@@ -1,7 +1,7 @@
 import { createContext, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 
-import { AdminTab } from '@/AdminTab.tsx';
+import { AdminTab } from '@/components/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
 import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
 import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';

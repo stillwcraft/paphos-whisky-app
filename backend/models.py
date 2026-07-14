@@ -35,6 +35,7 @@ class Distillery(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, unique=True, nullable=False)
     image_url = Column(String, nullable=True)
+    description = Column(String, nullable=True)
     bottles = relationship(
         "Bottle",
         back_populates="distillery",
@@ -54,8 +55,11 @@ class Bottle(Base):
         index=True,
         nullable=False,
     )
-    age = Column(Integer, nullable=True)
+    age = Column(String, nullable=True)
+    abv = Column(String, nullable=True)
     price_per_sample = Column(Float)
     description = Column(String)
     image_url = Column(String, nullable=True)
+    favorites_count = Column(Integer, default=0, nullable=False)
+    tried_count = Column(Integer, default=0, nullable=False)
     distillery = relationship("Distillery", back_populates="bottles")

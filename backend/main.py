@@ -30,53 +30,112 @@ def ensure_catalog_schema() -> None:
     bottle_columns = {
         column["name"] for column in inspect(engine).get_columns("bottles")
     }
-    if "distillery_id" in bottle_columns:
-        return
 
     with engine.begin() as connection:
-        connection.execute(
-            text("ALTER TABLE bottles ADD COLUMN distillery_id INTEGER")
-        )
+        if "distillery_id" not in bottle_columns:
+            connection.execute(
+                text("ALTER TABLE bottles ADD COLUMN distillery_id INTEGER")
+            )
 
-        if "distillery" not in bottle_columns:
-            return
+            if "distillery" in bottle_columns:
+                legacy_bottles = connection.execute(
+                    text("SELECT id, distillery FROM bottles")
+                ).mappings()
+                distillery_ids: dict[str, int] = {}
 
-        legacy_bottles = connection.execute(
-            text("SELECT id, distillery FROM bottles")
-        ).mappings()
-        distillery_ids: dict[str, int] = {}
+                for bottle in legacy_bottles:
+                    distillery_name = (bottle["distillery"] or "Unspecified").strip()
+                    if distillery_name not in distillery_ids:
+                        existing_distillery = connection.execute(
+                            text("SELECT id FROM distilleries WHERE name = :name"),
+                            {"name": distillery_name},
+                        ).mappings().first()
 
-        for bottle in legacy_bottles:
-            distillery_name = (bottle["distillery"] or "Unspecified").strip()
-            if distillery_name not in distillery_ids:
-                existing_distillery = connection.execute(
-                    text("SELECT id FROM distilleries WHERE name = :name"),
-                    {"name": distillery_name},
-                ).mappings().first()
+                        if existing_distillery:
+                            distillery_ids[distillery_name] = existing_distillery["id"]
+                        else:
+                            connection.execute(
+                                text("INSERT INTO distilleries (name) VALUES (:name)"),
+                                {"name": distillery_name},
+                            )
+                            created_distillery = connection.execute(
+                                text("SELECT id FROM distilleries WHERE name = :name"),
+                                {"name": distillery_name},
+                            ).mappings().first()
+                            distillery_ids[distillery_name] = created_distillery["id"]
 
-                if existing_distillery:
-                    distillery_ids[distillery_name] = existing_distillery["id"]
-                else:
                     connection.execute(
-                        text("INSERT INTO distilleries (name) VALUES (:name)"),
-                        {"name": distillery_name},
+                        text(
+                            "UPDATE bottles SET distillery_id = :distillery_id "
+                            "WHERE id = :bottle_id"
+                        ),
+                        {
+                            "distillery_id": distillery_ids[distillery_name],
+                            "bottle_id": bottle["id"],
+                        },
                     )
-                    created_distillery = connection.execute(
-                        text("SELECT id FROM distilleries WHERE name = :name"),
-                        {"name": distillery_name},
-                    ).mappings().first()
-                    distillery_ids[distillery_name] = created_distillery["id"]
 
+        distillery_columns = {
+            column["name"] for column in inspect(engine).get_columns("distilleries")
+        }
+        if "description" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN description TEXT")
+            )
+
+        bottle_columns = {
+            column["name"] for column in inspect(engine).get_columns("bottles")
+        }
+        if "abv" not in bottle_columns:
+            connection.execute(text("ALTER TABLE bottles ADD COLUMN abv TEXT"))
+        if "favorites_count" not in bottle_columns:
             connection.execute(
                 text(
-                    "UPDATE bottles SET distillery_id = :distillery_id "
-                    "WHERE id = :bottle_id"
-                ),
-                {
-                    "distillery_id": distillery_ids[distillery_name],
-                    "bottle_id": bottle["id"],
-                },
+                    "ALTER TABLE bottles ADD COLUMN favorites_count "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
             )
+        if "tried_count" not in bottle_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE bottles ADD COLUMN tried_count "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+
+        if engine.dialect.name == "postgresql":
+            connection.execute(
+                text(
+                    "ALTER TABLE bottles ALTER COLUMN age TYPE VARCHAR "
+                    "USING age::VARCHAR"
+                )
+            )
+        elif engine.dialect.name == "sqlite":
+            age_column = next(
+                column
+                for column in inspect(engine).get_columns("bottles")
+                if column["name"] == "age"
+            )
+            if "INT" in str(age_column["type"]).upper():
+                connection.execute(text("ALTER TABLE bottles RENAME TO bottles_legacy_age"))
+                connection.execute(text("DROP INDEX IF EXISTS ix_bottles_name"))
+                models.Bottle.__table__.create(bind=connection)
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO bottles (
+                            id, name, distillery_id, age, abv, price_per_sample,
+                            description, image_url, favorites_count, tried_count
+                        )
+                        SELECT
+                            id, name, distillery_id, CAST(age AS TEXT), abv,
+                            price_per_sample, description, image_url,
+                            favorites_count, tried_count
+                        FROM bottles_legacy_age
+                        """
+                    )
+                )
+                connection.execute(text("DROP TABLE bottles_legacy_age"))
 
 
 ensure_event_schema()
@@ -110,6 +169,7 @@ class EventResponse(EventCreate):
 class DistilleryCreate(BaseModel):
     name: str
     image_url: Optional[str] = None
+    description: Optional[str] = None
 
 
 class DistilleryResponse(DistilleryCreate):
@@ -122,10 +182,13 @@ class DistilleryResponse(DistilleryCreate):
 class BottleCreate(BaseModel):
     name: str
     distillery_id: int
-    age: Optional[int] = None
+    age: Optional[str] = None
+    abv: Optional[str] = None
     price_per_sample: float
     description: str
     image_url: Optional[str] = None
+    favorites_count: int = 0
+    tried_count: int = 0
 
 class BottleResponse(BottleCreate):
     id: int
@@ -302,6 +365,33 @@ def create_distillery(
     return distillery
 
 
+@app.put("/api/distilleries/{distillery_id}", response_model=DistilleryResponse)
+def update_distillery(
+    distillery_id: int,
+    distillery_data: DistilleryCreate,
+    db: Session = Depends(get_db),
+):
+    distillery = db.query(models.Distillery).filter(
+        models.Distillery.id == distillery_id
+    ).first()
+    if not distillery:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+
+    same_name_distillery = db.query(models.Distillery).filter(
+        models.Distillery.name == distillery_data.name,
+        models.Distillery.id != distillery_id,
+    ).first()
+    if same_name_distillery:
+        raise HTTPException(status_code=409, detail="Distillery already exists")
+
+    for field, value in distillery_data.model_dump().items():
+        setattr(distillery, field, value)
+
+    db.commit()
+    db.refresh(distillery)
+    return distillery
+
+
 @app.delete("/api/distilleries/{distillery_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_distillery(distillery_id: int, db: Session = Depends(get_db)):
     distillery = db.query(models.Distillery).filter(
@@ -334,6 +424,33 @@ def create_bottle(bottle_data: BottleCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_bottle)
     return new_bottle
+
+
+@app.put("/api/bottles/{bottle_id}", response_model=BottleResponse)
+def update_bottle(
+    bottle_id: int,
+    bottle_data: BottleCreate,
+    db: Session = Depends(get_db),
+):
+    bottle = db.query(models.Bottle).filter(
+        models.Bottle.id == bottle_id
+    ).first()
+    if not bottle:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+
+    distillery = db.query(models.Distillery).filter(
+        models.Distillery.id == bottle_data.distillery_id
+    ).first()
+    if not distillery:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+
+    for field, value in bottle_data.model_dump().items():
+        setattr(bottle, field, value)
+
+    db.commit()
+    db.refresh(bottle)
+    return bottle
+
 
 @app.delete("/api/bottles/{bottle_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_bottle(bottle_id: int, db: Session = Depends(get_db)):
