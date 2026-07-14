@@ -1,4 +1,5 @@
 import { createContext, useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
 
 import { AdminTab } from '@/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
@@ -120,12 +121,12 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [favorites, setFavorites] = useState<Array<string | number>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const initDataState = useSignal(initData.state);
   const activeScreen = tabs.find((tab) => tab.id === activeTab)?.screen;
 
   useEffect(() => {
-    const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
-    setIsAdmin(telegramUserId === ADMIN_TELEGRAM_ID);
-  }, []);
+    setIsAdmin(initDataState?.user?.id === ADMIN_TELEGRAM_ID);
+  }, [initDataState]);
 
   const toggleFavorite = (bottleId: string | number) => {
     setFavorites((currentFavorites) => (
