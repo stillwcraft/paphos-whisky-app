@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
@@ -99,7 +99,7 @@ function BottomSheet({
               onClick={onCancel}
               className="mt-6 w-full rounded-xl bg-red-500/90 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-400"
             >
-              {isRegistration ? 'Отменить регистрацию' : 'Отказаться'}
+              {isRegistration ? 'Cancel registration' : 'Cancel'}
             </button>
           </div>
         )}
@@ -152,10 +152,10 @@ function BottomSheet({
         )}
 
         <nav aria-label="Навигация шторки" className="mt-6 grid grid-cols-4 gap-2 border-t border-white/10 pt-4">
-          <button type="button" onClick={onClose} className="rounded-lg px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">🏠 Домой</button>
-          <button type="button" onClick={() => onSelectTab('events')} className="rounded-lg px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">📅 Events</button>
-          <button type="button" onClick={() => onSelectTab('members')} className="rounded-lg px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👥 Members</button>
-          <button type="button" onClick={() => onSelectTab('profile')} className="rounded-lg px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👤 Профиль</button>
+          <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">🏠 Home</button>
+          <button type="button" onClick={() => onSelectTab('events')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">📅 Events</button>
+          <button type="button" onClick={() => onSelectTab('members')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👥 Members</button>
+          <button type="button" onClick={() => onSelectTab('profile')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👤 Profile</button>
         </nav>
       </section>
     </div>
@@ -172,6 +172,7 @@ export function EventsTab() {
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
   const [activeTab, setActiveTab] = useState<SheetTab>('main');
   const [members, setMembers] = useState<Member[]>([]);
+  const timelineRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
@@ -201,6 +202,36 @@ export function EventsTab() {
       .filter((event) => new Date(event.date).valueOf() >= now)
       .sort((first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf())[0];
   }, [events]);
+  const orderedEvents = useMemo(
+    () => [...events].sort(
+      (first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf(),
+    ),
+    [events],
+  );
+  const centeredEventIndex = useMemo(() => {
+    const now = new Date();
+    const nextEventIndex = orderedEvents.findIndex(
+      (event) => new Date(event.date).valueOf() >= now.valueOf(),
+    );
+
+    return nextEventIndex === -1 ? orderedEvents.length - 1 : nextEventIndex;
+  }, [orderedEvents]);
+
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    const centeredCard = timeline?.querySelector<HTMLElement>(
+      `[data-event-index="${centeredEventIndex}"]`,
+    );
+
+    if (!timeline || !centeredCard) {
+      return;
+    }
+
+    timeline.scrollTo({
+      top: centeredCard.offsetTop - (timeline.clientHeight - centeredCard.clientHeight) / 2,
+      behavior: 'auto',
+    });
+  }, [centeredEventIndex, orderedEvents.length]);
 
   const updateParticipation = async (
     event: ClubEvent,
@@ -290,7 +321,7 @@ export function EventsTab() {
     <section className="mx-auto w-full max-w-md pb-5 pt-8">
       <header className="mb-8 px-5 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Дегустации клуба</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-white">Events</h1>
       </header>
 
       {feedback && <p className="mx-5 mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{feedback.message}</p>}
@@ -300,39 +331,52 @@ export function EventsTab() {
       ) : events.length === 0 ? (
         <p className="px-5 text-center text-sm text-slate-400">События скоро появятся.</p>
       ) : (
-        <ol className="space-y-4 px-5">
-          {events.map((event) => (
-            <li key={event.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70">
-              {event.image_url && <img src={event.image_url} alt="" className="h-36 w-full object-cover" />}
-              <article className="p-4">
-                <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
-                <h2 className="mt-2 text-lg font-semibold text-white">{event.title}</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-300">{event.description}</p>
-                <p className="mt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
-                <div className="mt-4 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={isSubmitting === event.id}
-                    onClick={() => void updateParticipation(event, 'registration', true, true)}
-                    className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:opacity-60"
-                  >
-                    Записаться
-                  </button>
-                  {event.has_samples && (
-                    <button
-                      type="button"
-                      disabled={isSubmitting === event.id}
-                      onClick={() => void updateParticipation(event, 'samples', true, true)}
-                      className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:opacity-60"
-                    >
-                      Сэмплы
-                    </button>
-                  )}
-                </div>
-              </article>
-            </li>
-          ))}
-        </ol>
+        <div ref={timelineRef} className="h-[min(34rem,calc(100vh-13rem))] min-h-[28rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth">
+          <ol className="h-full space-y-4 px-5">
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: 'calc(50% - 9rem)' }} />
+            {orderedEvents.map((event, index) => {
+              const isPast = new Date(event.date).valueOf() < new Date().valueOf();
+              const isDisabled = isPast || isSubmitting === event.id;
+
+              return (
+                <li
+                  key={event.id}
+                  data-event-index={index}
+                  className="h-72 snap-center overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
+                >
+                  {event.image_url && <img src={event.image_url} alt="" className="h-24 w-full object-cover" />}
+                  <article className="flex h-[calc(100%-6rem)] flex-col p-4">
+                    <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
+                    <h2 className="mt-2 text-lg font-semibold text-white">{event.title}</h2>
+                    <p className="mt-2 max-h-12 overflow-hidden text-sm leading-6 text-slate-300">{event.description}</p>
+                    <p className="mt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
+                    <div className="mt-auto flex gap-2 pt-3">
+                      <button
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => void updateParticipation(event, 'registration', true, true)}
+                        className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Register
+                      </button>
+                      {event.has_samples && (
+                        <button
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => void updateParticipation(event, 'samples', true, true)}
+                          className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Samples
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                </li>
+              );
+            })}
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: 'calc(50% - 9rem)' }} />
+          </ol>
+        </div>
       )}
 
       {sheetEvent && (
