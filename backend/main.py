@@ -26,7 +26,61 @@ def ensure_event_schema() -> None:
             )
 
 
+def ensure_catalog_schema() -> None:
+    bottle_columns = {
+        column["name"] for column in inspect(engine).get_columns("bottles")
+    }
+    if "distillery_id" in bottle_columns:
+        return
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE bottles ADD COLUMN distillery_id INTEGER")
+        )
+
+        if "distillery" not in bottle_columns:
+            return
+
+        legacy_bottles = connection.execute(
+            text("SELECT id, distillery FROM bottles")
+        ).mappings()
+        distillery_ids: dict[str, int] = {}
+
+        for bottle in legacy_bottles:
+            distillery_name = (bottle["distillery"] or "Unspecified").strip()
+            if distillery_name not in distillery_ids:
+                existing_distillery = connection.execute(
+                    text("SELECT id FROM distilleries WHERE name = :name"),
+                    {"name": distillery_name},
+                ).mappings().first()
+
+                if existing_distillery:
+                    distillery_ids[distillery_name] = existing_distillery["id"]
+                else:
+                    connection.execute(
+                        text("INSERT INTO distilleries (name) VALUES (:name)"),
+                        {"name": distillery_name},
+                    )
+                    created_distillery = connection.execute(
+                        text("SELECT id FROM distilleries WHERE name = :name"),
+                        {"name": distillery_name},
+                    ).mappings().first()
+                    distillery_ids[distillery_name] = created_distillery["id"]
+
+            connection.execute(
+                text(
+                    "UPDATE bottles SET distillery_id = :distillery_id "
+                    "WHERE id = :bottle_id"
+                ),
+                {
+                    "distillery_id": distillery_ids[distillery_name],
+                    "bottle_id": bottle["id"],
+                },
+            )
+
+
 ensure_event_schema()
+ensure_catalog_schema()
 
 app = FastAPI(title="Paphos Whisky Club API")
 
@@ -53,9 +107,21 @@ class EventResponse(EventCreate):
     class Config:
         from_attributes = True
 
+class DistilleryCreate(BaseModel):
+    name: str
+    image_url: Optional[str] = None
+
+
+class DistilleryResponse(DistilleryCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
 class BottleCreate(BaseModel):
     name: str
-    distillery: str
+    distillery_id: int
     age: Optional[int] = None
     price_per_sample: float
     description: str
@@ -209,12 +275,60 @@ def get_event_members(event_id: int, db: Session = Depends(get_db)):
 
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---
 
+@app.get("/api/distilleries", response_model=List[DistilleryResponse])
+def get_distilleries(db: Session = Depends(get_db)):
+    return db.query(models.Distillery).order_by(models.Distillery.name).all()
+
+
+@app.post(
+    "/api/distilleries",
+    response_model=DistilleryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_distillery(
+    distillery_data: DistilleryCreate,
+    db: Session = Depends(get_db),
+):
+    existing_distillery = db.query(models.Distillery).filter(
+        models.Distillery.name == distillery_data.name
+    ).first()
+    if existing_distillery:
+        raise HTTPException(status_code=409, detail="Distillery already exists")
+
+    distillery = models.Distillery(**distillery_data.model_dump())
+    db.add(distillery)
+    db.commit()
+    db.refresh(distillery)
+    return distillery
+
+
+@app.delete("/api/distilleries/{distillery_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_distillery(distillery_id: int, db: Session = Depends(get_db)):
+    distillery = db.query(models.Distillery).filter(
+        models.Distillery.id == distillery_id
+    ).first()
+    if not distillery:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+
+    db.query(models.Bottle).filter(
+        models.Bottle.distillery_id == distillery_id
+    ).delete(synchronize_session=False)
+    db.delete(distillery)
+    db.commit()
+
+
 @app.get("/api/bottles", response_model=List[BottleResponse])
 def get_bottles(db: Session = Depends(get_db)):
     return db.query(models.Bottle).all()
 
 @app.post("/api/bottles", response_model=BottleResponse, status_code=status.HTTP_201_CREATED)
 def create_bottle(bottle_data: BottleCreate, db: Session = Depends(get_db)):
+    distillery = db.query(models.Distillery).filter(
+        models.Distillery.id == bottle_data.distillery_id
+    ).first()
+    if not distillery:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+
     new_bottle = models.Bottle(**bottle_data.model_dump())
     db.add(new_bottle)
     db.commit()

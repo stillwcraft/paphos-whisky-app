@@ -35,9 +35,30 @@ const initialEventForm: EventForm = {
   has_samples: false,
 };
 
+type Distillery = {
+  id: number;
+  name: string;
+  image_url: string | null;
+};
+
+type Bottle = {
+  id: number;
+  name: string;
+  distillery_id: number;
+  age: number | null;
+  price_per_sample: number;
+  description: string;
+  image_url: string | null;
+};
+
+const initialDistilleryForm = {
+  name: '',
+  image_url: '',
+};
+
 const initialBottleForm = {
   name: '',
-  distillery: '',
+  distillery_id: '',
   age: '',
   price_per_sample: '',
   description: '',
@@ -61,8 +82,11 @@ async function getErrorMessage(response: Response): Promise<string> {
 
 export function AdminTab() {
   const [eventForm, setEventForm] = useState<EventForm>(initialEventForm);
+  const [distilleryForm, setDistilleryForm] = useState(initialDistilleryForm);
   const [bottleForm, setBottleForm] = useState(initialBottleForm);
   const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const [bottles, setBottles] = useState<Bottle[]>([]);
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -88,9 +112,33 @@ export function AdminTab() {
     }
   }, []);
 
+  const loadCatalog = useCallback(async () => {
+    try {
+      const [distilleriesResponse, bottlesResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/distilleries`),
+        fetch(`${API_BASE_URL}/api/bottles`),
+      ]);
+      if (!distilleriesResponse.ok) {
+        throw new Error(await getErrorMessage(distilleriesResponse));
+      }
+      if (!bottlesResponse.ok) {
+        throw new Error(await getErrorMessage(bottlesResponse));
+      }
+
+      setDistilleries(await distilleriesResponse.json() as Distillery[]);
+      setBottles(await bottlesResponse.json() as Bottle[]);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось загрузить каталог.',
+      });
+    }
+  }, []);
+
   useEffect(() => {
     void loadEvents();
-  }, [loadEvents]);
+    void loadCatalog();
+  }, [loadCatalog, loadEvents]);
 
   const cancelEditing = () => {
     setEditingEventId(null);
@@ -153,6 +201,67 @@ export function AdminTab() {
     }
   };
 
+  const submitDistillery = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsSaving(true);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/distilleries`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...distilleryForm,
+          image_url: distilleryForm.image_url || null,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response));
+      }
+
+      setDistilleryForm(initialDistilleryForm);
+      await loadCatalog();
+      setFeedback({ kind: 'success', message: 'Дистиллерия добавлена.' });
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось добавить дистиллерию.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteDistillery = async (distillery: Distillery) => {
+    if (!window.confirm(`Удалить ${distillery.name} и все её бутылки?`)) {
+      return;
+    }
+
+    setIsSaving(true);
+    setFeedback(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/distilleries/${distillery.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response));
+      }
+
+      if (bottleForm.distillery_id === String(distillery.id)) {
+        setBottleForm(initialBottleForm);
+      }
+      await loadCatalog();
+      setFeedback({ kind: 'success', message: 'Дистиллерия и её бутылки удалены.' });
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось удалить дистиллерию.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const submitBottle = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsSaving(true);
@@ -164,6 +273,7 @@ export function AdminTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...bottleForm,
+          distillery_id: Number(bottleForm.distillery_id),
           age: bottleForm.age ? Number(bottleForm.age) : undefined,
           price_per_sample: Number(bottleForm.price_per_sample),
           image_url: bottleForm.image_url || null,
@@ -175,11 +285,36 @@ export function AdminTab() {
       }
 
       setBottleForm(initialBottleForm);
+      await loadCatalog();
       setFeedback({ kind: 'success', message: 'Виски успешно добавлен.' });
     } catch (error) {
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'Не удалось добавить виски.',
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteBottle = async (bottle: Bottle) => {
+    setIsSaving(true);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bottles/${bottle.id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response));
+      }
+
+      await loadCatalog();
+      setFeedback({ kind: 'success', message: 'Бутылка удалена.' });
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось удалить бутылку.',
       });
     } finally {
       setIsSaving(false);
@@ -269,16 +404,74 @@ export function AdminTab() {
         )}
       </section>
 
+      <section className="space-y-4 rounded-2xl border border-white/10 bg-slate-800/70 p-5">
+        <h2 className="text-lg font-semibold text-white">Управление дистиллериями</h2>
+        <form onSubmit={submitDistillery} className="space-y-3">
+          <input required value={distilleryForm.name} onChange={(event) => setDistilleryForm({ ...distilleryForm, name: event.target.value })} placeholder="Name" className={inputClassName} />
+          <input type="url" value={distilleryForm.image_url} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value })} placeholder="Image URL" className={inputClassName} />
+          <button disabled={isSaving} type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+            Add Distillery
+          </button>
+        </form>
+
+        {distilleries.length === 0 ? (
+          <p className="text-sm text-slate-400">Сначала добавьте дистиллерию.</p>
+        ) : (
+          <ul className="space-y-3 border-t border-white/10 pt-4">
+            {distilleries.map((distillery) => {
+              const distilleryBottles = bottles.filter(
+                (bottle) => bottle.distillery_id === distillery.id,
+              );
+
+              return (
+                <li key={distillery.id} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+                  {distillery.image_url && <img src={distillery.image_url} alt="" className="h-24 w-full object-cover" />}
+                  <div className="flex items-center gap-3 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white">{distillery.name}</p>
+                      <p className="mt-1 text-xs text-slate-400">{distilleryBottles.length} bottles</p>
+                    </div>
+                    <button type="button" disabled={isSaving} onClick={() => void deleteDistillery(distillery)} className="rounded-lg border border-red-400/30 px-3 py-2 text-xs font-semibold text-red-300 transition-colors hover:bg-red-400/10 disabled:opacity-60">
+                      🗑️ Delete
+                    </button>
+                  </div>
+                  {distilleryBottles.length > 0 && (
+                    <ul className="border-t border-white/10 px-3">
+                      {distilleryBottles.map((bottle) => (
+                        <li key={bottle.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm text-slate-100">{bottle.name}</p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              {bottle.age ? `${bottle.age} years · ` : ''}€{bottle.price_per_sample} per sample
+                            </p>
+                          </div>
+                          <button type="button" disabled={isSaving} onClick={() => void deleteBottle(bottle)} className="shrink-0 rounded-lg px-2 py-2 text-xs font-semibold text-red-300 hover:bg-red-400/10 disabled:opacity-60">
+                            ❌ Remove bottle
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       <form onSubmit={submitBottle} className="space-y-4 rounded-2xl border border-white/10 bg-slate-800/70 p-5">
-        <h2 className="text-lg font-semibold text-white">Добавить виски</h2>
-        <input required value={bottleForm.name} onChange={(event) => setBottleForm({ ...bottleForm, name: event.target.value })} placeholder="Название виски" className={inputClassName} />
-        <input required value={bottleForm.distillery} onChange={(event) => setBottleForm({ ...bottleForm, distillery: event.target.value })} placeholder="Дистиллерия" className={inputClassName} />
-        <input min="0" type="number" value={bottleForm.age} onChange={(event) => setBottleForm({ ...bottleForm, age: event.target.value })} placeholder="Возраст (необязательно)" className={inputClassName} />
-        <input required min="0" step="0.01" type="number" value={bottleForm.price_per_sample} onChange={(event) => setBottleForm({ ...bottleForm, price_per_sample: event.target.value })} placeholder="Цена за сэмпл, EUR" className={inputClassName} />
-        <textarea required value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} placeholder="Описание" rows={4} className={`${inputClassName} resize-none`} />
-        <input type="url" value={bottleForm.image_url} onChange={(event) => setBottleForm({ ...bottleForm, image_url: event.target.value })} placeholder="URL изображения (необязательно)" className={inputClassName} />
-        <button disabled={isSaving} type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
-          Добавить виски
+        <h2 className="text-lg font-semibold text-white">Добавить бутылку</h2>
+        <select required value={bottleForm.distillery_id} onChange={(event) => setBottleForm({ ...bottleForm, distillery_id: event.target.value })} className={inputClassName}>
+          <option value="" disabled>Выберите дистиллерию</option>
+          {distilleries.map((distillery) => <option key={distillery.id} value={distillery.id}>{distillery.name}</option>)}
+        </select>
+        <input required value={bottleForm.name} onChange={(event) => setBottleForm({ ...bottleForm, name: event.target.value })} placeholder="Name" className={inputClassName} />
+        <input min="0" type="number" value={bottleForm.age} onChange={(event) => setBottleForm({ ...bottleForm, age: event.target.value })} placeholder="Age (optional)" className={inputClassName} />
+        <input required min="0" step="0.01" type="number" value={bottleForm.price_per_sample} onChange={(event) => setBottleForm({ ...bottleForm, price_per_sample: event.target.value })} placeholder="Price per sample" className={inputClassName} />
+        <textarea required value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} placeholder="Description" rows={4} className={`${inputClassName} resize-none`} />
+        <input type="url" value={bottleForm.image_url} onChange={(event) => setBottleForm({ ...bottleForm, image_url: event.target.value })} placeholder="Image URL" className={inputClassName} />
+        <button disabled={isSaving || distilleries.length === 0} type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+          Add bottle
         </button>
       </form>
     </section>

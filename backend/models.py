@@ -1,4 +1,5 @@
-from sqlalchemy import BigInteger, Boolean, Column, Float, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.orm import relationship
 from database import Base
 
 class Event(Base):
@@ -27,13 +28,34 @@ class Registration(Base):
     registered = Column(Boolean, default=False, nullable=False)
     samples = Column(Boolean, default=False, nullable=False)
 
+
+class Distillery(Base):
+    __tablename__ = "distilleries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, unique=True, nullable=False)
+    image_url = Column(String, nullable=True)
+    bottles = relationship(
+        "Bottle",
+        back_populates="distillery",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
 class Bottle(Base):
     __tablename__ = "bottles"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
-    distillery = Column(String)
+    distillery_id = Column(
+        Integer,
+        ForeignKey("distilleries.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
     age = Column(Integer, nullable=True)
     price_per_sample = Column(Float)
     description = Column(String)
     image_url = Column(String, nullable=True)
+    distillery = relationship("Distillery", back_populates="bottles")
