@@ -226,7 +226,7 @@ export function EventsTab() {
           body: JSON.stringify({
             telegram_id: user.id,
             username: user.username ?? null,
-            first_name: user.firstName ?? null,
+            first_name: user.first_name ?? null,
             [mode === 'registration' ? 'registered' : 'samples']: value,
           }),
         },
