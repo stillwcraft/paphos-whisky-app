@@ -31,3 +31,5 @@ typing_extensions==4.16.0
 urllib3==2.6.3
 uvicorn==0.39.0
 yarl==1.22.0
+sqlalchemy
+psycopg2-binary
