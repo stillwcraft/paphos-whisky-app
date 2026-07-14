@@ -75,8 +75,8 @@ const AdminIcon = (props: IconProps) => (
 
 const tabs: Tab[] = [
   { id: 'events', label: 'Events', screen: 'Экран Events', Icon: CalendarIcon },
-  { id: 'distilleries', label: 'Дистиллерии', screen: 'Экран Дистиллерии', Icon: DistilleryIcon },
-  { id: 'bottles', label: 'Бутылки', screen: 'Экран Бутылки и сэмплы', Icon: BottleIcon },
+  { id: 'distilleries', label: 'Distilleries', screen: 'Экран Дистиллерии', Icon: DistilleryIcon },
+  { id: 'bottles', label: 'Bottles', screen: 'Экран Бутылки и сэмплы', Icon: BottleIcon },
   { id: 'favorites', label: 'Избранное', screen: 'Экран Избранное', Icon: StarIcon },
   { id: 'profile', label: 'Профиль', screen: 'Экран Профиль', Icon: UserIcon },
 ];

@@ -326,7 +326,7 @@ export function EventsTab() {
       ) : (
         <div ref={timelineRef} className="h-[calc(100vh-9rem)] min-h-[32rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth">
           <ol className="h-full space-y-4 px-5">
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '6.5vh' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '7vh' }} />
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
@@ -342,9 +342,9 @@ export function EventsTab() {
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
                     <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
-                    <p className="mt-3 max-h-24 overflow-hidden text-sm leading-6 text-slate-300">{event.description}</p>
-                    <p className="mt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
-                    <div className="mt-auto flex gap-2 pt-3">
+                    <p className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{event.description}</p>
+                    <p className="mt-auto pt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
+                    <div className="mt-3 flex gap-2">
                       <button
                         type="button"
                         disabled={isDisabled}
@@ -374,13 +374,13 @@ export function EventsTab() {
                 </li>
               );
             })}
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '6.5vh' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '7vh' }} />
           </ol>
         </div>
       )}
 
       {expandedEvent && (
-        <div className="fixed inset-0 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
+        <div className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
           <style>{'@keyframes event-expand { from { opacity: 0; transform: translateY(2rem); } to { opacity: 1; transform: translateY(0); } }'}</style>
           <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50" style={{ animation: 'event-expand 220ms ease-out' }}>
             <div className="relative">
