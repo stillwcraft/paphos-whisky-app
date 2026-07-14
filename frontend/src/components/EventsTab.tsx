@@ -23,7 +23,7 @@ type Member = {
 };
 
 type SheetMode = 'registration' | 'samples';
-type SheetTab = 'main' | 'events' | 'members' | 'profile';
+type SheetTab = 'main' | 'events' | 'members';
 type Feedback = { kind: 'error'; message: string } | null;
 
 async function getErrorMessage(response: Response): Promise<string> {
@@ -142,20 +142,10 @@ function BottomSheet({
           </div>
         )}
 
-        {activeTab === 'profile' && (
-          <div className="py-6 text-center">
-            <h2 className="text-xl font-semibold text-white">Профиль</h2>
-            <p className="mt-3 text-sm leading-6 text-slate-400">
-              Профиль в разработке (скоро здесь можно будет настроить аватар и описание)
-            </p>
-          </div>
-        )}
-
-        <nav aria-label="Навигация шторки" className="mt-6 grid grid-cols-4 gap-2 border-t border-white/10 pt-4">
-          <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">🏠 Home</button>
-          <button type="button" onClick={() => onSelectTab('events')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">📅 Events</button>
-          <button type="button" onClick={() => onSelectTab('members')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👥 Members</button>
-          <button type="button" onClick={() => onSelectTab('profile')} className="rounded-lg border border-slate-600 px-1 py-2 text-[11px] font-medium text-slate-300 hover:bg-white/5">👤 Profile</button>
+        <nav aria-label="Навигация шторки" className="mt-6 flex justify-between gap-3 border-t border-white/10 pt-4">
+          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">🏠 Home</button>
+          <button type="button" onClick={() => onSelectTab('events')} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">📅 Events</button>
+          <button type="button" onClick={() => onSelectTab('members')} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">👥 Members</button>
         </nav>
       </section>
     </div>
@@ -172,6 +162,7 @@ export function EventsTab() {
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
   const [activeTab, setActiveTab] = useState<SheetTab>('main');
   const [members, setMembers] = useState<Member[]>([]);
+  const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
 
   const loadEvents = useCallback(async () => {
@@ -268,6 +259,7 @@ export function EventsTab() {
       }
 
       if (openSheet) {
+        setExpandedEventId(null);
         setSheetEvent(event);
         setSheetMode(mode);
         setActiveTab('main');
@@ -316,6 +308,7 @@ export function EventsTab() {
     setActiveTab('main');
     setMembers([]);
   };
+  const expandedEvent = orderedEvents.find((event) => event.id === expandedEventId);
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-8">
@@ -331,9 +324,9 @@ export function EventsTab() {
       ) : events.length === 0 ? (
         <p className="px-5 text-center text-sm text-slate-400">События скоро появятся.</p>
       ) : (
-        <div ref={timelineRef} className="h-[min(34rem,calc(100vh-13rem))] min-h-[28rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth">
+        <div ref={timelineRef} className="h-[calc(100vh-9rem)] min-h-[32rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth">
           <ol className="h-full space-y-4 px-5">
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: 'calc(50% - 9rem)' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '6.5vh' }} />
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
@@ -342,19 +335,23 @@ export function EventsTab() {
                 <li
                   key={event.id}
                   data-event-index={index}
-                  className="h-72 snap-center overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
+                  onClick={() => setExpandedEventId(event.id)}
+                  className="h-[78vh] snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
                 >
-                  {event.image_url && <img src={event.image_url} alt="" className="h-24 w-full object-cover" />}
-                  <article className="flex h-[calc(100%-6rem)] flex-col p-4">
+                  {event.image_url && <img src={event.image_url} alt="" className="h-40 w-full object-cover" />}
+                  <article className="flex h-[calc(100%-10rem)] flex-col p-5">
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
-                    <h2 className="mt-2 text-lg font-semibold text-white">{event.title}</h2>
-                    <p className="mt-2 max-h-12 overflow-hidden text-sm leading-6 text-slate-300">{event.description}</p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
+                    <p className="mt-3 max-h-24 overflow-hidden text-sm leading-6 text-slate-300">{event.description}</p>
                     <p className="mt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
                     <div className="mt-auto flex gap-2 pt-3">
                       <button
                         type="button"
                         disabled={isDisabled}
-                        onClick={() => void updateParticipation(event, 'registration', true, true)}
+                        onClick={(clickEvent) => {
+                          clickEvent.stopPropagation();
+                          void updateParticipation(event, 'registration', true, true);
+                        }}
                         className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Register
@@ -363,7 +360,10 @@ export function EventsTab() {
                         <button
                           type="button"
                           disabled={isDisabled}
-                          onClick={() => void updateParticipation(event, 'samples', true, true)}
+                          onClick={(clickEvent) => {
+                            clickEvent.stopPropagation();
+                            void updateParticipation(event, 'samples', true, true);
+                          }}
                           className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Samples
@@ -374,8 +374,62 @@ export function EventsTab() {
                 </li>
               );
             })}
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: 'calc(50% - 9rem)' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '6.5vh' }} />
           </ol>
+        </div>
+      )}
+
+      {expandedEvent && (
+        <div className="fixed inset-0 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
+          <style>{'@keyframes event-expand { from { opacity: 0; transform: translateY(2rem); } to { opacity: 1; transform: translateY(0); } }'}</style>
+          <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50" style={{ animation: 'event-expand 220ms ease-out' }}>
+            <div className="relative">
+              {expandedEvent.image_url && <img src={expandedEvent.image_url} alt="" className="h-56 w-full object-cover" />}
+              <button
+                type="button"
+                aria-label="Закрыть карточку события"
+                onClick={() => setExpandedEventId(null)}
+                className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-28">
+              <p className="text-xs font-semibold text-amber-400">{formatDate(expandedEvent.date)}</p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">{expandedEvent.title}</h2>
+              <p className="mt-5 whitespace-pre-line text-sm leading-7 text-slate-300">{expandedEvent.description}</p>
+              <p className="mt-6 text-lg font-semibold text-amber-400">€{expandedEvent.price}</p>
+            </div>
+            <div className="border-t border-white/10 bg-slate-900 p-4">
+              {(() => {
+                const isPast = new Date(expandedEvent.date).valueOf() < new Date().valueOf();
+                const isDisabled = isPast || isSubmitting === expandedEvent.id;
+
+                return (
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => void updateParticipation(expandedEvent, 'registration', true, true)}
+                      className="flex-1 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Register
+                    </button>
+                    {expandedEvent.has_samples && (
+                      <button
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => void updateParticipation(expandedEvent, 'samples', true, true)}
+                        className="flex-1 rounded-xl bg-slate-600 px-4 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Samples
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </article>
         </div>
       )}
 
