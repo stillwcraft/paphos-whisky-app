@@ -1,0 +1,13 @@
+# Бэкенд
+backend/venv/
+backend/__pycache__/
+*.db
+.env
+
+# Фронтенд (на всякий случай)
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+
+# Настройки PyCharm
+.idea/
