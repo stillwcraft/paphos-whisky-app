@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 type TelegramUser = {
+  id?: number;
   first_name?: string;
   username?: string;
   photo_url?: string;

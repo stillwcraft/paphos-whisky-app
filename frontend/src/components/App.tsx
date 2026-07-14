@@ -1,12 +1,13 @@
-import { createContext, useState, type ComponentType, type SVGProps } from 'react';
+import { createContext, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 
+import { AdminTab } from '@/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
 import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
 import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 
-type TabId = 'events' | 'distilleries' | 'bottles' | 'favorites' | 'profile';
+type TabId = 'events' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
 type IconProps = SVGProps<SVGSVGElement>;
 
@@ -16,6 +17,7 @@ type FavoritesContextValue = {
 };
 
 export const FavoritesContext = createContext<FavoritesContextValue | null>(null);
+const ADMIN_TELEGRAM_ID = 8546526596; // Replace 0 with your Telegram user ID.
 
 type Tab = {
   id: TabId;
@@ -63,6 +65,13 @@ const UserIcon = (props: IconProps) => (
   </svg>
 );
 
+const AdminIcon = (props: IconProps) => (
+  <svg {...iconProps} {...props}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.12 2.12-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1 1.55V20.3h-3v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.12-2.12.06-.06A1.7 1.7 0 0 0 7.08 15a1.7 1.7 0 0 0-1.55-1H5.4v-3h.13a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L8.8 5.94l.06.06A1.7 1.7 0 0 0 10.74 6.34a1.7 1.7 0 0 0 1-1.55V4.7h3v.09a1.7 1.7 0 0 0 1 1.55A1.7 1.7 0 0 0 17.62 6l.06-.06 2.12 2.12-.06.06A1.7 1.7 0 0 0 19.4 10a1.7 1.7 0 0 0 1.55 1h.13v3h-.13a1.7 1.7 0 0 0-1.55 1Z" />
+  </svg>
+);
+
 const tabs: Tab[] = [
   { id: 'events', label: 'Ивенты', screen: 'Экран Ивенты', Icon: CalendarIcon },
   { id: 'distilleries', label: 'Дистиллерии', screen: 'Экран Дистиллерии', Icon: DistilleryIcon },
@@ -70,17 +79,21 @@ const tabs: Tab[] = [
   { id: 'favorites', label: 'Избранное', screen: 'Экран Избранное', Icon: StarIcon },
   { id: 'profile', label: 'Профиль', screen: 'Экран Профиль', Icon: UserIcon },
 ];
+const adminTab: Tab = { id: 'admin', label: 'Админ', screen: 'Админ', Icon: AdminIcon };
 
 type FooterProps = {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  isAdmin: boolean;
 };
 
-function Footer({ activeTab, onTabChange }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
+  const visibleTabs = isAdmin ? [...tabs, adminTab] : tabs;
+
   return (
     <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-amber-100/10 bg-slate-950/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
       <nav aria-label="Основная навигация" className="mx-auto flex max-w-md justify-between">
-        {tabs.map(({ id, label, Icon }) => {
+        {visibleTabs.map(({ id, label, Icon }) => {
           const isActive = activeTab === id;
 
           return (
@@ -89,7 +102,7 @@ function Footer({ activeTab, onTabChange }: FooterProps) {
               type="button"
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onTabChange(id)}
-              className={`flex min-w-14 flex-col items-center gap-1 rounded-lg px-1 py-1 text-[10px] font-medium transition-colors ${
+              className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 text-[10px] font-medium transition-colors ${
                 isActive ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -106,7 +119,13 @@ function Footer({ activeTab, onTabChange }: FooterProps) {
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [favorites, setFavorites] = useState<Array<string | number>>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
   const activeScreen = tabs.find((tab) => tab.id === activeTab)?.screen;
+
+  useEffect(() => {
+    const telegramUserId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
+    setIsAdmin(telegramUserId === ADMIN_TELEGRAM_ID);
+  }, []);
 
   const toggleFavorite = (bottleId: string | number) => {
     setFavorites((currentFavorites) => (
@@ -130,6 +149,8 @@ export function App() {
             <FavoritesTab favorites={favorites} toggleFavorite={toggleFavorite} />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
+          ) : activeTab === 'admin' && isAdmin ? (
+            <AdminTab />
           ) : (
             <div className="flex min-h-screen items-center justify-center text-center">
               <div>
@@ -141,7 +162,7 @@ export function App() {
             </div>
           )}
         </main>
-        <Footer activeTab={activeTab} onTabChange={setActiveTab} />
+        <Footer activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
       </div>
     </FavoritesContext.Provider>
   );
