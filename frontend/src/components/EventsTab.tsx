@@ -324,9 +324,12 @@ export function EventsTab() {
       ) : events.length === 0 ? (
         <p className="px-5 text-center text-sm text-slate-400">События скоро появятся.</p>
       ) : (
-        <div ref={timelineRef} className="h-[calc(100vh-9rem)] min-h-[32rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth">
+        <div
+          ref={timelineRef}
+          className="h-[calc(100dvh-14rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+        >
           <ol className="h-full space-y-4 px-5">
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '7vh' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '8vh' }} />
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
@@ -336,7 +339,7 @@ export function EventsTab() {
                   key={event.id}
                   data-event-index={index}
                   onClick={() => setExpandedEventId(event.id)}
-                  className="h-[78vh] snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
+                  className="h-[64dvh] snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
                 >
                   {event.image_url && <img src={event.image_url} alt="" className="h-40 w-full object-cover" />}
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
@@ -374,7 +377,7 @@ export function EventsTab() {
                 </li>
               );
             })}
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '7vh' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '8vh' }} />
           </ol>
         </div>
       )}

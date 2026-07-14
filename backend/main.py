@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import inspect, text
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import List, Optional
+from sqlalchemy import case, func, inspect, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
+from pydantic import BaseModel, Field
+from typing import List, Literal, Optional
 
 import models
 from database import engine, get_db
@@ -138,8 +139,98 @@ def ensure_catalog_schema() -> None:
                 connection.execute(text("DROP TABLE bottles_legacy_age"))
 
 
+def ensure_user_bottle_action_schema() -> None:
+    inspector = inspect(engine)
+    if "user_bottle_actions" not in inspector.get_table_names():
+        return
+
+    indexes = inspector.get_indexes("user_bottle_actions")
+    unique_constraints = inspector.get_unique_constraints("user_bottle_actions")
+    index_names = {index["name"] for index in indexes}
+    has_pair_uniqueness = any(
+        set(constraint.get("column_names") or []) == {"telegram_id", "bottle_id"}
+        for constraint in unique_constraints
+    ) or any(
+        index.get("unique")
+        and set(index.get("column_names") or []) == {"telegram_id", "bottle_id"}
+        for index in indexes
+    )
+
+    with engine.begin() as connection:
+        if "ix_user_bottle_actions_telegram_id" not in index_names:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_user_bottle_actions_telegram_id "
+                    "ON user_bottle_actions (telegram_id)"
+                )
+            )
+        if "ix_user_bottle_actions_bottle_id" not in index_names:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_user_bottle_actions_bottle_id "
+                    "ON user_bottle_actions (bottle_id)"
+                )
+            )
+        if not has_pair_uniqueness:
+            duplicate_rows = connection.execute(
+                text(
+                    """
+                    SELECT
+                        telegram_id,
+                        bottle_id,
+                        MIN(id) AS keep_id,
+                        MAX(CASE WHEN is_favorite THEN 1 ELSE 0 END) AS is_favorite,
+                        MAX(CASE WHEN is_tried THEN 1 ELSE 0 END) AS is_tried
+                    FROM user_bottle_actions
+                    GROUP BY telegram_id, bottle_id
+                    HAVING COUNT(*) > 1
+                    """
+                )
+            ).mappings().all()
+
+            for row in duplicate_rows:
+                connection.execute(
+                    text(
+                        """
+                        UPDATE user_bottle_actions
+                        SET is_favorite = :is_favorite, is_tried = :is_tried
+                        WHERE id = :keep_id
+                        """
+                    ),
+                    {
+                        "keep_id": row["keep_id"],
+                        "is_favorite": row["is_favorite"],
+                        "is_tried": row["is_tried"],
+                    },
+                )
+                connection.execute(
+                    text(
+                        """
+                        DELETE FROM user_bottle_actions
+                        WHERE telegram_id = :telegram_id
+                          AND bottle_id = :bottle_id
+                          AND id != :keep_id
+                        """
+                    ),
+                    {
+                        "telegram_id": row["telegram_id"],
+                        "bottle_id": row["bottle_id"],
+                        "keep_id": row["keep_id"],
+                    },
+                )
+
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "uq_user_bottle_action_telegram_bottle_idx "
+                    "ON user_bottle_actions (telegram_id, bottle_id)"
+                )
+            )
+
+
 ensure_event_schema()
 ensure_catalog_schema()
+ensure_user_bottle_action_schema()
 
 app = FastAPI(title="Paphos Whisky Club API")
 
@@ -187,13 +278,38 @@ class BottleCreate(BaseModel):
     price_per_sample: float
     description: str
     image_url: Optional[str] = None
-    favorites_count: int = 0
-    tried_count: int = 0
+
 
 class BottleResponse(BottleCreate):
     id: int
+    favorites_count: int
+    tried_count: int
+
     class Config:
         from_attributes = True
+
+
+class DistilleryWithBottlesResponse(DistilleryResponse):
+    bottles: List[BottleResponse] = Field(default_factory=list)
+
+
+class BottleActionToggleRequest(BaseModel):
+    telegram_id: int
+    action_type: Literal["favorite", "tried"]
+
+
+class UserBottleStateResponse(BaseModel):
+    bottle_id: int
+    is_favorite: bool
+    is_tried: bool
+
+    class Config:
+        from_attributes = True
+
+
+class BottleActionToggleResponse(UserBottleStateResponse):
+    favorites_count: int
+    tried_count: int
 
 
 class RegistrationBase(BaseModel):
@@ -250,6 +366,23 @@ def get_or_create_registration(
     )
     db.add(registration)
     return registration
+
+
+def recompute_bottle_counts(bottle: models.Bottle, db: Session) -> None:
+    favorites_count, tried_count = db.query(
+        func.coalesce(
+            func.sum(
+                case((models.UserBottleAction.is_favorite.is_(True), 1), else_=0)
+            ),
+            0,
+        ),
+        func.coalesce(
+            func.sum(case((models.UserBottleAction.is_tried.is_(True), 1), else_=0)),
+            0,
+        ),
+    ).filter(models.UserBottleAction.bottle_id == bottle.id).one()
+    bottle.favorites_count = favorites_count
+    bottle.tried_count = tried_count
 
 
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
@@ -338,9 +471,11 @@ def get_event_members(event_id: int, db: Session = Depends(get_db)):
 
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---
 
-@app.get("/api/distilleries", response_model=List[DistilleryResponse])
+@app.get("/api/distilleries", response_model=List[DistilleryWithBottlesResponse])
 def get_distilleries(db: Session = Depends(get_db)):
-    return db.query(models.Distillery).order_by(models.Distillery.name).all()
+    return db.query(models.Distillery).options(
+        selectinload(models.Distillery.bottles)
+    ).order_by(models.Distillery.name).all()
 
 
 @app.post(
@@ -400,6 +535,16 @@ def delete_distillery(distillery_id: int, db: Session = Depends(get_db)):
     if not distillery:
         raise HTTPException(status_code=404, detail="Distillery not found")
 
+    bottle_ids = [
+        bottle_id
+        for (bottle_id,) in db.query(models.Bottle.id).filter(
+            models.Bottle.distillery_id == distillery_id
+        ).all()
+    ]
+    if bottle_ids:
+        db.query(models.UserBottleAction).filter(
+            models.UserBottleAction.bottle_id.in_(bottle_ids)
+        ).delete(synchronize_session=False)
     db.query(models.Bottle).filter(
         models.Bottle.distillery_id == distillery_id
     ).delete(synchronize_session=False)
@@ -457,6 +602,91 @@ def delete_bottle(bottle_id: int, db: Session = Depends(get_db)):
     bottle = db.query(models.Bottle).filter(models.Bottle.id == bottle_id).first()
     if not bottle:
         raise HTTPException(status_code=404, detail="Bottle not found")
+    db.query(models.UserBottleAction).filter(
+        models.UserBottleAction.bottle_id == bottle_id
+    ).delete(synchronize_session=False)
     db.delete(bottle)
     db.commit()
     return
+
+
+@app.post(
+    "/api/bottles/{bottle_id}/toggle-action",
+    response_model=BottleActionToggleResponse,
+)
+def toggle_bottle_action(
+    bottle_id: int,
+    action_data: BottleActionToggleRequest,
+    db: Session = Depends(get_db),
+):
+    bottle = db.query(models.Bottle).filter(
+        models.Bottle.id == bottle_id
+    ).with_for_update().first()
+    if not bottle:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+
+    action_field = (
+        "is_favorite" if action_data.action_type == "favorite" else "is_tried"
+    )
+    action = db.query(models.UserBottleAction).filter(
+        models.UserBottleAction.telegram_id == action_data.telegram_id,
+        models.UserBottleAction.bottle_id == bottle_id,
+    ).first()
+
+    current_value = getattr(action, action_field) if action else False
+    target_value = not current_value
+
+    if action is None:
+        action = models.UserBottleAction(
+            telegram_id=action_data.telegram_id,
+            bottle_id=bottle_id,
+        )
+        db.add(action)
+
+    setattr(action, action_field, target_value)
+
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        bottle = db.query(models.Bottle).filter(
+            models.Bottle.id == bottle_id
+        ).with_for_update().first()
+        if not bottle:
+            raise HTTPException(status_code=404, detail="Bottle not found")
+        action = db.query(models.UserBottleAction).filter(
+            models.UserBottleAction.telegram_id == action_data.telegram_id,
+            models.UserBottleAction.bottle_id == bottle_id,
+        ).first()
+        if action is None:
+            raise HTTPException(
+                status_code=409,
+                detail="Failed to persist bottle action",
+            )
+        setattr(action, action_field, target_value)
+        db.flush()
+
+    recompute_bottle_counts(bottle, db)
+    db.commit()
+    db.refresh(action)
+    db.refresh(bottle)
+
+    return BottleActionToggleResponse(
+        bottle_id=bottle.id,
+        is_favorite=action.is_favorite,
+        is_tried=action.is_tried,
+        favorites_count=bottle.favorites_count,
+        tried_count=bottle.tried_count,
+    )
+
+
+@app.get(
+    "/api/bottles/user-states",
+    response_model=List[UserBottleStateResponse],
+)
+def get_user_bottle_states(telegram_id: int, db: Session = Depends(get_db)):
+    return db.query(models.UserBottleAction).filter(
+        models.UserBottleAction.telegram_id == telegram_id,
+        (models.UserBottleAction.is_favorite.is_(True))
+        | (models.UserBottleAction.is_tried.is_(True)),
+    ).order_by(models.UserBottleAction.bottle_id).all()

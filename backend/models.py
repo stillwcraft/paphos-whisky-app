@@ -63,3 +63,33 @@ class Bottle(Base):
     favorites_count = Column(Integer, default=0, nullable=False)
     tried_count = Column(Integer, default=0, nullable=False)
     distillery = relationship("Distillery", back_populates="bottles")
+    user_actions = relationship(
+        "UserBottleAction",
+        back_populates="bottle",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class UserBottleAction(Base):
+    __tablename__ = "user_bottle_actions"
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_id",
+            "bottle_id",
+            name="uq_user_bottle_action_telegram_bottle",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(BigInteger, index=True, nullable=False)
+    bottle_id = Column(
+        Integer,
+        ForeignKey("bottles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    is_favorite = Column(Boolean, default=False, nullable=False)
+    is_tried = Column(Boolean, default=False, nullable=False)
+
+    bottle = relationship("Bottle", back_populates="user_actions")

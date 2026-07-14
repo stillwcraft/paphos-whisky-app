@@ -1,151 +1,378 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
 
-export type Bottle = {
+const API_URL = 'https://paphos-whisky-api.onrender.com';
+
+type Bottle = {
   id: number;
   name: string;
-  age: number;
-  abv: number;
+  distillery_id: number;
+  age: string | null;
+  abv: string | null;
+  price_per_sample: number;
+  description: string;
+  image_url: string | null;
+  favorites_count: number;
+  tried_count: number;
 };
 
-export type Distillery = {
+type Distillery = {
   id: number;
   name: string;
+  image_url: string | null;
+  description: string | null;
   bottles: Bottle[];
 };
 
-type DistilleriesTabProps = {
-  favorites: Array<string | number>;
-  toggleFavorite: (bottleId: string | number) => void;
+type BottleActionState = {
+  is_favorite: boolean;
+  is_tried: boolean;
 };
 
-export const distilleries: Distillery[] = [
-  {
-    id: 1,
-    name: 'The Macallan',
-    bottles: [
-      { id: 101, name: 'Sherry Oak 12 Years Old', age: 12, abv: 40 },
-      { id: 102, name: 'Double Cask 15 Years Old', age: 15, abv: 43 },
-      { id: 103, name: 'Rare Cask', age: 18, abv: 43 },
-    ],
-  },
-  {
-    id: 2,
-    name: 'Springbank',
-    bottles: [
-      { id: 201, name: 'Springbank 10 Years Old', age: 10, abv: 46 },
-      { id: 202, name: 'Springbank 15 Years Old', age: 15, abv: 46 },
-      { id: 203, name: 'Springbank 18 Years Old', age: 18, abv: 46 },
-    ],
-  },
-  {
-    id: 3,
-    name: 'Port Charlotte',
-    bottles: [
-      { id: 301, name: 'Port Charlotte 10', age: 10, abv: 50 },
-      { id: 302, name: 'Islay Barley 2014', age: 8, abv: 50 },
-      { id: 303, name: 'SC: 01 2012', age: 9, abv: 55.2 },
-    ],
-  },
-];
+type ToggleActionResponse = BottleActionState & {
+  bottle_id: number;
+  favorites_count: number;
+  tried_count: number;
+};
 
 function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   return (
     <svg
-      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={`h-5 w-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"
-      className={`h-5 w-5 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-      aria-hidden="true"
+      viewBox="0 0 24 24"
     >
       <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }
 
-function StarIcon({ isFavorite }: { isFavorite: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill={isFavorite ? 'currentColor' : 'none'}
-      stroke="currentColor"
-      strokeWidth="1.8"
-      className="h-5 w-5"
-      aria-hidden="true"
-    >
-      <path d="m12 3.5 2.63 5.33 5.88.85-4.25 4.14 1 5.85L12 16.9l-5.26 2.77 1-5.85-4.25-4.14 5.88-.85L12 3.5Z" />
-    </svg>
-  );
+function CatalogImage({
+  alt,
+  className,
+  source,
+}: {
+  alt: string;
+  className: string;
+  source: string | null;
+}) {
+  if (!source) {
+    return (
+      <div
+        aria-label={alt}
+        className={`${className} flex items-center justify-center bg-gradient-to-br from-amber-700/70 via-slate-700 to-slate-950 text-4xl`}
+        role="img"
+      >
+        🥃
+      </div>
+    );
+  }
+
+  return <img alt={alt} className={className} src={source} />;
 }
 
-export function DistilleriesTab({ favorites, toggleFavorite }: DistilleriesTabProps) {
-  const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
+async function errorMessage(response: Response) {
+  try {
+    const payload: unknown = await response.json();
+    if (typeof payload === 'object' && payload !== null && 'detail' in payload) {
+      return String(payload.detail);
+    }
+  } catch {
+    // Fall through to the HTTP status when the response is not JSON.
+  }
 
-  const toggleDistillery = (distilleryId: number) => {
-    setOpenDistilleryId((currentId) => currentId === distilleryId ? null : distilleryId);
+  return `Server error: ${response.status}`;
+}
+
+export function DistilleriesTab() {
+  const initDataState = useSignal(initData.state);
+  const telegramId = initDataState?.user?.id;
+  const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
+  const [selectedDistillery, setSelectedDistillery] = useState<Distillery | null>(null);
+  const [selectedBottle, setSelectedBottle] = useState<Bottle | null>(null);
+  const [userStates, setUserStates] = useState<Record<number, BottleActionState>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const loadCatalog = useCallback(async () => {
+    setIsLoading(true);
+    setFeedback(null);
+
+    try {
+      const distilleriesResponse = await fetch(`${API_URL}/api/distilleries`);
+      if (!distilleriesResponse.ok) {
+        throw new Error(await errorMessage(distilleriesResponse));
+      }
+
+      const loadedDistilleries = await distilleriesResponse.json() as Array<
+        Omit<Distillery, 'bottles'> & { bottles?: Bottle[] }
+      >;
+      const needsBottleFallback = loadedDistilleries.some(
+        (distillery) => !Array.isArray(distillery.bottles),
+      );
+      let fallbackBottles: Bottle[] = [];
+
+      // Keep the storefront usable while an older deployed API still returns
+      // distilleries without the new nested bottles field.
+      if (needsBottleFallback) {
+        const bottlesResponse = await fetch(`${API_URL}/api/bottles`);
+        if (!bottlesResponse.ok) {
+          throw new Error(await errorMessage(bottlesResponse));
+        }
+        fallbackBottles = await bottlesResponse.json() as Bottle[];
+      }
+
+      setDistilleries(loadedDistilleries.map((distillery) => ({
+        ...distillery,
+        bottles: Array.isArray(distillery.bottles)
+          ? distillery.bottles
+          : fallbackBottles.filter((bottle) => bottle.distillery_id === distillery.id),
+      })));
+
+      if (!telegramId) {
+        setUserStates({});
+        return;
+      }
+
+      const statesResponse = await fetch(
+        `${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`,
+      );
+      if (!statesResponse.ok) {
+        throw new Error(await errorMessage(statesResponse));
+      }
+
+      const states = await statesResponse.json() as Array<BottleActionState & { bottle_id: number }>;
+      setUserStates(Object.fromEntries(states.map((state) => [
+        state.bottle_id,
+        { is_favorite: state.is_favorite, is_tried: state.is_tried },
+      ])));
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Could not load the catalogue.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [telegramId]);
+
+  useEffect(() => {
+    void loadCatalog();
+  }, [loadCatalog]);
+
+  const toggleAction = async (bottle: Bottle, actionType: 'favorite' | 'tried') => {
+    if (!telegramId) {
+      setFeedback('Open the app in Telegram to save bottle marks.');
+      return;
+    }
+
+    setIsUpdatingBottleId(bottle.id);
+    setFeedback(null);
+
+    try {
+      const response = await fetch(`${API_URL}/api/bottles/${bottle.id}/toggle-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telegram_id: telegramId, action_type: actionType }),
+      });
+      if (!response.ok) {
+        throw new Error(await errorMessage(response));
+      }
+
+      const result = await response.json() as ToggleActionResponse;
+      setUserStates((current) => ({
+        ...current,
+        [bottle.id]: {
+          is_favorite: result.is_favorite,
+          is_tried: result.is_tried,
+        },
+      }));
+      setDistilleries((current) => current.map((distillery) => ({
+        ...distillery,
+        bottles: distillery.bottles.map((currentBottle) => currentBottle.id === bottle.id
+          ? {
+            ...currentBottle,
+            favorites_count: result.favorites_count,
+            tried_count: result.tried_count,
+          }
+          : currentBottle),
+      })));
+      setSelectedBottle((current) => current?.id === bottle.id
+        ? {
+          ...current,
+          favorites_count: result.favorites_count,
+          tried_count: result.tried_count,
+        }
+        : current);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'Could not update this bottle.');
+    } finally {
+      setIsUpdatingBottleId(null);
+    }
   };
 
+  const selectedBottleState = selectedBottle ? userStates[selectedBottle.id] : undefined;
+
   return (
-    <section className="mx-auto w-full max-w-md pt-8">
+    <section className="mx-auto w-full max-w-md pb-5 pt-8">
       <header className="mb-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Дистиллерии</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-white">Distilleries</h1>
       </header>
 
-      <div className="space-y-3">
-        {distilleries.map((distillery) => {
-          const isOpen = openDistilleryId === distillery.id;
-          const panelId = `distillery-${distillery.id}-bottles`;
+      {feedback && (
+        <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">
+          {feedback}
+        </p>
+      )}
 
-          return (
-            <article key={distillery.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70">
-              <h2>
+      {isLoading ? (
+        <p className="text-center text-sm text-slate-400">Loading distilleries...</p>
+      ) : distilleries.length === 0 ? (
+        <p className="text-center text-sm text-slate-400">The catalogue will be available soon.</p>
+      ) : (
+        <div className="space-y-4">
+          {distilleries.map((distillery) => {
+            const isOpen = openDistilleryId === distillery.id;
+            const panelId = `distillery-${distillery.id}-bottles`;
+
+            return (
+              <article key={distillery.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
                 <button
+                  aria-label={`Open ${distillery.name} details`}
+                  className="block h-44 w-full overflow-hidden text-left"
+                  onClick={() => setSelectedDistillery(distillery)}
                   type="button"
-                  aria-expanded={isOpen}
-                  aria-controls={panelId}
-                  onClick={() => toggleDistillery(distillery.id)}
-                  className="flex w-full items-center justify-between px-5 py-4 text-left text-base font-semibold text-white transition-colors hover:bg-white/5"
                 >
-                  {distillery.name}
-                  <ChevronIcon isOpen={isOpen} />
+                  <CatalogImage
+                    alt={distillery.name}
+                    className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                    source={distillery.image_url}
+                  />
                 </button>
-              </h2>
-              <div
-                id={panelId}
-                className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
-              >
-                <div className="overflow-hidden">
-                  <ul className="border-t border-white/10 px-5 py-1">
-                    {distillery.bottles.map((bottle) => {
-                      const isFavorite = favorites.includes(bottle.id);
-
-                      return (
-                        <li key={bottle.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-slate-100">{bottle.name}</p>
-                            <p className="mt-1 text-xs text-slate-400">{bottle.age} лет · {bottle.abv}% ABV</p>
-                          </div>
-                          <button
-                            type="button"
-                            aria-label={isFavorite ? `Удалить ${bottle.name} из избранного` : `Добавить ${bottle.name} в избранное`}
-                            onClick={() => toggleFavorite(bottle.id)}
-                            className={`rounded-lg p-2 transition-colors hover:bg-white/5 ${
-                              isFavorite ? 'text-yellow-400' : 'text-gray-400 hover:text-slate-200'
-                            }`}
-                          >
-                            <StarIcon isFavorite={isFavorite} />
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                <div className="flex items-center justify-between gap-3 px-5 py-4">
+                  <h2 className="min-w-0 truncate text-lg font-semibold text-white">{distillery.name}</h2>
+                  <button
+                    aria-controls={panelId}
+                    aria-expanded={isOpen}
+                    aria-label={isOpen ? `Hide ${distillery.name} bottles` : `Show ${distillery.name} bottles`}
+                    className="rounded-lg p-2 text-amber-400 transition-colors hover:bg-white/5"
+                    onClick={() => setOpenDistilleryId((current) => current === distillery.id ? null : distillery.id)}
+                    type="button"
+                  >
+                    <ChevronIcon isOpen={isOpen} />
+                  </button>
                 </div>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+                <div
+                  className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
+                  id={panelId}
+                >
+                  <div className="overflow-hidden">
+                    {distillery.bottles.length === 0 ? (
+                      <p className="border-t border-white/10 px-5 py-4 text-sm text-slate-400">No bottles yet.</p>
+                    ) : (
+                      <ul className="border-t border-white/10 px-4 py-2">
+                        {distillery.bottles.map((bottle) => (
+                          <li key={bottle.id}>
+                            <button
+                              className="flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left transition-colors hover:bg-white/5"
+                              onClick={() => setSelectedBottle(bottle)}
+                              type="button"
+                            >
+                              <CatalogImage
+                                alt=""
+                                className="h-14 w-12 shrink-0 rounded-lg object-cover"
+                                source={bottle.image_url}
+                              />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-slate-100">{bottle.name}</span>
+                                <span className="mt-1 block text-xs text-slate-400">
+                                  {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || 'Whisky'}
+                                </span>
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {selectedDistillery && (
+        <div className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
+          <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
+            <div className="relative">
+              <CatalogImage alt={selectedDistillery.name} className="h-56 w-full object-cover" source={selectedDistillery.image_url} />
+              <button
+                aria-label="Close distillery details"
+                className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
+                onClick={() => setSelectedDistillery(null)}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              <h2 className="text-2xl font-semibold text-white">{selectedDistillery.name}</h2>
+              <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>
+                {selectedDistillery.description || 'Description will be added soon.'}
+              </p>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {selectedBottle && (
+        <div className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
+          <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
+            <div className="relative">
+              <CatalogImage alt={selectedBottle.name} className="h-56 w-full object-cover" source={selectedBottle.image_url} />
+              <button
+                aria-label="Close bottle details"
+                className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
+                onClick={() => setSelectedBottle(null)}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
+              <h2 className="text-2xl font-semibold text-white">{selectedBottle.name}</h2>
+              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">Age</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.age || 'NAS'}</dd></div>
+                <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">ABV</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.abv || '—'}</dd></div>
+              </dl>
+              <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample} / sample</p>
+              <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
+              <button
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selectedBottleState?.is_favorite ? 'border-amber-300 bg-amber-400 text-slate-950' : 'border-slate-600 text-slate-100 hover:bg-white/5'}`}
+                disabled={isUpdatingBottleId === selectedBottle.id}
+                onClick={() => void toggleAction(selectedBottle, 'favorite')}
+                type="button"
+              >
+                ⭐ Favorites {selectedBottle.favorites_count > 0 && `(${selectedBottle.favorites_count})`}
+              </button>
+              <button
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selectedBottleState?.is_tried ? 'border-orange-300 bg-orange-400 text-slate-950' : 'border-slate-600 text-slate-100 hover:bg-white/5'}`}
+                disabled={isUpdatingBottleId === selectedBottle.id}
+                onClick={() => void toggleAction(selectedBottle, 'tried')}
+                type="button"
+              >
+                🥃 Tried {selectedBottle.tried_count > 0 && `(${selectedBottle.tried_count})`}
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
     </section>
   );
 }

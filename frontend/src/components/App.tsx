@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 
 import { AdminTab } from '@/components/AdminTab.tsx';
@@ -12,12 +12,6 @@ type TabId = 'events' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | '
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-type FavoritesContextValue = {
-  favorites: Array<string | number>;
-  toggleFavorite: (bottleId: string | number) => void;
-};
-
-export const FavoritesContext = createContext<FavoritesContextValue | null>(null);
 const ADMIN_TELEGRAM_ID = 8546526596; // Replace 0 with your Telegram user ID.
 
 type Tab = {
@@ -119,7 +113,6 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
-  const [favorites, setFavorites] = useState<Array<string | number>>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const activeScreen = tabs.find((tab) => tab.id === activeTab)?.screen;
@@ -128,26 +121,17 @@ export function App() {
     setIsAdmin(initDataState?.user?.id === ADMIN_TELEGRAM_ID);
   }, [initDataState]);
 
-  const toggleFavorite = (bottleId: string | number) => {
-    setFavorites((currentFavorites) => (
-      currentFavorites.includes(bottleId)
-        ? currentFavorites.filter((id) => id !== bottleId)
-        : [...currentFavorites, bottleId]
-    ));
-  };
-
   return (
-    <FavoritesContext.Provider value={{ favorites, toggleFavorite }}>
-      <div className="min-h-screen bg-slate-900 text-white">
-        <main className="min-h-screen px-6 pb-28">
+    <div className="min-h-screen bg-slate-900 text-white">
+      <main className="min-h-screen px-6 pb-28">
           {activeTab === 'events' ? (
             <EventsTab />
           ) : activeTab === 'distilleries' ? (
-            <DistilleriesTab favorites={favorites} toggleFavorite={toggleFavorite} />
+            <DistilleriesTab />
           ) : activeTab === 'bottles' ? (
             <BottlesSamplesTab />
           ) : activeTab === 'favorites' ? (
-            <FavoritesTab favorites={favorites} toggleFavorite={toggleFavorite} />
+            <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
           ) : activeTab === 'admin' && isAdmin ? (
@@ -162,9 +146,8 @@ export function App() {
               </div>
             </div>
           )}
-        </main>
-        <Footer activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
-      </div>
-    </FavoritesContext.Provider>
+      </main>
+      <Footer activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
+    </div>
   );
 }

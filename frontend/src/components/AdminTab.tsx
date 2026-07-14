@@ -1,7 +1,6 @@
 import React, {
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from 'react';
 
@@ -41,9 +40,11 @@ type BottleForm = {
   price_per_sample: string;
   description: string;
   image_url: string;
-  favorites_count: number;
-  tried_count: number;
 };
+
+type PendingDeletion =
+  | { type: 'distillery'; item: Distillery }
+  | { type: 'bottle'; item: Bottle };
 
 const emptyDistilleryForm: DistilleryForm = {
   name: '',
@@ -59,8 +60,6 @@ const emptyBottleForm: BottleForm = {
   price_per_sample: '',
   description: '',
   image_url: '',
-  favorites_count: 0,
-  tried_count: 0,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -110,8 +109,8 @@ export const AdminTab: React.FC = () => {
   const [bottles, setBottles] = useState<Bottle[]>([]);
   const [editingDistilleryId, setEditingDistilleryId] = useState<number | null>(null);
   const [editingBottleId, setEditingBottleId] = useState<number | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
   const [message, setMessage] = useState('');
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const loadCatalog = useCallback(async () => {
     try {
@@ -136,40 +135,6 @@ export const AdminTab: React.FC = () => {
   useEffect(() => {
     void loadCatalog();
   }, [loadCatalog]);
-
-  const insertMarkdown = (prefix: string, suffix = prefix) => {
-    const textarea = descriptionRef.current;
-    const start = textarea?.selectionStart ?? distilleryForm.description.length;
-    const end = textarea?.selectionEnd ?? start;
-    const selectedText = distilleryForm.description.slice(start, end) || 'text';
-    const replacement = `${prefix}${selectedText}${suffix}`;
-    const description = [
-      distilleryForm.description.slice(0, start),
-      replacement,
-      distilleryForm.description.slice(end),
-    ].join('');
-
-    setDistilleryForm({ ...distilleryForm, description });
-    requestAnimationFrame(() => {
-      textarea?.focus();
-      textarea?.setSelectionRange(start + prefix.length, start + prefix.length + selectedText.length);
-    });
-  };
-
-  const insertBulletList = () => {
-    const textarea = descriptionRef.current;
-    const start = textarea?.selectionStart ?? distilleryForm.description.length;
-    const end = textarea?.selectionEnd ?? start;
-    const selectedText = distilleryForm.description.slice(start, end) || 'item';
-    const replacement = selectedText.split('\n').map((line) => `- ${line}`).join('\n');
-    const description = [
-      distilleryForm.description.slice(0, start),
-      replacement,
-      distilleryForm.description.slice(end),
-    ].join('');
-
-    setDistilleryForm({ ...distilleryForm, description });
-  };
 
   const resetDistilleryForm = () => {
     setEditingDistilleryId(null);
@@ -294,16 +259,10 @@ export const AdminTab: React.FC = () => {
       price_per_sample: String(bottle.price_per_sample),
       description: bottle.description,
       image_url: bottle.image_url ?? '',
-      favorites_count: bottle.favorites_count,
-      tried_count: bottle.tried_count,
     });
   };
 
   const deleteDistillery = async (distillery: Distillery) => {
-    if (!window.confirm(`Удалить ${distillery.name} и все вложенные бутылки?`)) {
-      return;
-    }
-
     try {
       const response = await fetch(`${API_URL}/api/distilleries/${distillery.id}`, {
         method: 'DELETE',
@@ -312,6 +271,7 @@ export const AdminTab: React.FC = () => {
         throw new Error(await getErrorMessage(response));
       }
       await loadCatalog();
+      setPendingDeletion(null);
       setMessage('✅ Дистиллерия удалена.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '❌ Ошибка удаления дистиллерии');
@@ -327,6 +287,7 @@ export const AdminTab: React.FC = () => {
         throw new Error(await getErrorMessage(response));
       }
       await loadCatalog();
+      setPendingDeletion(null);
       setMessage('✅ Бутылка удалена.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '❌ Ошибка удаления бутылки');
@@ -348,7 +309,7 @@ export const AdminTab: React.FC = () => {
         <form onSubmit={handleCreateEvent} style={formStyle}>
           <input type="text" placeholder="Title" value={eventTitle} onChange={(event) => setEventTitle(event.target.value)} required style={inputStyle} />
           <input type="datetime-local" value={eventDate} onChange={(event) => setEventDate(event.target.value)} required style={inputStyle} />
-          <textarea placeholder="Event description" value={eventDesc} onChange={(event) => setEventDesc(event.target.value)} required style={{ ...inputStyle, height: '80px' }} />
+          <textarea placeholder="Event description" value={eventDesc} onChange={(event) => setEventDesc(event.target.value)} required style={{ ...inputStyle, height: '80px', whiteSpace: 'pre-wrap' }} />
           <input type="number" placeholder="Price, EUR" value={eventPrice} onChange={(event) => setEventPrice(event.target.value)} required style={inputStyle} />
           <input type="url" placeholder="Image URL (optional)" value={eventImg} onChange={(event) => setEventImg(event.target.value)} style={inputStyle} />
           <button type="submit" style={buttonStyle}>Publish Event</button>
@@ -360,12 +321,7 @@ export const AdminTab: React.FC = () => {
         <form onSubmit={handleDistillerySubmit} style={formStyle}>
           <input type="text" placeholder="Name" value={distilleryForm.name} onChange={(event) => setDistilleryForm({ ...distilleryForm, name: event.target.value })} required style={inputStyle} />
           <input type="url" placeholder="Image URL" value={distilleryForm.image_url} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value })} style={inputStyle} />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="button" onClick={() => insertMarkdown('**')} style={formatButtonStyle}>Bold</button>
-            <button type="button" onClick={() => insertMarkdown('*')} style={formatButtonStyle}>Italic</button>
-            <button type="button" onClick={insertBulletList} style={formatButtonStyle}>Bullet List</button>
-          </div>
-          <textarea ref={descriptionRef} placeholder="Description" value={distilleryForm.description} onChange={(event) => setDistilleryForm({ ...distilleryForm, description: event.target.value })} style={{ ...inputStyle, height: '100px' }} />
+          <textarea placeholder="Description" value={distilleryForm.description} onChange={(event) => setDistilleryForm({ ...distilleryForm, description: event.target.value })} style={{ ...inputStyle, height: '100px', whiteSpace: 'pre-wrap' }} />
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="submit" style={{ ...buttonStyle, flex: 1 }}>{editingDistilleryId === null ? 'Add Distillery' : 'Save Changes'}</button>
             {editingDistilleryId !== null && <button type="button" onClick={resetDistilleryForm} style={secondaryButtonStyle}>Cancel</button>}
@@ -386,7 +342,7 @@ export const AdminTab: React.FC = () => {
                     <strong>{distillery.name}</strong>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button type="button" onClick={() => startDistilleryEdit(distillery)} style={smallButtonStyle}>✏️ Edit</button>
-                      <button type="button" onClick={() => void deleteDistillery(distillery)} style={dangerButtonStyle}>🗑️ Delete</button>
+                      <button type="button" onClick={() => setPendingDeletion({ type: 'distillery', item: distillery })} style={dangerButtonStyle}>🗑️ Delete</button>
                     </div>
                   </div>
                   {distillery.description && <p style={descriptionStyle}>{distillery.description}</p>}
@@ -397,7 +353,7 @@ export const AdminTab: React.FC = () => {
                           <strong>{bottle.name}</strong>
                           <div style={{ display: 'flex', gap: '6px' }}>
                             <button type="button" onClick={() => startBottleEdit(bottle)} style={smallButtonStyle}>✏️ Edit</button>
-                            <button type="button" onClick={() => void deleteBottle(bottle)} style={dangerButtonStyle}>❌ Remove bottle</button>
+                            <button type="button" onClick={() => setPendingDeletion({ type: 'bottle', item: bottle })} style={dangerButtonStyle}>❌ Remove bottle</button>
                           </div>
                         </div>
                         <p style={mutedTextStyle}>{bottle.age ?? 'NAS'} · {bottle.abv ?? 'ABV not set'} · €{bottle.price_per_sample}</p>
@@ -423,7 +379,7 @@ export const AdminTab: React.FC = () => {
           <input type="text" placeholder="Age (e.g. 12 or NAS)" value={bottleForm.age} onChange={(event) => setBottleForm({ ...bottleForm, age: event.target.value })} style={inputStyle} />
           <input type="text" placeholder="ABV (e.g. 46% or 57.1% CS)" value={bottleForm.abv} onChange={(event) => setBottleForm({ ...bottleForm, abv: event.target.value })} style={inputStyle} />
           <input type="number" step="0.1" placeholder="Price per sample" value={bottleForm.price_per_sample} onChange={(event) => setBottleForm({ ...bottleForm, price_per_sample: event.target.value })} required style={inputStyle} />
-          <textarea placeholder="Description" value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} required style={{ ...inputStyle, height: '80px' }} />
+          <textarea placeholder="Description" value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} required style={{ ...inputStyle, height: '80px', whiteSpace: 'pre-wrap' }} />
           <input type="url" placeholder="Image URL" value={bottleForm.image_url} onChange={(event) => setBottleForm({ ...bottleForm, image_url: event.target.value })} style={inputStyle} />
           <div style={{ display: 'flex', gap: '8px' }}>
             <button type="submit" disabled={distilleries.length === 0} style={{ ...buttonStyle, flex: 1, opacity: distilleries.length === 0 ? 0.6 : 1 }}>{editingBottleId === null ? 'Add Bottle' : 'Save Changes'}</button>
@@ -431,6 +387,35 @@ export const AdminTab: React.FC = () => {
           </div>
         </form>
       </section>
+
+      {pendingDeletion && (
+        <div style={modalOverlayStyle} role="presentation">
+          <div style={modalStyle} role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
+            <h3 id="delete-dialog-title" style={{ marginTop: 0 }}>Confirm deletion</h3>
+            <p style={mutedTextStyle}>
+              {pendingDeletion.type === 'distillery'
+                ? `Delete ${pendingDeletion.item.name} and all its bottles?`
+                : `Delete ${pendingDeletion.item.name}?`}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <button type="button" onClick={() => setPendingDeletion(null)} style={secondaryButtonStyle}>Cancel</button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (pendingDeletion.type === 'distillery') {
+                    void deleteDistillery(pendingDeletion.item);
+                  } else {
+                    void deleteBottle(pendingDeletion.item);
+                  }
+                }}
+                style={dangerButtonStyle}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -463,12 +448,6 @@ const secondaryButtonStyle: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const formatButtonStyle: React.CSSProperties = {
-  ...secondaryButtonStyle,
-  flex: 1,
-  padding: '8px',
-};
-
 const smallButtonStyle: React.CSSProperties = {
   padding: '6px 8px',
   borderRadius: '6px',
@@ -493,4 +472,25 @@ const mutedTextStyle: React.CSSProperties = {
 const descriptionStyle: React.CSSProperties = {
   ...mutedTextStyle,
   whiteSpace: 'pre-wrap',
+};
+
+const modalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 50,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '20px',
+  background: 'rgba(0, 0, 0, 0.7)',
+};
+
+const modalStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '360px',
+  padding: '20px',
+  borderRadius: '12px',
+  border: '1px solid #4a5568',
+  background: '#1a202c',
+  color: '#fff',
 };
