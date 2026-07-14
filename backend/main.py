@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -9,6 +10,23 @@ from database import engine, get_db
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
 models.Base.metadata.create_all(bind=engine)
+
+
+def ensure_event_schema() -> None:
+    event_columns = {
+        column["name"] for column in inspect(engine).get_columns("events")
+    }
+    if "has_samples" not in event_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE events "
+                    "ADD COLUMN has_samples BOOLEAN NOT NULL DEFAULT FALSE"
+                )
+            )
+
+
+ensure_event_schema()
 
 app = FastAPI(title="Paphos Whisky Club API")
 
@@ -28,6 +46,7 @@ class EventCreate(BaseModel):
     description: str
     price: float
     image_url: Optional[str] = None
+    has_samples: bool = False
 
 class EventResponse(EventCreate):
     id: int
@@ -46,6 +65,62 @@ class BottleResponse(BottleCreate):
     id: int
     class Config:
         from_attributes = True
+
+
+class RegistrationBase(BaseModel):
+    telegram_id: int
+    username: Optional[str] = None
+    first_name: Optional[str] = None
+
+
+class RegistrationRequest(RegistrationBase):
+    registered: bool
+
+
+class SamplesRequest(RegistrationBase):
+    samples: bool
+
+
+class RegistrationResponse(RegistrationBase):
+    id: int
+    event_id: int
+    registered: bool
+    samples: bool
+
+    class Config:
+        from_attributes = True
+
+
+def get_event_or_404(event_id: int, db: Session) -> models.Event:
+    event = db.query(models.Event).filter(models.Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    return event
+
+
+def get_or_create_registration(
+    event_id: int,
+    registration_data: RegistrationBase,
+    db: Session,
+) -> models.Registration:
+    registration = db.query(models.Registration).filter(
+        models.Registration.event_id == event_id,
+        models.Registration.telegram_id == registration_data.telegram_id,
+    ).first()
+
+    if registration:
+        registration.username = registration_data.username
+        registration.first_name = registration_data.first_name
+        return registration
+
+    registration = models.Registration(
+        event_id=event_id,
+        telegram_id=registration_data.telegram_id,
+        username=registration_data.username,
+        first_name=registration_data.first_name,
+    )
+    db.add(registration)
+    return registration
 
 
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
@@ -85,6 +160,51 @@ def delete_event(event_id: int, db: Session = Depends(get_db)):
     db.delete(event)
     db.commit()
     return
+
+
+@app.post(
+    "/api/events/{event_id}/register",
+    response_model=RegistrationResponse,
+)
+def register_for_event(
+    event_id: int,
+    registration_data: RegistrationRequest,
+    db: Session = Depends(get_db),
+):
+    get_event_or_404(event_id, db)
+    registration = get_or_create_registration(event_id, registration_data, db)
+    registration.registered = registration_data.registered
+    db.commit()
+    db.refresh(registration)
+    return registration
+
+
+@app.post(
+    "/api/events/{event_id}/samples",
+    response_model=RegistrationResponse,
+)
+def reserve_samples(
+    event_id: int,
+    samples_data: SamplesRequest,
+    db: Session = Depends(get_db),
+):
+    get_event_or_404(event_id, db)
+    registration = get_or_create_registration(event_id, samples_data, db)
+    registration.samples = samples_data.samples
+    db.commit()
+    db.refresh(registration)
+    return registration
+
+
+@app.get(
+    "/api/events/{event_id}/members",
+    response_model=List[RegistrationResponse],
+)
+def get_event_members(event_id: int, db: Session = Depends(get_db)):
+    get_event_or_404(event_id, db)
+    return db.query(models.Registration).filter(
+        models.Registration.event_id == event_id
+    ).order_by(models.Registration.id).all()
 
 
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---

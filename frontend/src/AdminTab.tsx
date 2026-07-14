@@ -14,6 +14,7 @@ type AdminEvent = {
   description: string;
   price: number;
   image_url: string | null;
+  has_samples: boolean;
 };
 
 type EventForm = {
@@ -22,6 +23,7 @@ type EventForm = {
   description: string;
   price: string;
   image_url: string;
+  has_samples: boolean;
 };
 
 const initialEventForm: EventForm = {
@@ -30,6 +32,7 @@ const initialEventForm: EventForm = {
   description: '',
   price: '',
   image_url: '',
+  has_samples: false,
 };
 
 const initialBottleForm = {
@@ -102,6 +105,7 @@ export function AdminTab() {
       description: currentEvent.description,
       price: String(currentEvent.price),
       image_url: currentEvent.image_url ?? '',
+      has_samples: currentEvent.has_samples,
     });
     setFeedback(null);
   };
@@ -206,10 +210,27 @@ export function AdminTab() {
           {editingEvent ? `📝 Редактировать событие ${editingEvent.title}` : 'Создать событие'}
         </h2>
         <input required value={eventForm.title} onChange={(event) => setEventForm({ ...eventForm, title: event.target.value })} placeholder="Название события" className={inputClassName} />
-        <input required value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} placeholder="Дата" className={inputClassName} />
+        <input
+          required
+          type="datetime-local"
+          value={eventForm.date}
+          onFocus={(event) => event.currentTarget.blur()}
+          onClick={(event) => event.currentTarget.showPicker?.()}
+          onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })}
+          className={inputClassName}
+        />
         <textarea required value={eventForm.description} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} placeholder="Описание" rows={4} className={`${inputClassName} resize-none`} />
         <input required min="0" step="0.01" type="number" value={eventForm.price} onChange={(event) => setEventForm({ ...eventForm, price: event.target.value })} placeholder="Цена, EUR" className={inputClassName} />
         <input type="url" value={eventForm.image_url} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value })} placeholder="URL изображения (необязательно)" className={inputClassName} />
+        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-slate-900 px-3 py-3 text-sm text-slate-200">
+          <input
+            type="checkbox"
+            checked={eventForm.has_samples}
+            onChange={(event) => setEventForm({ ...eventForm, has_samples: event.target.checked })}
+            className="h-4 w-4 accent-amber-400"
+          />
+          Доступны сэмплы
+        </label>
         <div className="flex gap-3">
           <button disabled={isSaving} type="submit" className="flex-1 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
             {editingEventId === null ? 'Сохранить событие' : 'Сохранить изменения'}
@@ -234,7 +255,10 @@ export function AdminTab() {
               <li key={currentEvent.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-slate-900/60 p-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-white">{currentEvent.title}</p>
-                  <p className="mt-1 text-xs text-slate-400">{currentEvent.date} · €{currentEvent.price}</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {currentEvent.date} · €{currentEvent.price}
+                    {currentEvent.has_samples ? ' · Сэмплы доступны' : ''}
+                  </p>
                 </div>
                 <button type="button" onClick={() => startEditing(currentEvent)} className="shrink-0 rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-amber-400 transition-colors hover:bg-slate-600">
                   ✏️ Редактировать
