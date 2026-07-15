@@ -142,19 +142,24 @@ export function DistilleriesTab() {
         return;
       }
 
-      const statesResponse = await fetch(
-        `${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`,
-        { headers: telegramAuthHeaders(initDataRaw) },
-      );
-      if (!statesResponse.ok) {
-        throw new Error(await errorMessage(statesResponse));
-      }
+      try {
+        const statesResponse = await fetch(
+          `${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`,
+          { headers: telegramAuthHeaders(initDataRaw) },
+        );
+        if (!statesResponse.ok) {
+          throw new Error(await errorMessage(statesResponse));
+        }
 
-      const states = await statesResponse.json() as Array<BottleActionState & { bottle_id: number }>;
-      setUserStates(Object.fromEntries(states.map((state) => [
-        state.bottle_id,
-        { is_favorite: state.is_favorite, is_tried: state.is_tried },
-      ])));
+        const states = await statesResponse.json() as Array<BottleActionState & { bottle_id: number }>;
+        setUserStates(Object.fromEntries(states.map((state) => [
+          state.bottle_id,
+          { is_favorite: state.is_favorite, is_tried: state.is_tried },
+        ])));
+      } catch {
+        // Personal marks require configured Telegram server authentication.
+        setUserStates({});
+      }
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Could not load the catalogue.');
     } finally {

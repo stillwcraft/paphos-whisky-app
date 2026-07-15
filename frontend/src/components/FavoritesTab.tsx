@@ -3,6 +3,7 @@ import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const PERSONAL_DATA_UNAVAILABLE = 'Favorites are temporarily unavailable. Please try again later.';
 
 type Bottle = {
   id: number;
@@ -46,6 +47,13 @@ async function getError(response: Response) {
     // Use the HTTP status below when the response has no JSON error body.
   }
   return `Server error: ${response.status}`;
+}
+
+function displayError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  return message.includes('Telegram auth is not configured')
+    ? PERSONAL_DATA_UNAVAILABLE
+    : message;
 }
 
 export function FavoritesTab() {
@@ -95,7 +103,7 @@ export function FavoritesTab() {
           .filter((bottle) => statesByBottle[bottle.id]?.is_favorite)
           .map((bottle) => ({ ...bottle, distilleryName: bottle.distillery_id ? distilleryNames.get(bottle.distillery_id) ?? 'Independent bottle' : 'Independent bottle' })));
       } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Could not load favorites.');
+        setError(displayError(loadError, 'Could not load favorites.'));
       } finally {
         setIsLoading(false);
       }
@@ -147,7 +155,7 @@ export function FavoritesTab() {
         closeBottle();
       }
     } catch (toggleError) {
-      setError(toggleError instanceof Error ? toggleError.message : 'Could not update this bottle.');
+      setError(displayError(toggleError, 'Could not update this bottle.'));
     } finally {
       setIsUpdatingBottleId(null);
     }
