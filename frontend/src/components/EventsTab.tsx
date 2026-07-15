@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import ReactMarkdown from 'react-markdown';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -99,7 +100,7 @@ function BottomSheet({
               onClick={onCancel}
               className="mt-6 w-full rounded-xl bg-red-500/90 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-400"
             >
-              {isRegistration ? 'Cancel registration' : 'Cancel'}
+              {isRegistration ? 'Cancel registration' : 'Cancel reservation'}
             </button>
           </div>
         )}
@@ -113,7 +114,12 @@ function BottomSheet({
                 <div className="p-4">
                   <p className="text-xs font-semibold text-amber-400">{formatDate(upcomingEvent.date)}</p>
                   <h3 className="mt-2 text-lg font-semibold text-white">{upcomingEvent.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{upcomingEvent.description}</p>
+                  <div
+                    className="mt-2 text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3"
+                    style={{ overflowY: 'auto', maxHeight: '50vh', paddingRight: '10px' }}
+                  >
+                    <ReactMarkdown>{upcomingEvent.description}</ReactMarkdown>
+                  </div>
                   <p className="mt-4 text-sm font-semibold text-amber-400">€{upcomingEvent.price}</p>
                 </div>
               </article>
@@ -345,7 +351,9 @@ export function EventsTab() {
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
                     <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
-                    <p className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{event.description}</p>
+                    <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
+                      <ReactMarkdown>{event.description}</ReactMarkdown>
+                    </div>
                     <p className="mt-auto pt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
                     <div className="mt-3 flex gap-2">
                       <button
@@ -400,7 +408,9 @@ export function EventsTab() {
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-28">
               <p className="text-xs font-semibold text-amber-400">{formatDate(expandedEvent.date)}</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{expandedEvent.title}</h2>
-              <p className="mt-5 whitespace-pre-line text-sm leading-7 text-slate-300">{expandedEvent.description}</p>
+              <div className="mt-5 text-sm leading-7 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-semibold [&_ul]:my-3">
+                <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
+              </div>
               <p className="mt-6 text-lg font-semibold text-amber-400">€{expandedEvent.price}</p>
             </div>
             <div className="border-t border-white/10 bg-slate-900 p-4">

@@ -71,8 +71,8 @@ const tabs: Tab[] = [
   { id: 'events', label: 'Events', screen: 'Экран Events', Icon: CalendarIcon },
   { id: 'distilleries', label: 'Distilleries', screen: 'Экран Дистиллерии', Icon: DistilleryIcon },
   { id: 'bottles', label: 'Bottles', screen: 'Экран Бутылки и сэмплы', Icon: BottleIcon },
-  { id: 'favorites', label: 'Избранное', screen: 'Экран Избранное', Icon: StarIcon },
-  { id: 'profile', label: 'Профиль', screen: 'Экран Профиль', Icon: UserIcon },
+  { id: 'favorites', label: 'Favorites', screen: 'Favorites', Icon: StarIcon },
+  { id: 'profile', label: 'Profile', screen: 'Profile', Icon: UserIcon },
 ];
 const adminTab: Tab = { id: 'admin', label: 'Админ', screen: 'Админ', Icon: AdminIcon };
 

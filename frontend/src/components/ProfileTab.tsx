@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 type TelegramUser = {
   id?: number;
   first_name?: string;
@@ -51,16 +49,7 @@ function UserPlaceholderIcon() {
   );
 }
 
-function BarcodeIcon() {
-  return (
-    <svg viewBox="0 0 48 32" fill="currentColor" className="h-7 w-10" aria-hidden="true">
-      <path d="M3 3h2v26H3zm4 0h1v26H7zm3 0h4v26h-4zm6 0h2v26h-2zm5 0h1v26h-1zm3 0h3v26h-3zm5 0h2v26h-2zm4 0h4v26h-4zm6 0h1v26h-1z" />
-    </svg>
-  );
-}
-
 export function ProfileTab() {
-  const [isClubCardHighlighted, setIsClubCardHighlighted] = useState(false);
   const telegramUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
   const name = telegramUser?.first_name ?? 'Константин';
   const username = telegramUser?.username ?? 'whisky_connoisseur';
@@ -91,26 +80,13 @@ export function ProfileTab() {
         <div className="mt-7 grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-white/10 bg-slate-800/80 p-4">
             <p className="text-3xl font-bold text-white">{tastingsCount}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">Посещено дегустаций</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">Tastings attended</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-800/80 p-4">
             <p className="text-3xl font-bold text-white">{bottlesCount}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">Попробовано бутылок</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">Tested releases</p>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={() => setIsClubCardHighlighted((isHighlighted) => !isHighlighted)}
-          className={`mt-7 flex w-full items-center justify-center gap-3 rounded-2xl border px-4 py-4 text-sm font-semibold transition-all ${
-            isClubCardHighlighted
-              ? 'border-amber-300 bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/30'
-              : 'border-amber-400/30 bg-amber-400/10 text-amber-400 hover:border-amber-400 hover:bg-amber-400/20'
-          }`}
-        >
-          <BarcodeIcon />
-          Клубная карта
-        </button>
       </article>
     </section>
   );
