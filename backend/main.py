@@ -71,12 +71,24 @@ def rebuild_sqlite_bottles_table(
 
 def ensure_event_schema() -> None:
     event_columns = get_table_columns(engine, "events")
-    if "has_samples" not in event_columns:
-        with engine.begin() as connection:
+    with engine.begin() as connection:
+        if "has_samples" not in event_columns:
             connection.execute(
                 text(
                     "ALTER TABLE events "
                     "ADD COLUMN has_samples BOOLEAN NOT NULL DEFAULT FALSE"
+                )
+            )
+        if "samples_price" not in event_columns:
+            samples_price_type = (
+                "DOUBLE PRECISION"
+                if engine.dialect.name == "postgresql"
+                else "FLOAT"
+            )
+            connection.execute(
+                text(
+                    "ALTER TABLE events "
+                    f"ADD COLUMN samples_price {samples_price_type} NULL"
                 )
             )
 
@@ -300,11 +312,15 @@ class EventCreate(BaseModel):
     date: str
     description: str
     price: float
+    samples_price: Optional[float] = None
     image_url: Optional[str] = None
     has_samples: bool = False
 
 class EventResponse(EventCreate):
     id: int
+    registered_count: int
+    samples_count: int
+
     class Config:
         from_attributes = True
 
@@ -437,11 +453,68 @@ def recompute_bottle_counts(bottle: models.Bottle, db: Session) -> None:
     bottle.tried_count = tried_count
 
 
+def build_event_response(
+    event: models.Event,
+    *,
+    registered_count: int = 0,
+    samples_count: int = 0,
+) -> EventResponse:
+    return EventResponse(
+        id=event.id,
+        title=event.title,
+        date=event.date,
+        description=event.description,
+        price=event.price,
+        samples_price=event.samples_price,
+        image_url=event.image_url,
+        has_samples=event.has_samples,
+        registered_count=int(registered_count),
+        samples_count=int(samples_count),
+    )
+
+
+def get_event_counts_subquery(db: Session):
+    return (
+        db.query(
+            models.Registration.event_id.label("event_id"),
+            func.coalesce(
+                func.sum(
+                    case((models.Registration.registered.is_(True), 1), else_=0)
+                ),
+                0,
+            ).label("registered_count"),
+            func.coalesce(
+                func.sum(case((models.Registration.samples.is_(True), 1), else_=0)),
+                0,
+            ).label("samples_count"),
+        )
+        .group_by(models.Registration.event_id)
+        .subquery()
+    )
+
+
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
 
 @app.get("/api/events", response_model=List[EventResponse])
 def get_events(db: Session = Depends(get_db)):
-    return db.query(models.Event).all()
+    event_counts = get_event_counts_subquery(db)
+    events = (
+        db.query(
+            models.Event,
+            func.coalesce(event_counts.c.registered_count, 0).label("registered_count"),
+            func.coalesce(event_counts.c.samples_count, 0).label("samples_count"),
+        )
+        .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
+        .all()
+    )
+    return [
+        build_event_response(
+            event,
+            registered_count=registered_count,
+            samples_count=samples_count,
+        )
+        for event, registered_count, samples_count in events
+    ]
 
 @app.post("/api/events", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 def create_event(event_data: EventCreate, db: Session = Depends(get_db)):
@@ -449,7 +522,7 @@ def create_event(event_data: EventCreate, db: Session = Depends(get_db)):
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
-    return new_event
+    return build_event_response(new_event)
 
 
 @app.put("/api/events/{event_id}", response_model=EventResponse)
@@ -463,7 +536,22 @@ def update_event(event_id: int, event_data: EventCreate, db: Session = Depends(g
 
     db.commit()
     db.refresh(event)
-    return event
+    event_counts = get_event_counts_subquery(db)
+    registered_count, samples_count = (
+        db.query(
+            func.coalesce(event_counts.c.registered_count, 0),
+            func.coalesce(event_counts.c.samples_count, 0),
+        )
+        .select_from(models.Event)
+        .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
+        .filter(models.Event.id == event_id)
+        .one()
+    )
+    return build_event_response(
+        event,
+        registered_count=registered_count,
+        samples_count=samples_count,
+    )
 
 
 @app.delete("/api/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -3,15 +3,15 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, t
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 type Label = 'bottle' | 'samples' | 'event';
 
-type EventItem = { id: number; title: string; date: string; description: string; price: number; image_url: string | null; has_samples: boolean };
+type EventItem = { id: number; title: string; date: string; description: string; price: number; samples_price: number | null; image_url: string | null; has_samples: boolean; registered_count: number; samples_count: number };
 type Distillery = { id: number; name: string; image_url: string | null; description: string | null };
 type Bottle = { id: number; name: string; distillery_id: number | null; label: Label; age: string | null; abv: string | null; price_per_sample: number; description: string; image_url: string | null };
-type EventForm = Omit<EventItem, 'id'>;
+type EventForm = Omit<EventItem, 'id' | 'registered_count' | 'samples_count'>;
 type DistilleryForm = Omit<Distillery, 'id'>;
 type BottleForm = { name: string; label: Label; age: string; abv: string; price_per_sample: string; description: string; image_url: string };
 type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'bottle'; item: Bottle };
 
-const emptyEvent: EventForm = { title: '', date: '', description: '', price: 0, image_url: null, has_samples: false };
+const emptyEvent: EventForm = { title: '', date: '', description: '', price: 0, samples_price: null, image_url: null, has_samples: false };
 const emptyDistillery: DistilleryForm = { name: '', image_url: null, description: null };
 const emptyBottle: BottleForm = { name: '', label: 'bottle', age: '', abv: '', price_per_sample: '', description: '', image_url: '' };
 
@@ -131,6 +131,7 @@ export function AdminTab() {
         <input required style={inputStyle} type="datetime-local" value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} />
         <textarea required placeholder="Description" rows={4} style={{ ...inputStyle, whiteSpace: 'pre-wrap' }} value={eventForm.description} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} />
         <input required min="0" placeholder="Price" style={inputStyle} type="number" value={eventForm.price || ''} onChange={(event) => setEventForm({ ...eventForm, price: Number(event.target.value) })} />
+        <input min="0" placeholder="Samples Price (EUR)" step="0.1" style={inputStyle} type="number" value={eventForm.samples_price ?? ''} onChange={(event) => setEventForm({ ...eventForm, samples_price: event.target.value === '' ? null : Number(event.target.value) })} />
         <input placeholder="Image URL" style={inputStyle} value={eventForm.image_url ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value || null })} />
         <label style={labelStyle}><input checked={eventForm.has_samples} type="checkbox" onChange={(event) => setEventForm({ ...eventForm, has_samples: event.target.checked })} /> Samples available</label>
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingEventId === null ? 'Create Event' : 'Save Changes'}</button>{editingEventId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetEvent}>Cancel</button>}</div>

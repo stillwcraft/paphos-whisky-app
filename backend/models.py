@@ -10,6 +10,7 @@ class Event(Base):
     date = Column(String)  # Например: "25 Июля, 19:00"
     description = Column(String)
     price = Column(Float)
+    samples_price = Column(Float, nullable=True)
     image_url = Column(String, nullable=True)
     has_samples = Column(Boolean, default=False, nullable=False)
 

@@ -10,8 +10,11 @@ type ClubEvent = {
   date: string;
   description: string;
   price: number;
+  samples_price: number | null;
   image_url: string | null;
   has_samples: boolean;
+  registered_count: number;
+  samples_count: number;
 };
 
 type Member = {
@@ -358,7 +361,10 @@ export function EventsTab() {
                         <ReactMarkdown>{event.description}</ReactMarkdown>
                       </div>
                     </div>
-                    <p className="mt-auto pt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
+                    <div className="mt-auto flex justify-between gap-3 pt-3 text-sm font-semibold text-amber-400">
+                      <span>Price: {event.price} EUR</span>
+                      {event.samples_price !== null && <span>Samples: {event.samples_price} EUR</span>}
+                    </div>
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -370,6 +376,7 @@ export function EventsTab() {
                         className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Register
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{event.registered_count}</span>
                       </button>
                       {event.has_samples && (
                         <button
@@ -382,6 +389,7 @@ export function EventsTab() {
                           className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Samples
+                          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{event.samples_count}</span>
                         </button>
                       )}
                     </div>
@@ -417,7 +425,10 @@ export function EventsTab() {
                   <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
                 </div>
               </div>
-              <p className="mt-6 text-lg font-semibold text-amber-400">€{expandedEvent.price}</p>
+              <div className="mt-6 flex justify-between gap-3 text-lg font-semibold text-amber-400">
+                <span>Price: {expandedEvent.price} EUR</span>
+                {expandedEvent.samples_price !== null && <span>Samples: {expandedEvent.samples_price} EUR</span>}
+              </div>
             </div>
             <div className="border-t border-white/10 bg-slate-900 p-4">
               {(() => {
@@ -433,6 +444,7 @@ export function EventsTab() {
                       className="flex-1 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Register
+                      <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{expandedEvent.registered_count}</span>
                     </button>
                     {expandedEvent.has_samples && (
                       <button
@@ -442,6 +454,7 @@ export function EventsTab() {
                         className="flex-1 rounded-xl bg-slate-600 px-4 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Samples
+                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{expandedEvent.samples_count}</span>
                       </button>
                     )}
                   </div>
