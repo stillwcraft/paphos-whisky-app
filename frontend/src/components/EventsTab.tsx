@@ -118,7 +118,9 @@ function BottomSheet({
                     className="mt-2 text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3"
                     style={{ overflowY: 'auto', maxHeight: '50vh', paddingRight: '10px' }}
                   >
-                    <ReactMarkdown>{upcomingEvent.description}</ReactMarkdown>
+                    <div className="markdown-content">
+                      <ReactMarkdown>{upcomingEvent.description}</ReactMarkdown>
+                    </div>
                   </div>
                   <p className="mt-4 text-sm font-semibold text-amber-400">€{upcomingEvent.price}</p>
                 </div>
@@ -352,7 +354,9 @@ export function EventsTab() {
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
                     <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
                     <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
-                      <ReactMarkdown>{event.description}</ReactMarkdown>
+                      <div className="markdown-content">
+                        <ReactMarkdown>{event.description}</ReactMarkdown>
+                      </div>
                     </div>
                     <p className="mt-auto pt-3 text-sm font-semibold text-amber-400">€{event.price}</p>
                     <div className="mt-3 flex gap-2">
@@ -409,7 +413,9 @@ export function EventsTab() {
               <p className="text-xs font-semibold text-amber-400">{formatDate(expandedEvent.date)}</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{expandedEvent.title}</h2>
               <div className="mt-5 text-sm leading-7 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-semibold [&_ul]:my-3">
-                <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
+                <div className="markdown-content">
+                  <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
+                </div>
               </div>
               <p className="mt-6 text-lg font-semibold text-amber-400">€{expandedEvent.price}</p>
             </div>
