@@ -84,9 +84,17 @@ function BottomSheet({
         aria-label="Панель события"
         aria-modal="true"
         role="dialog"
-        className="mx-auto w-full max-w-md rounded-t-3xl border border-amber-100/10 bg-slate-900 p-5 shadow-2xl shadow-black/50"
+        className="relative mx-auto w-full max-w-md rounded-t-3xl border border-amber-100/10 bg-slate-900 p-5 shadow-2xl shadow-black/50"
         style={{ animation: 'bottomsheet-slide-up 220ms ease-out' }}
       >
+        <button
+          aria-label="Close event panel"
+          className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-xl text-slate-100 transition-colors hover:bg-slate-700"
+          onClick={onClose}
+          type="button"
+        >
+          ✕
+        </button>
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-slate-600" />
 
         {activeTab === 'main' && (
