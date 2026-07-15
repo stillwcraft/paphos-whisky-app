@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -37,21 +38,23 @@ function UserPlaceholderIcon() {
 
 export function ProfileTab() {
   const tg = window.Telegram?.WebApp;
-  const user = tg?.initDataUnsafe?.user;
+  const rawUser = tg?.initDataUnsafe?.user;
+  const initDataState = useSignal(initData.state);
+  const userId = initDataState?.user?.id ?? rawUser?.id;
   const [stats, setStats] = useState<UserStats>({ tastings_attended: 0, tested_releases: 0 });
   const [statsError, setStatsError] = useState<string | null>(null);
-  const name = user?.first_name ?? 'Whisky Club Member';
-  const username = user?.username;
-  const photoUrl = user?.photo_url;
+  const name = initDataState?.user?.first_name ?? rawUser?.first_name ?? 'Whisky Club Member';
+  const username = initDataState?.user?.username ?? rawUser?.username;
+  const photoUrl = initDataState?.user?.photo_url ?? rawUser?.photo_url;
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!userId) {
       return;
     }
 
     const loadStats = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/users/${user.id}/stats`);
+        const response = await fetch(`${API_URL}/api/users/${userId}/stats`);
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
         }
@@ -63,7 +66,7 @@ export function ProfileTab() {
     };
 
     void loadStats();
-  }, [user?.id]);
+  }, [userId]);
 
   return (
     <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center py-8">
@@ -73,7 +76,7 @@ export function ProfileTab() {
             <img alt="Avatar" className="h-full w-full rounded-full object-cover" src={photoUrl} />
           ) : (
             <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-800">
-              {user?.first_name ? <span className="text-2xl font-bold">{user.first_name[0]?.toUpperCase()}</span> : <UserPlaceholderIcon />}
+              {name ? <span className="text-2xl font-bold">{name[0]?.toUpperCase()}</span> : <UserPlaceholderIcon />}
             </div>
           )}
         </div>
