@@ -53,8 +53,9 @@ class Bottle(Base):
         Integer,
         ForeignKey("distilleries.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
     )
+    label = Column(String, default="bottle", nullable=False)
     age = Column(String, nullable=True)
     abv = Column(String, nullable=True)
     price_per_sample = Column(Float)

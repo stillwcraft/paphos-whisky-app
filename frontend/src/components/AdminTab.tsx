@@ -1,496 +1,184 @@
-import React, {
-  useCallback,
-  useEffect,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+type Label = 'bottle' | 'samples' | 'event';
 
-type Distillery = {
-  id: number;
-  name: string;
-  image_url: string | null;
-  description: string | null;
-};
+type EventItem = { id: number; title: string; date: string; description: string; price: number; image_url: string | null; has_samples: boolean };
+type Distillery = { id: number; name: string; image_url: string | null; description: string | null };
+type Bottle = { id: number; name: string; distillery_id: number | null; label: Label; age: string | null; abv: string | null; price_per_sample: number; description: string; image_url: string | null };
+type EventForm = Omit<EventItem, 'id'>;
+type DistilleryForm = Omit<Distillery, 'id'>;
+type BottleForm = { name: string; label: Label; age: string; abv: string; price_per_sample: string; description: string; image_url: string };
+type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'bottle'; item: Bottle };
 
-type Bottle = {
-  id: number;
-  name: string;
-  distillery_id: number;
-  age: string | null;
-  abv: string | null;
-  price_per_sample: number;
-  description: string;
-  image_url: string | null;
-  favorites_count: number;
-  tried_count: number;
-};
+const emptyEvent: EventForm = { title: '', date: '', description: '', price: 0, image_url: null, has_samples: false };
+const emptyDistillery: DistilleryForm = { name: '', image_url: null, description: null };
+const emptyBottle: BottleForm = { name: '', label: 'bottle', age: '', abv: '', price_per_sample: '', description: '', image_url: '' };
 
-type DistilleryForm = {
-  name: string;
-  image_url: string;
-  description: string;
-};
-
-type BottleForm = {
-  name: string;
-  distillery_id: string;
-  age: string;
-  abv: string;
-  price_per_sample: string;
-  description: string;
-  image_url: string;
-};
-
-type PendingDeletion =
-  | { type: 'distillery'; item: Distillery }
-  | { type: 'bottle'; item: Bottle };
-
-const emptyDistilleryForm: DistilleryForm = {
-  name: '',
-  image_url: '',
-  description: '',
-};
-
-const emptyBottleForm: BottleForm = {
-  name: '',
-  distillery_id: '',
-  age: '',
-  abv: '',
-  price_per_sample: '',
-  description: '',
-  image_url: '',
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '10px',
-  borderRadius: '8px',
-  border: '1px solid #4a5568',
-  background: '#2d3748',
-  color: '#fff',
-  fontSize: '14px',
-  width: '100%',
-  boxSizing: 'border-box',
-};
-
-const buttonStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  borderRadius: '8px',
-  border: 'none',
-  background: '#f59e0b',
-  color: '#000',
-  fontWeight: 'bold',
-  cursor: 'pointer',
-  fontSize: '14px',
-};
-
-async function getErrorMessage(response: Response): Promise<string> {
+async function getError(response: Response) {
   try {
     const data: unknown = await response.json();
-    if (typeof data === 'object' && data !== null && 'detail' in data) {
-      return String(data.detail);
-    }
-  } catch {
-    // A non-JSON response still has a useful status code.
-  }
-
-  return `Ошибка сервера: ${response.status}`;
+    if (typeof data === 'object' && data !== null && 'detail' in data) return String(data.detail);
+  } catch { /* Status below is sufficient. */ }
+  return `Server error: ${response.status}`;
 }
 
-export const AdminTab: React.FC = () => {
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [eventDesc, setEventDesc] = useState('');
-  const [eventPrice, setEventPrice] = useState('');
-  const [eventImg, setEventImg] = useState('');
-  const [distilleryForm, setDistilleryForm] = useState<DistilleryForm>(emptyDistilleryForm);
-  const [bottleForm, setBottleForm] = useState<BottleForm>(emptyBottleForm);
+function Accordion({ children, title }: { children: ReactNode; title: string }) {
+  return <details style={sectionStyle}><summary style={summaryStyle}>{title}</summary><div style={{ marginTop: 14 }}>{children}</div></details>;
+}
+
+function BottleFields({ form, setForm, includeLabel }: { form: BottleForm; setForm: (form: BottleForm) => void; includeLabel: boolean }) {
+  return <div style={formStyle}>
+    <input required placeholder="Name" style={inputStyle} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+    <input placeholder="Photo URL" style={inputStyle} value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} />
+    <input required min="0" placeholder="Price" step="0.1" style={inputStyle} type="number" value={form.price_per_sample} onChange={(event) => setForm({ ...form, price_per_sample: event.target.value })} />
+    <input placeholder="Age (optional)" style={inputStyle} value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
+    <input placeholder="ABV (optional)" style={inputStyle} value={form.abv} onChange={(event) => setForm({ ...form, abv: event.target.value })} />
+    {includeLabel && <select style={inputStyle} value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value as Label })}><option value="bottle">bottle</option><option value="samples">samples</option><option value="event">event</option></select>}
+    <textarea required placeholder="Description" rows={4} style={{ ...inputStyle, resize: 'vertical', whiteSpace: 'pre-wrap' }} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
+  </div>;
+}
+
+export function AdminTab() {
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
   const [bottles, setBottles] = useState<Bottle[]>([]);
+  const [eventForm, setEventForm] = useState<EventForm>(emptyEvent);
+  const [distilleryForm, setDistilleryForm] = useState<DistilleryForm>(emptyDistillery);
+  const [catalogBottleForm, setCatalogBottleForm] = useState<BottleForm>(emptyBottle);
+  const [tabBottleForm, setTabBottleForm] = useState<BottleForm>(emptyBottle);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [editingDistilleryId, setEditingDistilleryId] = useState<number | null>(null);
-  const [editingBottleId, setEditingBottleId] = useState<number | null>(null);
-  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
-  const [message, setMessage] = useState('');
+  const [editingCatalogBottleId, setEditingCatalogBottleId] = useState<number | null>(null);
+  const [editingTabBottleId, setEditingTabBottleId] = useState<number | null>(null);
+  const [catalogDistilleryId, setCatalogDistilleryId] = useState<number | null>(null);
+  const [openBottleLists, setOpenBottleLists] = useState<number[]>([]);
+  const [deletion, setDeletion] = useState<Deletion | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const loadCatalog = useCallback(async () => {
+  const loadContent = useCallback(async () => {
     try {
-      const [distilleriesResponse, bottlesResponse] = await Promise.all([
-        fetch(`${API_URL}/api/distilleries`),
-        fetch(`${API_URL}/api/bottles`),
+      const [eventsResponse, distilleriesResponse, bottlesResponse] = await Promise.all([
+        fetch(`${API_URL}/api/events`), fetch(`${API_URL}/api/distilleries`), fetch(`${API_URL}/api/bottles`),
       ]);
-      if (!distilleriesResponse.ok) {
-        throw new Error(await getErrorMessage(distilleriesResponse));
-      }
-      if (!bottlesResponse.ok) {
-        throw new Error(await getErrorMessage(bottlesResponse));
-      }
-
+      if (!eventsResponse.ok) throw new Error(await getError(eventsResponse));
+      if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
+      if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
+      setEvents(await eventsResponse.json() as EventItem[]);
       setDistilleries(await distilleriesResponse.json() as Distillery[]);
       setBottles(await bottlesResponse.json() as Bottle[]);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка загрузки каталога');
+      setMessage(error instanceof Error ? error.message : 'Could not load admin content.');
     }
   }, []);
 
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
+  useEffect(() => { void loadContent(); }, [loadContent]);
+  const resetEvent = () => { setEditingEventId(null); setEventForm(emptyEvent); };
+  const resetDistillery = () => { setEditingDistilleryId(null); setDistilleryForm(emptyDistillery); };
+  const resetCatalogBottle = () => { setEditingCatalogBottleId(null); setCatalogDistilleryId(null); setCatalogBottleForm(emptyBottle); };
+  const resetTabBottle = () => { setEditingTabBottleId(null); setTabBottleForm(emptyBottle); };
 
-  const resetDistilleryForm = () => {
-    setEditingDistilleryId(null);
-    setDistilleryForm(emptyDistilleryForm);
-  };
-
-  const resetBottleForm = () => {
-    setEditingBottleId(null);
-    setBottleForm(emptyBottleForm);
-  };
-
-  const handleCreateEvent = async (event: React.FormEvent) => {
+  const saveEvent = async (event: FormEvent) => {
     event.preventDefault();
+    const editing = editingEventId !== null;
     try {
-      const response = await fetch(`${API_URL}/api/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: eventTitle,
-          date: eventDate,
-          description: eventDesc,
-          price: Number(eventPrice),
-          image_url: eventImg || null,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-
-      setMessage('🎉 Событие успешно создано!');
-      setEventTitle('');
-      setEventDate('');
-      setEventDesc('');
-      setEventPrice('');
-      setEventImg('');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка при создании события');
-    }
+      const response = await fetch(editing ? `${API_URL}/api/events/${editingEventId}` : `${API_URL}/api/events`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(eventForm) });
+      if (!response.ok) throw new Error(await getError(response));
+      resetEvent(); await loadContent(); setMessage(editing ? 'Event updated.' : 'Event created.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save event.'); }
   };
-
-  const handleDistillerySubmit = async (event: React.FormEvent) => {
+  const saveDistillery = async (event: FormEvent) => {
     event.preventDefault();
-    const isEditing = editingDistilleryId !== null;
-
+    const editing = editingDistilleryId !== null;
     try {
-      const response = await fetch(
-        isEditing
-          ? `${API_URL}/api/distilleries/${editingDistilleryId}`
-          : `${API_URL}/api/distilleries`,
-        {
-          method: isEditing ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...distilleryForm,
-            image_url: distilleryForm.image_url || null,
-            description: distilleryForm.description || null,
-          }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-
-      resetDistilleryForm();
-      await loadCatalog();
-      setMessage(isEditing ? '✅ Дистиллерия обновлена.' : '✅ Дистиллерия добавлена.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка при сохранении дистиллерии');
-    }
+      const response = await fetch(editing ? `${API_URL}/api/distilleries/${editingDistilleryId}` : `${API_URL}/api/distilleries`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(distilleryForm) });
+      if (!response.ok) throw new Error(await getError(response));
+      resetDistillery(); await loadContent(); setMessage(editing ? 'Distillery updated.' : 'Distillery created.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save distillery.'); }
   };
-
-  const handleBottleSubmit = async (event: React.FormEvent) => {
+  const saveBottle = async (event: FormEvent, form: BottleForm, distilleryId: number | null, editingId: number | null, reset: () => void) => {
     event.preventDefault();
-    const isEditing = editingBottleId !== null;
-
+    const editing = editingId !== null;
     try {
-      const response = await fetch(
-        isEditing
-          ? `${API_URL}/api/bottles/${editingBottleId}`
-          : `${API_URL}/api/bottles`,
-        {
-          method: isEditing ? 'PUT' : 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...bottleForm,
-            distillery_id: Number(bottleForm.distillery_id),
-            age: bottleForm.age || null,
-            abv: bottleForm.abv || null,
-            price_per_sample: Number(bottleForm.price_per_sample),
-            image_url: bottleForm.image_url || null,
-          }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-
-      resetBottleForm();
-      await loadCatalog();
-      setMessage(isEditing ? '✅ Бутылка обновлена.' : '🥃 Бутылка добавлена на витрину!');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка при сохранении бутылки');
-    }
-  };
-
-  const startDistilleryEdit = (distillery: Distillery) => {
-    setEditingDistilleryId(distillery.id);
-    setDistilleryForm({
-      name: distillery.name,
-      image_url: distillery.image_url ?? '',
-      description: distillery.description ?? '',
-    });
-  };
-
-  const startBottleEdit = (bottle: Bottle) => {
-    setEditingBottleId(bottle.id);
-    setBottleForm({
-      name: bottle.name,
-      distillery_id: String(bottle.distillery_id),
-      age: bottle.age ?? '',
-      abv: bottle.abv ?? '',
-      price_per_sample: String(bottle.price_per_sample),
-      description: bottle.description,
-      image_url: bottle.image_url ?? '',
-    });
-  };
-
-  const deleteDistillery = async (distillery: Distillery) => {
-    try {
-      const response = await fetch(`${API_URL}/api/distilleries/${distillery.id}`, {
-        method: 'DELETE',
+      const response = await fetch(editing ? `${API_URL}/api/bottles/${editingId}` : `${API_URL}/api/bottles`, {
+        method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, image_url: form.image_url || null, price_per_sample: Number(form.price_per_sample) }),
       });
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-      await loadCatalog();
-      setPendingDeletion(null);
-      setMessage('✅ Дистиллерия удалена.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка удаления дистиллерии');
-    }
+      if (!response.ok) throw new Error(await getError(response));
+      reset(); await loadContent(); setMessage(editing ? 'Card updated.' : 'Card created.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save card.'); }
   };
-
-  const deleteBottle = async (bottle: Bottle) => {
+  const remove = async () => {
+    if (!deletion) return;
+    const path = deletion.kind === 'event' ? 'events' : deletion.kind === 'distillery' ? 'distilleries' : 'bottles';
     try {
-      const response = await fetch(`${API_URL}/api/bottles/${bottle.id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-      await loadCatalog();
-      setPendingDeletion(null);
-      setMessage('✅ Бутылка удалена.');
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : '❌ Ошибка удаления бутылки');
-    }
+      const response = await fetch(`${API_URL}/api/${path}/${deletion.item.id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(await getError(response));
+      setDeletion(null); await loadContent(); setMessage('Deleted.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete item.'); }
+  };
+  const editBottle = (bottle: Bottle) => {
+    const form = { name: bottle.name, label: bottle.label, age: bottle.age ?? '', abv: bottle.abv ?? '', price_per_sample: String(bottle.price_per_sample), description: bottle.description, image_url: bottle.image_url ?? '' };
+    if (bottle.distillery_id === null) { setTabBottleForm(form); setEditingTabBottleId(bottle.id); } else { setCatalogBottleForm(form); setCatalogDistilleryId(bottle.distillery_id); setEditingCatalogBottleId(bottle.id); setOpenBottleLists((current) => current.includes(bottle.distillery_id!) ? current : [...current, bottle.distillery_id!]); }
   };
 
-  return (
-    <div style={{ padding: '16px', color: '#fff', paddingBottom: '80px' }}>
-      <h2 style={{ color: '#f59e0b' }}>⚙️ Admin</h2>
+  return <div style={pageStyle}>
+    <h2 style={{ color: '#f59e0b', marginTop: 0 }}>⚙️ Admin</h2>
+    {message && <p style={messageStyle}>{message}</p>}
+    <Accordion title="📅 Manage Events">
+      <form onSubmit={saveEvent} style={formStyle}>
+        <input required placeholder="Title" style={inputStyle} value={eventForm.title} onChange={(event) => setEventForm({ ...eventForm, title: event.target.value })} />
+        <input required style={inputStyle} type="datetime-local" value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} />
+        <textarea required placeholder="Description" rows={4} style={{ ...inputStyle, whiteSpace: 'pre-wrap' }} value={eventForm.description} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} />
+        <input required min="0" placeholder="Price" style={inputStyle} type="number" value={eventForm.price || ''} onChange={(event) => setEventForm({ ...eventForm, price: Number(event.target.value) })} />
+        <input placeholder="Image URL" style={inputStyle} value={eventForm.image_url ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value || null })} />
+        <label style={labelStyle}><input checked={eventForm.has_samples} type="checkbox" onChange={(event) => setEventForm({ ...eventForm, has_samples: event.target.checked })} /> Samples available</label>
+        <div style={buttonRow}><button style={buttonStyle} type="submit">{editingEventId === null ? 'Create Event' : 'Save Changes'}</button>{editingEventId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetEvent}>Cancel</button>}</div>
+      </form>
+      <div style={listStyle}>{events.map((item) => <div key={item.id} style={rowStyle}><span>{item.title}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingEventId(item.id); setEventForm({ ...item }); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'event', item })}>🗑️ Delete</button></span></div>)}</div>
+    </Accordion>
+    <Accordion title="📁 Manage Distilleries">
+      <form onSubmit={saveDistillery} style={formStyle}>
+        <input required placeholder="Name" style={inputStyle} value={distilleryForm.name} onChange={(event) => setDistilleryForm({ ...distilleryForm, name: event.target.value })} />
+        <input placeholder="Image URL" style={inputStyle} value={distilleryForm.image_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value || null })} />
+        <textarea placeholder="Description" rows={4} style={{ ...inputStyle, whiteSpace: 'pre-wrap' }} value={distilleryForm.description ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, description: event.target.value || null })} />
+        <div style={buttonRow}><button style={buttonStyle} type="submit">{editingDistilleryId === null ? 'Add Distillery' : 'Save Changes'}</button>{editingDistilleryId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetDistillery}>Cancel</button>}</div>
+      </form>
+      <div style={listStyle}>{distilleries.map((distillery) => {
+        const isOpen = openBottleLists.includes(distillery.id);
+        const distilleryBottles = bottles.filter((bottle) => bottle.distillery_id === distillery.id);
+        const editingHere = catalogDistilleryId === distillery.id;
+        return <div key={distillery.id} style={cardStyle}><div style={rowStyle}><strong>{distillery.name}</strong><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingDistilleryId(distillery.id); setDistilleryForm({ name: distillery.name, image_url: distillery.image_url, description: distillery.description }); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'distillery', item: distillery })}>🗑️ Delete</button></span></div>
+          <button style={spoilerButtonStyle} type="button" onClick={() => setOpenBottleLists((current) => current.includes(distillery.id) ? current.filter((id) => id !== distillery.id) : [...current, distillery.id])}>🥃 {isOpen ? 'Hide Bottles' : 'Show Bottles'}</button>
+          {isOpen && <div style={{ marginTop: 10 }}>{editingHere ? <form onSubmit={(event) => void saveBottle(event, catalogBottleForm, distillery.id, editingCatalogBottleId, resetCatalogBottle)}><BottleFields form={catalogBottleForm} setForm={setCatalogBottleForm} includeLabel={false} /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingCatalogBottleId === null ? 'Add Bottle' : 'Save Changes'}</button><button style={secondaryButtonStyle} type="button" onClick={resetCatalogBottle}>Cancel</button></div></form> : <button style={smallButtonStyle} type="button" onClick={() => { setCatalogDistilleryId(distillery.id); setCatalogBottleForm({ ...emptyBottle, label: 'bottle' }); }}>Add Bottle</button>}
+            <div style={listStyle}>{distilleryBottles.map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
+          </div>}</div>;
+      })}</div>
+    </Accordion>
+    <Accordion title="🥃 Manage Bottles & Samples Tab">
+      <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
+      <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
+    </Accordion>
+    {deletion && <div style={modalOverlayStyle} role="presentation"><div aria-modal="true" role="dialog" style={modalStyle}><h3>Confirm deletion</h3><p>Delete {deletion.kind === 'event' ? deletion.item.title : deletion.item.name}?</p><div style={buttonRow}><button style={secondaryButtonStyle} type="button" onClick={() => setDeletion(null)}>Cancel</button><button style={dangerButtonStyle} type="button" onClick={() => void remove()}>Delete</button></div></div></div>}
+  </div>;
+}
 
-      {message && (
-        <div style={{ padding: '10px', background: '#2d3748', borderRadius: '8px', marginBottom: '15px', textAlign: 'center' }}>
-          {message}
-        </div>
-      )}
-
-      <section style={sectionStyle}>
-        <h3>📅 Create Event</h3>
-        <form onSubmit={handleCreateEvent} style={formStyle}>
-          <input type="text" placeholder="Title" value={eventTitle} onChange={(event) => setEventTitle(event.target.value)} required style={inputStyle} />
-          <input type="datetime-local" value={eventDate} onChange={(event) => setEventDate(event.target.value)} required style={inputStyle} />
-          <textarea placeholder="Event description" value={eventDesc} onChange={(event) => setEventDesc(event.target.value)} required style={{ ...inputStyle, height: '80px', whiteSpace: 'pre-wrap' }} />
-          <input type="number" placeholder="Price, EUR" value={eventPrice} onChange={(event) => setEventPrice(event.target.value)} required style={inputStyle} />
-          <input type="url" placeholder="Image URL (optional)" value={eventImg} onChange={(event) => setEventImg(event.target.value)} style={inputStyle} />
-          <button type="submit" style={buttonStyle}>Publish Event</button>
-        </form>
-      </section>
-
-      <section style={sectionStyle}>
-        <h3>{editingDistilleryId === null ? '🏭 Add Distillery' : '✏️ Edit Distillery'}</h3>
-        <form onSubmit={handleDistillerySubmit} style={formStyle}>
-          <input type="text" placeholder="Name" value={distilleryForm.name} onChange={(event) => setDistilleryForm({ ...distilleryForm, name: event.target.value })} required style={inputStyle} />
-          <input type="url" placeholder="Image URL" value={distilleryForm.image_url} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value })} style={inputStyle} />
-          <textarea placeholder="Description" value={distilleryForm.description} onChange={(event) => setDistilleryForm({ ...distilleryForm, description: event.target.value })} style={{ ...inputStyle, height: '100px', whiteSpace: 'pre-wrap' }} />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="submit" style={{ ...buttonStyle, flex: 1 }}>{editingDistilleryId === null ? 'Add Distillery' : 'Save Changes'}</button>
-            {editingDistilleryId !== null && <button type="button" onClick={resetDistilleryForm} style={secondaryButtonStyle}>Cancel</button>}
-          </div>
-        </form>
-      </section>
-
-      <section style={sectionStyle}>
-        <h3>🏭 Distilleries</h3>
-        {distilleries.length === 0 ? <p style={mutedTextStyle}>No distilleries yet.</p> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {distilleries.map((distillery) => {
-              const distilleryBottles = bottles.filter((bottle) => bottle.distillery_id === distillery.id);
-              return (
-                <article key={distillery.id} style={cardStyle}>
-                  {distillery.image_url && <img src={distillery.image_url} alt="" style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '8px' }} />}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', marginTop: '10px' }}>
-                    <strong>{distillery.name}</strong>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button type="button" onClick={() => startDistilleryEdit(distillery)} style={smallButtonStyle}>✏️ Edit</button>
-                      <button type="button" onClick={() => setPendingDeletion({ type: 'distillery', item: distillery })} style={dangerButtonStyle}>🗑️ Delete</button>
-                    </div>
-                  </div>
-                  {distillery.description && <p style={descriptionStyle}>{distillery.description}</p>}
-                  <div style={{ marginTop: '10px', borderTop: '1px solid #4a5568', paddingTop: '8px' }}>
-                    {distilleryBottles.length === 0 ? <p style={mutedTextStyle}>No bottles.</p> : distilleryBottles.map((bottle) => (
-                      <div key={bottle.id} style={{ borderBottom: '1px solid #4a5568', padding: '10px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
-                          <strong>{bottle.name}</strong>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button type="button" onClick={() => startBottleEdit(bottle)} style={smallButtonStyle}>✏️ Edit</button>
-                            <button type="button" onClick={() => setPendingDeletion({ type: 'bottle', item: bottle })} style={dangerButtonStyle}>❌ Remove bottle</button>
-                          </div>
-                        </div>
-                        <p style={mutedTextStyle}>{bottle.age ?? 'NAS'} · {bottle.abv ?? 'ABV not set'} · €{bottle.price_per_sample}</p>
-                        <p style={mutedTextStyle}>⭐ В избранном: {bottle.favorites_count} · 🥃 Пробовали: {bottle.tried_count}</p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section style={sectionStyle}>
-        <h3>{editingBottleId === null ? '🥃 Add Bottle' : '✏️ Edit Bottle'}</h3>
-        <form onSubmit={handleBottleSubmit} style={formStyle}>
-          <select required value={bottleForm.distillery_id} onChange={(event) => setBottleForm({ ...bottleForm, distillery_id: event.target.value })} style={inputStyle}>
-            <option value="">Select distillery</option>
-            {distilleries.map((distillery) => <option key={distillery.id} value={distillery.id}>{distillery.name}</option>)}
-          </select>
-          <input type="text" placeholder="Name" value={bottleForm.name} onChange={(event) => setBottleForm({ ...bottleForm, name: event.target.value })} required style={inputStyle} />
-          <input type="text" placeholder="Age (e.g. 12 or NAS)" value={bottleForm.age} onChange={(event) => setBottleForm({ ...bottleForm, age: event.target.value })} style={inputStyle} />
-          <input type="text" placeholder="ABV (e.g. 46% or 57.1% CS)" value={bottleForm.abv} onChange={(event) => setBottleForm({ ...bottleForm, abv: event.target.value })} style={inputStyle} />
-          <input type="number" step="0.1" placeholder="Price per sample" value={bottleForm.price_per_sample} onChange={(event) => setBottleForm({ ...bottleForm, price_per_sample: event.target.value })} required style={inputStyle} />
-          <textarea placeholder="Description" value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} required style={{ ...inputStyle, height: '80px', whiteSpace: 'pre-wrap' }} />
-          <input type="url" placeholder="Image URL" value={bottleForm.image_url} onChange={(event) => setBottleForm({ ...bottleForm, image_url: event.target.value })} style={inputStyle} />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button type="submit" disabled={distilleries.length === 0} style={{ ...buttonStyle, flex: 1, opacity: distilleries.length === 0 ? 0.6 : 1 }}>{editingBottleId === null ? 'Add Bottle' : 'Save Changes'}</button>
-            {editingBottleId !== null && <button type="button" onClick={resetBottleForm} style={secondaryButtonStyle}>Cancel</button>}
-          </div>
-        </form>
-      </section>
-
-      {pendingDeletion && (
-        <div style={modalOverlayStyle} role="presentation">
-          <div style={modalStyle} role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
-            <h3 id="delete-dialog-title" style={{ marginTop: 0 }}>Confirm deletion</h3>
-            <p style={mutedTextStyle}>
-              {pendingDeletion.type === 'distillery'
-                ? `Delete ${pendingDeletion.item.name} and all its bottles?`
-                : `Delete ${pendingDeletion.item.name}?`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
-              <button type="button" onClick={() => setPendingDeletion(null)} style={secondaryButtonStyle}>Cancel</button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (pendingDeletion.type === 'distillery') {
-                    void deleteDistillery(pendingDeletion.item);
-                  } else {
-                    void deleteBottle(pendingDeletion.item);
-                  }
-                }}
-                style={dangerButtonStyle}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const sectionStyle: React.CSSProperties = {
-  background: '#1a202c',
-  padding: '15px',
-  borderRadius: '12px',
-  marginBottom: '20px',
-};
-
-const formStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '10px',
-};
-
-const cardStyle: React.CSSProperties = {
-  background: '#2d3748',
-  padding: '12px',
-  borderRadius: '10px',
-};
-
-const secondaryButtonStyle: React.CSSProperties = {
-  padding: '10px 12px',
-  borderRadius: '8px',
-  border: '1px solid #4a5568',
-  background: '#2d3748',
-  color: '#fff',
-  cursor: 'pointer',
-};
-
-const smallButtonStyle: React.CSSProperties = {
-  padding: '6px 8px',
-  borderRadius: '6px',
-  border: '1px solid #4a5568',
-  background: '#1a202c',
-  color: '#f59e0b',
-  cursor: 'pointer',
-  fontSize: '12px',
-};
-
-const dangerButtonStyle: React.CSSProperties = {
-  ...smallButtonStyle,
-  color: '#fc8181',
-};
-
-const mutedTextStyle: React.CSSProperties = {
-  color: '#a0aec0',
-  fontSize: '13px',
-  margin: '6px 0',
-};
-
-const descriptionStyle: React.CSSProperties = {
-  ...mutedTextStyle,
-  whiteSpace: 'pre-wrap',
-};
-
-const modalOverlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  zIndex: 50,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '20px',
-  background: 'rgba(0, 0, 0, 0.7)',
-};
-
-const modalStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: '360px',
-  padding: '20px',
-  borderRadius: '12px',
-  border: '1px solid #4a5568',
-  background: '#1a202c',
-  color: '#fff',
-};
+const pageStyle: CSSProperties = { color: '#fff', padding: 16, paddingBottom: 90 };
+const sectionStyle: CSSProperties = { background: '#1a202c', borderRadius: 12, marginBottom: 14, padding: 14 };
+const summaryStyle: CSSProperties = { color: '#f59e0b', cursor: 'pointer', fontSize: 16, fontWeight: 700 };
+const formStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 };
+const inputStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, boxSizing: 'border-box', color: '#fff', padding: 10, width: '100%' };
+const buttonStyle: CSSProperties = { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#000', cursor: 'pointer', fontWeight: 700, padding: '10px 12px' };
+const secondaryButtonStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: '8px 10px' };
+const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: '#f6c453', fontSize: 12, padding: '6px 8px' };
+const dangerButtonStyle: CSSProperties = { ...smallButtonStyle, color: '#fc8181' };
+const labelStyle: CSSProperties = { color: '#cbd5e0', fontSize: 14 };
+const buttonRow: CSSProperties = { display: 'flex', gap: 8, justifyContent: 'flex-end' };
+const actionRow: CSSProperties = { display: 'flex', flexShrink: 0, gap: 6 };
+const listStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 };
+const rowStyle: CSSProperties = { alignItems: 'center', background: '#2d3748', borderRadius: 8, display: 'flex', fontSize: 14, gap: 8, justifyContent: 'space-between', padding: 8 };
+const cardStyle: CSSProperties = { background: '#2d3748', borderRadius: 10, padding: 10 };
+const spoilerButtonStyle: CSSProperties = { ...smallButtonStyle, marginTop: 10 };
+const messageStyle: CSSProperties = { background: '#2d3748', borderRadius: 8, padding: 10 };
+const modalOverlayStyle: CSSProperties = { alignItems: 'center', background: 'rgba(0,0,0,.7)', display: 'flex', inset: 0, justifyContent: 'center', padding: 20, position: 'fixed', zIndex: 50 };
+const modalStyle: CSSProperties = { background: '#1a202c', border: '1px solid #4a5568', borderRadius: 12, maxWidth: 360, padding: 20, width: '100%' };

@@ -13,10 +13,64 @@ from database import engine, get_db
 models.Base.metadata.create_all(bind=engine)
 
 
-def ensure_event_schema() -> None:
-    event_columns = {
-        column["name"] for column in inspect(engine).get_columns("events")
+BottleLabel = Literal["bottle", "samples", "event"]
+
+
+def get_table_columns(bind, table_name: str) -> dict[str, dict]:
+    return {
+        column["name"]: column for column in inspect(bind).get_columns(table_name)
     }
+
+
+def rebuild_sqlite_bottles_table(
+    connection,
+    bottle_columns: dict[str, dict],
+    *,
+    cast_age_to_text: bool,
+) -> None:
+    legacy_table_name = "bottles_legacy_schema"
+    bottle_indexes = inspect(connection).get_indexes("bottles")
+
+    connection.execute(text(f"ALTER TABLE bottles RENAME TO {legacy_table_name}"))
+    for index in bottle_indexes:
+        index_name = index.get("name")
+        if index_name:
+            connection.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+
+    models.Bottle.__table__.create(bind=connection)
+
+    insert_columns = []
+    select_columns = []
+    for column in models.Bottle.__table__.columns:
+        insert_columns.append(column.name)
+        if column.name == "label":
+            if column.name in bottle_columns:
+                select_columns.append("COALESCE(label, 'bottle') AS label")
+            else:
+                select_columns.append("'bottle' AS label")
+        elif column.name == "age" and cast_age_to_text and column.name in bottle_columns:
+            select_columns.append("CAST(age AS TEXT) AS age")
+        elif column.name in bottle_columns:
+            select_columns.append(column.name)
+        elif column.name in {"favorites_count", "tried_count"}:
+            select_columns.append(f"0 AS {column.name}")
+        else:
+            select_columns.append(f"NULL AS {column.name}")
+
+    connection.execute(
+        text(
+            f"""
+            INSERT INTO bottles ({", ".join(insert_columns)})
+            SELECT {", ".join(select_columns)}
+            FROM {legacy_table_name}
+            """
+        )
+    )
+    connection.execute(text(f"DROP TABLE {legacy_table_name}"))
+
+
+def ensure_event_schema() -> None:
+    event_columns = get_table_columns(engine, "events")
     if "has_samples" not in event_columns:
         with engine.begin() as connection:
             connection.execute(
@@ -28,11 +82,8 @@ def ensure_event_schema() -> None:
 
 
 def ensure_catalog_schema() -> None:
-    bottle_columns = {
-        column["name"] for column in inspect(engine).get_columns("bottles")
-    }
-
     with engine.begin() as connection:
+        bottle_columns = get_table_columns(connection, "bottles")
         if "distillery_id" not in bottle_columns:
             connection.execute(
                 text("ALTER TABLE bottles ADD COLUMN distillery_id INTEGER")
@@ -76,17 +127,13 @@ def ensure_catalog_schema() -> None:
                         },
                     )
 
-        distillery_columns = {
-            column["name"] for column in inspect(engine).get_columns("distilleries")
-        }
+        distillery_columns = get_table_columns(connection, "distilleries")
         if "description" not in distillery_columns:
             connection.execute(
                 text("ALTER TABLE distilleries ADD COLUMN description TEXT")
             )
 
-        bottle_columns = {
-            column["name"] for column in inspect(engine).get_columns("bottles")
-        }
+        bottle_columns = get_table_columns(connection, "bottles")
         if "abv" not in bottle_columns:
             connection.execute(text("ALTER TABLE bottles ADD COLUMN abv TEXT"))
         if "favorites_count" not in bottle_columns:
@@ -103,40 +150,44 @@ def ensure_catalog_schema() -> None:
                     "INTEGER NOT NULL DEFAULT 0"
                 )
             )
-
-        if engine.dialect.name == "postgresql":
+        if "label" not in bottle_columns:
             connection.execute(
                 text(
-                    "ALTER TABLE bottles ALTER COLUMN age TYPE VARCHAR "
-                    "USING age::VARCHAR"
+                    "ALTER TABLE bottles ADD COLUMN label "
+                    "VARCHAR NOT NULL DEFAULT 'bottle'"
                 )
             )
-        elif engine.dialect.name == "sqlite":
-            age_column = next(
-                column
-                for column in inspect(engine).get_columns("bottles")
-                if column["name"] == "age"
-            )
-            if "INT" in str(age_column["type"]).upper():
-                connection.execute(text("ALTER TABLE bottles RENAME TO bottles_legacy_age"))
-                connection.execute(text("DROP INDEX IF EXISTS ix_bottles_name"))
-                models.Bottle.__table__.create(bind=connection)
+
+        bottle_columns = get_table_columns(connection, "bottles")
+        age_column = bottle_columns.get("age")
+        distillery_column = bottle_columns.get("distillery_id")
+
+        if engine.dialect.name == "postgresql":
+            if age_column and "INT" in str(age_column["type"]).upper():
                 connection.execute(
                     text(
-                        """
-                        INSERT INTO bottles (
-                            id, name, distillery_id, age, abv, price_per_sample,
-                            description, image_url, favorites_count, tried_count
-                        )
-                        SELECT
-                            id, name, distillery_id, CAST(age AS TEXT), abv,
-                            price_per_sample, description, image_url,
-                            favorites_count, tried_count
-                        FROM bottles_legacy_age
-                        """
+                        "ALTER TABLE bottles ALTER COLUMN age TYPE VARCHAR "
+                        "USING age::VARCHAR"
                     )
                 )
-                connection.execute(text("DROP TABLE bottles_legacy_age"))
+            if distillery_column and not distillery_column.get("nullable", True):
+                connection.execute(
+                    text("ALTER TABLE bottles ALTER COLUMN distillery_id DROP NOT NULL")
+                )
+        elif engine.dialect.name == "sqlite":
+            if (
+                age_column
+                and "INT" in str(age_column["type"]).upper()
+            ) or (
+                distillery_column and not distillery_column.get("nullable", True)
+            ):
+                rebuild_sqlite_bottles_table(
+                    connection,
+                    bottle_columns,
+                    cast_age_to_text=bool(
+                        age_column and "INT" in str(age_column["type"]).upper()
+                    ),
+                )
 
 
 def ensure_user_bottle_action_schema() -> None:
@@ -272,7 +323,8 @@ class DistilleryResponse(DistilleryCreate):
 
 class BottleCreate(BaseModel):
     name: str
-    distillery_id: int
+    distillery_id: Optional[int] = None
+    label: Optional[BottleLabel] = "bottle"
     age: Optional[str] = None
     abv: Optional[str] = None
     price_per_sample: float
@@ -558,13 +610,18 @@ def get_bottles(db: Session = Depends(get_db)):
 
 @app.post("/api/bottles", response_model=BottleResponse, status_code=status.HTTP_201_CREATED)
 def create_bottle(bottle_data: BottleCreate, db: Session = Depends(get_db)):
-    distillery = db.query(models.Distillery).filter(
-        models.Distillery.id == bottle_data.distillery_id
-    ).first()
-    if not distillery:
-        raise HTTPException(status_code=404, detail="Distillery not found")
+    if bottle_data.distillery_id is not None:
+        distillery = db.query(models.Distillery).filter(
+            models.Distillery.id == bottle_data.distillery_id
+        ).first()
+        if not distillery:
+            raise HTTPException(status_code=404, detail="Distillery not found")
 
-    new_bottle = models.Bottle(**bottle_data.model_dump())
+    bottle_payload = bottle_data.model_dump()
+    if bottle_payload["label"] is None:
+        bottle_payload["label"] = "bottle"
+
+    new_bottle = models.Bottle(**bottle_payload)
     db.add(new_bottle)
     db.commit()
     db.refresh(new_bottle)
@@ -583,13 +640,18 @@ def update_bottle(
     if not bottle:
         raise HTTPException(status_code=404, detail="Bottle not found")
 
-    distillery = db.query(models.Distillery).filter(
-        models.Distillery.id == bottle_data.distillery_id
-    ).first()
-    if not distillery:
-        raise HTTPException(status_code=404, detail="Distillery not found")
+    if bottle_data.distillery_id is not None:
+        distillery = db.query(models.Distillery).filter(
+            models.Distillery.id == bottle_data.distillery_id
+        ).first()
+        if not distillery:
+            raise HTTPException(status_code=404, detail="Distillery not found")
 
-    for field, value in bottle_data.model_dump().items():
+    bottle_payload = bottle_data.model_dump()
+    if bottle_payload["label"] is None:
+        bottle_payload["label"] = "bottle"
+
+    for field, value in bottle_payload.items():
         setattr(bottle, field, value)
 
     db.commit()
