@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from pydantic import BaseModel, Field
 from typing import List, Literal, Optional
+from datetime import datetime, timezone
 
 import models
 from database import engine, get_db
@@ -404,6 +405,11 @@ class RegistrationResponse(RegistrationBase):
         from_attributes = True
 
 
+class UserStatsResponse(BaseModel):
+    tastings_attended: int
+    tested_releases: int
+
+
 def get_event_or_404(event_id: int, db: Session) -> models.Event:
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
@@ -451,6 +457,28 @@ def recompute_bottle_counts(bottle: models.Bottle, db: Session) -> None:
     ).filter(models.UserBottleAction.bottle_id == bottle.id).one()
     bottle.favorites_count = favorites_count
     bottle.tried_count = tried_count
+
+
+def parse_event_date_to_utc(date_value: Optional[str]) -> Optional[datetime]:
+    if not date_value:
+        return None
+
+    normalized_value = date_value.strip()
+    if not normalized_value:
+        return None
+
+    if normalized_value.endswith(("Z", "z")):
+        normalized_value = f"{normalized_value[:-1]}+00:00"
+
+    try:
+        parsed_date = datetime.fromisoformat(normalized_value)
+    except ValueError:
+        return None
+
+    if parsed_date.tzinfo is None:
+        return parsed_date.replace(tzinfo=timezone.utc)
+
+    return parsed_date.astimezone(timezone.utc)
 
 
 def build_event_response(
@@ -607,6 +635,42 @@ def get_event_members(event_id: int, db: Session = Depends(get_db)):
     return db.query(models.Registration).filter(
         models.Registration.event_id == event_id
     ).order_by(models.Registration.id).all()
+
+
+@app.get("/api/users/{telegram_id}/stats", response_model=UserStatsResponse)
+def get_user_stats(telegram_id: int, db: Session = Depends(get_db)):
+    now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+    attended_tastings = 0
+
+    registered_event_dates = (
+        db.query(models.Event.date)
+        .join(models.Registration, models.Registration.event_id == models.Event.id)
+        .filter(
+            models.Registration.telegram_id == telegram_id,
+            models.Registration.registered.is_(True),
+        )
+        .all()
+    )
+
+    for (event_date,) in registered_event_dates:
+        parsed_event_date = parse_event_date_to_utc(event_date)
+        if parsed_event_date and parsed_event_date <= now_utc:
+            attended_tastings += 1
+
+    tested_releases = (
+        db.query(func.count(models.UserBottleAction.id))
+        .filter(
+            models.UserBottleAction.telegram_id == telegram_id,
+            models.UserBottleAction.is_tried.is_(True),
+        )
+        .scalar()
+        or 0
+    )
+
+    return UserStatsResponse(
+        tastings_attended=attended_tastings,
+        tested_releases=int(tested_releases),
+    )
 
 
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---
