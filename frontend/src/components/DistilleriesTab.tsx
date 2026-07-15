@@ -94,6 +94,7 @@ export function DistilleriesTab() {
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
   const [selectedDistillery, setSelectedDistillery] = useState<Distillery | null>(null);
   const [selectedBottle, setSelectedBottle] = useState<Bottle | null>(null);
+  const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
   const [userStates, setUserStates] = useState<Record<number, BottleActionState>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
@@ -214,6 +215,10 @@ export function DistilleriesTab() {
   };
 
   const selectedBottleState = selectedBottle ? userStates[selectedBottle.id] : undefined;
+  const closeBottleDetails = () => {
+    setIsPhotoExpanded(false);
+    setSelectedBottle(null);
+  };
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-8">
@@ -278,7 +283,10 @@ export function DistilleriesTab() {
                           <li key={bottle.id}>
                             <button
                               className="flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left transition-colors hover:bg-white/5"
-                              onClick={() => setSelectedBottle(bottle)}
+                              onClick={() => {
+                                setIsPhotoExpanded(false);
+                                setSelectedBottle(bottle);
+                              }}
                               type="button"
                             >
                               <CatalogImage
@@ -330,14 +338,43 @@ export function DistilleriesTab() {
       )}
 
       {selectedBottle && (
-        <div className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm"
+          onClick={() => {
+            if (isPhotoExpanded) {
+              setIsPhotoExpanded(false);
+            }
+          }}
+        >
           <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
-            <div className="relative">
-              <CatalogImage alt={selectedBottle.name} className="h-56 w-full object-cover" source={selectedBottle.image_url} />
+            <div
+              className="relative shrink-0 cursor-zoom-in overflow-hidden"
+              onClick={(event) => {
+                event.stopPropagation();
+                setIsPhotoExpanded((current) => !current);
+              }}
+              style={{
+                height: isPhotoExpanded ? '55vh' : '200px',
+                maxHeight: '60vh',
+                transition: 'all 0.3s ease-in-out',
+              }}
+            >
+              {selectedBottle.image_url ? (
+                <img
+                  alt={selectedBottle.name}
+                  className="h-full w-full object-contain"
+                  src={selectedBottle.image_url}
+                />
+              ) : (
+                <CatalogImage alt={selectedBottle.name} className="h-full w-full object-contain" source={null} />
+              )}
               <button
                 aria-label="Close bottle details"
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
-                onClick={() => setSelectedBottle(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeBottleDetails();
+                }}
                 type="button"
               >
                 ✕
@@ -349,7 +386,7 @@ export function DistilleriesTab() {
                 <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">Age</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.age || 'NAS'}</dd></div>
                 <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">ABV</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.abv || '—'}</dd></div>
               </dl>
-              <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample} / sample</p>
+              <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample}</p>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
