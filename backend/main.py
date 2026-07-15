@@ -1,11 +1,17 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+import hashlib
+import hmac
+import json
+import os
+from datetime import datetime, timedelta, timezone
+from typing import List, Literal, Optional
+from urllib.parse import parse_qsl
+
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 from pydantic import BaseModel, Field
-from typing import List, Literal, Optional
-from datetime import datetime, timezone
 
 import models
 from database import engine, get_db
@@ -15,6 +21,8 @@ models.Base.metadata.create_all(bind=engine)
 
 
 BottleLabel = Literal["bottle", "samples", "event"]
+TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
+TELEGRAM_INIT_DATA_FUTURE_SKEW = timedelta(minutes=5)
 
 
 def get_table_columns(bind, table_name: str) -> dict[str, dict]:
@@ -307,6 +315,213 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+class TelegramAuthContext(BaseModel):
+    telegram_id: int
+    user: dict
+
+
+def get_bot_token() -> str:
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram auth is not configured: BOT_TOKEN is missing",
+        )
+    return bot_token
+
+
+def parse_authorization_header(authorization: Optional[str]) -> str:
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing Authorization header",
+        )
+
+    scheme, _, credentials = authorization.partition(" ")
+    if not credentials or scheme.lower() not in {"tma", "bearer"}:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must be formatted as 'tma <initData>'",
+        )
+
+    raw_init_data = credentials.strip()
+    if not raw_init_data:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData is missing",
+        )
+    return raw_init_data
+
+
+def parse_telegram_user_id(user_payload: dict) -> int:
+    telegram_id = user_payload.get("id")
+    if isinstance(telegram_id, bool):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram user id is invalid",
+        )
+
+    try:
+        parsed_id = int(telegram_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram user id is invalid",
+        ) from None
+
+    return parsed_id
+
+
+def validate_telegram_init_data(raw_init_data: str, bot_token: str) -> TelegramAuthContext:
+    try:
+        init_data_pairs = parse_qsl(
+            raw_init_data,
+            keep_blank_values=True,
+            strict_parsing=True,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData is malformed",
+        ) from None
+
+    provided_hash = None
+    data_check_pairs: list[tuple[str, str]] = []
+
+    for key, value in init_data_pairs:
+        if key == "hash":
+            if provided_hash is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Telegram initData hash is invalid",
+                )
+            provided_hash = value
+            continue
+        data_check_pairs.append((key, value))
+
+    if not provided_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData hash is missing",
+        )
+
+    data_check_string = "\n".join(
+        f"{key}={value}" for key, value in sorted(data_check_pairs, key=lambda item: item[0])
+    )
+    secret_key = hmac.new(
+        key=b"WebAppData",
+        msg=bot_token.encode(),
+        digestmod=hashlib.sha256,
+    ).digest()
+    expected_hash = hmac.new(
+        key=secret_key,
+        msg=data_check_string.encode(),
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_hash, provided_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData hash is invalid",
+        )
+
+    init_data = dict(data_check_pairs)
+    auth_date_raw = init_data.get("auth_date")
+    try:
+        auth_timestamp = int(auth_date_raw) if auth_date_raw is not None else None
+    except (TypeError, ValueError):
+        auth_timestamp = None
+
+    if auth_timestamp is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram auth_date is invalid",
+        )
+
+    auth_datetime = datetime.fromtimestamp(auth_timestamp, tz=timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    if auth_datetime > now_utc + TELEGRAM_INIT_DATA_FUTURE_SKEW:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData auth_date is in the future",
+        )
+    if now_utc - auth_datetime > TELEGRAM_INIT_DATA_MAX_AGE:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram initData has expired",
+        )
+
+    user_raw = init_data.get("user")
+    if not user_raw:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram user payload is missing",
+        )
+
+    try:
+        user_payload = json.loads(user_raw)
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram user payload is invalid",
+        ) from None
+
+    if not isinstance(user_payload, dict):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Telegram user payload is invalid",
+        )
+
+    return TelegramAuthContext(
+        telegram_id=parse_telegram_user_id(user_payload),
+        user=user_payload,
+    )
+
+
+def get_authenticated_telegram_user(
+    authorization: Optional[str] = Header(default=None),
+) -> TelegramAuthContext:
+    raw_init_data = parse_authorization_header(authorization)
+    return validate_telegram_init_data(raw_init_data, get_bot_token())
+
+
+def ensure_telegram_id_matches(authenticated_user: TelegramAuthContext, telegram_id: Optional[int]) -> int:
+    if telegram_id is not None and telegram_id != authenticated_user.telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authenticated Telegram user does not match requested telegram_id",
+        )
+    return authenticated_user.telegram_id
+
+
+def require_admin(
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+) -> TelegramAuthContext:
+    admin_telegram_id = os.getenv("ADMIN_TELEGRAM_ID")
+    if not admin_telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ADMIN_TELEGRAM_ID is not configured",
+        )
+
+    try:
+        parsed_admin_id = int(admin_telegram_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="ADMIN_TELEGRAM_ID is invalid",
+        ) from None
+
+    if authenticated_user.telegram_id != parsed_admin_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+
+    return authenticated_user
+
+
 # --- Схемы валидации данных (Pydantic) ---
 class EventCreate(BaseModel):
     title: str
@@ -405,6 +620,15 @@ class RegistrationResponse(RegistrationBase):
         from_attributes = True
 
 
+class MemberResponse(BaseModel):
+    id: int
+    registered: bool
+    samples: bool
+
+    class Config:
+        from_attributes = True
+
+
 class UserStatsResponse(BaseModel):
     tastings_attended: int
     tested_releases: int
@@ -415,6 +639,14 @@ def get_event_or_404(event_id: int, db: Session) -> models.Event:
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     return event
+
+
+def bind_registration_to_authenticated_user(
+    registration_data: RegistrationBase,
+    authenticated_user: TelegramAuthContext,
+) -> RegistrationBase:
+    ensure_telegram_id_matches(authenticated_user, registration_data.telegram_id)
+    return registration_data.model_copy(update={"telegram_id": authenticated_user.telegram_id})
 
 
 def get_or_create_registration(
@@ -545,7 +777,11 @@ def get_events(db: Session = Depends(get_db)):
     ]
 
 @app.post("/api/events", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
-def create_event(event_data: EventCreate, db: Session = Depends(get_db)):
+def create_event(
+    event_data: EventCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     new_event = models.Event(**event_data.model_dump())
     db.add(new_event)
     db.commit()
@@ -554,7 +790,12 @@ def create_event(event_data: EventCreate, db: Session = Depends(get_db)):
 
 
 @app.put("/api/events/{event_id}", response_model=EventResponse)
-def update_event(event_id: int, event_data: EventCreate, db: Session = Depends(get_db)):
+def update_event(
+    event_id: int,
+    event_data: EventCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -583,7 +824,11 @@ def update_event(event_id: int, event_data: EventCreate, db: Session = Depends(g
 
 
 @app.delete("/api/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_event(event_id: int, db: Session = Depends(get_db)):
+def delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -600,10 +845,15 @@ def register_for_event(
     event_id: int,
     registration_data: RegistrationRequest,
     db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
 ):
     get_event_or_404(event_id, db)
-    registration = get_or_create_registration(event_id, registration_data, db)
-    registration.registered = registration_data.registered
+    bound_registration = bind_registration_to_authenticated_user(
+        registration_data,
+        authenticated_user,
+    )
+    registration = get_or_create_registration(event_id, bound_registration, db)
+    registration.registered = bound_registration.registered
     db.commit()
     db.refresh(registration)
     return registration
@@ -617,10 +867,15 @@ def reserve_samples(
     event_id: int,
     samples_data: SamplesRequest,
     db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
 ):
     get_event_or_404(event_id, db)
-    registration = get_or_create_registration(event_id, samples_data, db)
-    registration.samples = samples_data.samples
+    bound_samples = bind_registration_to_authenticated_user(
+        samples_data,
+        authenticated_user,
+    )
+    registration = get_or_create_registration(event_id, bound_samples, db)
+    registration.samples = bound_samples.samples
     db.commit()
     db.refresh(registration)
     return registration
@@ -628,9 +883,13 @@ def reserve_samples(
 
 @app.get(
     "/api/events/{event_id}/members",
-    response_model=List[RegistrationResponse],
+    response_model=List[MemberResponse],
 )
-def get_event_members(event_id: int, db: Session = Depends(get_db)):
+def get_event_members(
+    event_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
     get_event_or_404(event_id, db)
     return db.query(models.Registration).filter(
         models.Registration.event_id == event_id
@@ -638,7 +897,12 @@ def get_event_members(event_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/api/users/{telegram_id}/stats", response_model=UserStatsResponse)
-def get_user_stats(telegram_id: int, db: Session = Depends(get_db)):
+def get_user_stats(
+    telegram_id: int,
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    telegram_id = ensure_telegram_id_matches(authenticated_user, telegram_id)
     now_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
     attended_tastings = 0
 
@@ -690,6 +954,7 @@ def get_distilleries(db: Session = Depends(get_db)):
 def create_distillery(
     distillery_data: DistilleryCreate,
     db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
 ):
     existing_distillery = db.query(models.Distillery).filter(
         models.Distillery.name == distillery_data.name
@@ -709,6 +974,7 @@ def update_distillery(
     distillery_id: int,
     distillery_data: DistilleryCreate,
     db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
 ):
     distillery = db.query(models.Distillery).filter(
         models.Distillery.id == distillery_id
@@ -732,7 +998,11 @@ def update_distillery(
 
 
 @app.delete("/api/distilleries/{distillery_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_distillery(distillery_id: int, db: Session = Depends(get_db)):
+def delete_distillery(
+    distillery_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     distillery = db.query(models.Distillery).filter(
         models.Distillery.id == distillery_id
     ).first()
@@ -761,7 +1031,11 @@ def get_bottles(db: Session = Depends(get_db)):
     return db.query(models.Bottle).all()
 
 @app.post("/api/bottles", response_model=BottleResponse, status_code=status.HTTP_201_CREATED)
-def create_bottle(bottle_data: BottleCreate, db: Session = Depends(get_db)):
+def create_bottle(
+    bottle_data: BottleCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     if bottle_data.distillery_id is not None:
         distillery = db.query(models.Distillery).filter(
             models.Distillery.id == bottle_data.distillery_id
@@ -785,6 +1059,7 @@ def update_bottle(
     bottle_id: int,
     bottle_data: BottleCreate,
     db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
 ):
     bottle = db.query(models.Bottle).filter(
         models.Bottle.id == bottle_id
@@ -812,7 +1087,11 @@ def update_bottle(
 
 
 @app.delete("/api/bottles/{bottle_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_bottle(bottle_id: int, db: Session = Depends(get_db)):
+def delete_bottle(
+    bottle_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
     bottle = db.query(models.Bottle).filter(models.Bottle.id == bottle_id).first()
     if not bottle:
         raise HTTPException(status_code=404, detail="Bottle not found")
@@ -832,7 +1111,9 @@ def toggle_bottle_action(
     bottle_id: int,
     action_data: BottleActionToggleRequest,
     db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
 ):
+    telegram_id = ensure_telegram_id_matches(authenticated_user, action_data.telegram_id)
     bottle = db.query(models.Bottle).filter(
         models.Bottle.id == bottle_id
     ).with_for_update().first()
@@ -843,7 +1124,7 @@ def toggle_bottle_action(
         "is_favorite" if action_data.action_type == "favorite" else "is_tried"
     )
     action = db.query(models.UserBottleAction).filter(
-        models.UserBottleAction.telegram_id == action_data.telegram_id,
+        models.UserBottleAction.telegram_id == telegram_id,
         models.UserBottleAction.bottle_id == bottle_id,
     ).first()
 
@@ -852,7 +1133,7 @@ def toggle_bottle_action(
 
     if action is None:
         action = models.UserBottleAction(
-            telegram_id=action_data.telegram_id,
+            telegram_id=telegram_id,
             bottle_id=bottle_id,
         )
         db.add(action)
@@ -869,7 +1150,7 @@ def toggle_bottle_action(
         if not bottle:
             raise HTTPException(status_code=404, detail="Bottle not found")
         action = db.query(models.UserBottleAction).filter(
-            models.UserBottleAction.telegram_id == action_data.telegram_id,
+            models.UserBottleAction.telegram_id == telegram_id,
             models.UserBottleAction.bottle_id == bottle_id,
         ).first()
         if action is None:
@@ -898,7 +1179,12 @@ def toggle_bottle_action(
     "/api/bottles/user-states",
     response_model=List[UserBottleStateResponse],
 )
-def get_user_bottle_states(telegram_id: int, db: Session = Depends(get_db)):
+def get_user_bottle_states(
+    telegram_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    telegram_id = ensure_telegram_id_matches(authenticated_user, telegram_id)
     return db.query(models.UserBottleAction).filter(
         models.UserBottleAction.telegram_id == telegram_id,
         (models.UserBottleAction.is_favorite.is_(True))

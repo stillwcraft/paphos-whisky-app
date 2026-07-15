@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -40,6 +41,7 @@ export function ProfileTab() {
   const tg = window.Telegram?.WebApp;
   const rawUser = tg?.initDataUnsafe?.user;
   const initDataState = useSignal(initData.state);
+  const initDataRaw = useSignal(initData.raw);
   const userId = initDataState?.user?.id ?? rawUser?.id;
   const [stats, setStats] = useState<UserStats>({ tastings_attended: 0, tested_releases: 0 });
   const [statsError, setStatsError] = useState<string | null>(null);
@@ -54,7 +56,9 @@ export function ProfileTab() {
 
     const loadStats = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/users/${userId}/stats`);
+        const response = await fetch(`${API_URL}/api/users/${userId}/stats`, {
+          headers: telegramAuthHeaders(initDataRaw),
+        });
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
         }
@@ -66,7 +70,7 @@ export function ProfileTab() {
     };
 
     void loadStats();
-  }, [userId]);
+  }, [initDataRaw, userId]);
 
   return (
     <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center py-8">

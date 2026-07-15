@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -89,6 +90,7 @@ async function errorMessage(response: Response) {
 
 export function DistilleriesTab() {
   const initDataState = useSignal(initData.state);
+  const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
@@ -142,6 +144,7 @@ export function DistilleriesTab() {
 
       const statesResponse = await fetch(
         `${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`,
+        { headers: telegramAuthHeaders(initDataRaw) },
       );
       if (!statesResponse.ok) {
         throw new Error(await errorMessage(statesResponse));
@@ -157,7 +160,7 @@ export function DistilleriesTab() {
     } finally {
       setIsLoading(false);
     }
-  }, [telegramId]);
+  }, [initDataRaw, telegramId]);
 
   useEffect(() => {
     void loadCatalog();
@@ -175,7 +178,7 @@ export function DistilleriesTab() {
     try {
       const response = await fetch(`${API_URL}/api/bottles/${bottle.id}/toggle-action`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
         body: JSON.stringify({ telegram_id: telegramId, action_type: actionType }),
       });
       if (!response.ok) {

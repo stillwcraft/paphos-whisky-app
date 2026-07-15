@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -49,6 +50,7 @@ async function getError(response: Response) {
 
 export function FavoritesTab() {
   const initDataState = useSignal(initData.state);
+  const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
   const [favoriteBottles, setFavoriteBottles] = useState<FavoriteBottle[]>([]);
   const [userStates, setUserStates] = useState<Record<number, UserBottleState>>({});
@@ -73,7 +75,9 @@ export function FavoritesTab() {
         const [bottlesResponse, distilleriesResponse, statesResponse] = await Promise.all([
           fetch(`${API_URL}/api/bottles`),
           fetch(`${API_URL}/api/distilleries`),
-          fetch(`${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`),
+          fetch(`${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`, {
+            headers: telegramAuthHeaders(initDataRaw),
+          }),
         ]);
         if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
         if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
@@ -98,7 +102,7 @@ export function FavoritesTab() {
     };
 
     void loadFavorites();
-  }, [telegramId]);
+  }, [initDataRaw, telegramId]);
 
   const closeBottle = () => {
     setIsPhotoExpanded(false);
@@ -120,7 +124,7 @@ export function FavoritesTab() {
     try {
       const response = await fetch(`${API_URL}/api/bottles/${bottle.id}/toggle-action`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
         body: JSON.stringify({ telegram_id: telegramId, action_type: actionType }),
       });
       if (!response.ok) throw new Error(await getError(response));

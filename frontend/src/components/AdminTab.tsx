@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
+import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 type Label = 'bottle' | 'samples' | 'event';
@@ -40,6 +42,7 @@ function BottleFields({ form, setForm, includeLabel }: { form: BottleForm; setFo
 }
 
 export function AdminTab() {
+  const initDataRaw = useSignal(initData.raw);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
   const [bottles, setBottles] = useState<Bottle[]>([]);
@@ -82,7 +85,7 @@ export function AdminTab() {
     event.preventDefault();
     const editing = editingEventId !== null;
     try {
-      const response = await fetch(editing ? `${API_URL}/api/events/${editingEventId}` : `${API_URL}/api/events`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(eventForm) });
+      const response = await fetch(editing ? `${API_URL}/api/events/${editingEventId}` : `${API_URL}/api/events`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) }, body: JSON.stringify(eventForm) });
       if (!response.ok) throw new Error(await getError(response));
       resetEvent(); await loadContent(); setMessage(editing ? 'Event updated.' : 'Event created.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save event.'); }
@@ -91,7 +94,7 @@ export function AdminTab() {
     event.preventDefault();
     const editing = editingDistilleryId !== null;
     try {
-      const response = await fetch(editing ? `${API_URL}/api/distilleries/${editingDistilleryId}` : `${API_URL}/api/distilleries`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(distilleryForm) });
+      const response = await fetch(editing ? `${API_URL}/api/distilleries/${editingDistilleryId}` : `${API_URL}/api/distilleries`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) }, body: JSON.stringify(distilleryForm) });
       if (!response.ok) throw new Error(await getError(response));
       resetDistillery(); await loadContent(); setMessage(editing ? 'Distillery updated.' : 'Distillery created.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save distillery.'); }
@@ -101,7 +104,7 @@ export function AdminTab() {
     const editing = editingId !== null;
     try {
       const response = await fetch(editing ? `${API_URL}/api/bottles/${editingId}` : `${API_URL}/api/bottles`, {
-        method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+        method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
         body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, image_url: form.image_url || null, price_per_sample: Number(form.price_per_sample) }),
       });
       if (!response.ok) throw new Error(await getError(response));
@@ -112,7 +115,7 @@ export function AdminTab() {
     if (!deletion) return;
     const path = deletion.kind === 'event' ? 'events' : deletion.kind === 'distillery' ? 'distilleries' : 'bottles';
     try {
-      const response = await fetch(`${API_URL}/api/${path}/${deletion.item.id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_URL}/api/${path}/${deletion.item.id}`, { method: 'DELETE', headers: telegramAuthHeaders(initDataRaw) });
       if (!response.ok) throw new Error(await getError(response));
       setDeletion(null); await loadContent(); setMessage('Deleted.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete item.'); }

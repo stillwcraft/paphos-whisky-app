@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import ReactMarkdown from 'react-markdown';
+import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -19,9 +20,6 @@ type ClubEvent = {
 
 type Member = {
   id: number;
-  telegram_id: number;
-  username: string | null;
-  first_name: string | null;
   registered: boolean;
   samples: boolean;
 };
@@ -151,9 +149,9 @@ function BottomSheet({
               <p className="mt-4 text-sm text-slate-400">Пока никого нет.</p>
             ) : (
               <ul className="mt-4 space-y-2">
-                {visibleMembers.map((member) => (
+                {visibleMembers.map((member, index) => (
                   <li key={member.id} className="rounded-xl border border-white/10 bg-slate-800 px-4 py-3 text-sm text-slate-200">
-                    {member.first_name ?? 'Участник'}{member.username ? ` · @${member.username}` : ''}
+                    Member {index + 1}
                   </li>
                 ))}
               </ul>
@@ -173,6 +171,7 @@ function BottomSheet({
 
 export function EventsTab() {
   const initDataState = useSignal(initData.state);
+  const initDataRaw = useSignal(initData.raw);
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -263,7 +262,7 @@ export function EventsTab() {
         `${API_BASE_URL}/api/events/${event.id}/${mode === 'registration' ? 'register' : 'samples'}`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
           body: JSON.stringify({
             telegram_id: user.id,
             username: user.username ?? null,
@@ -302,7 +301,9 @@ export function EventsTab() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events/${sheetEvent.id}/members`);
+      const response = await fetch(`${API_BASE_URL}/api/events/${sheetEvent.id}/members`, {
+        headers: telegramAuthHeaders(initDataRaw),
+      });
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
       }
@@ -313,7 +314,7 @@ export function EventsTab() {
         message: error instanceof Error ? error.message : 'Не удалось загрузить участников.',
       });
     }
-  }, [sheetEvent]);
+  }, [initDataRaw, sheetEvent]);
 
   const selectSheetTab = (tab: SheetTab) => {
     setActiveTab(tab);

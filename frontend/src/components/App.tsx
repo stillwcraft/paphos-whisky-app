@@ -12,7 +12,7 @@ type TabId = 'events' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | '
 
 type IconProps = SVGProps<SVGSVGElement>;
 
-const ADMIN_TELEGRAM_ID = 8546526596; // Replace 0 with your Telegram user ID.
+const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
 type Tab = {
   id: TabId;
@@ -118,7 +118,10 @@ export function App() {
   const activeScreen = tabs.find((tab) => tab.id === activeTab)?.screen;
 
   useEffect(() => {
-    setIsAdmin(initDataState?.user?.id === ADMIN_TELEGRAM_ID);
+    setIsAdmin(
+      Number.isSafeInteger(ADMIN_TELEGRAM_ID)
+      && initDataState?.user?.id === ADMIN_TELEGRAM_ID,
+    );
   }, [initDataState]);
 
   return (
