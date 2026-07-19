@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -88,55 +89,66 @@ async function errorMessage(response: Response) {
   return `Server error: ${response.status}`;
 }
 
+async function loadCatalog(): Promise<Distillery[]> {
+  const distilleriesResponse = await fetch(`${API_URL}/api/distilleries`);
+  if (!distilleriesResponse.ok) {
+    throw new Error(await errorMessage(distilleriesResponse));
+  }
+
+  const loadedDistilleries = await distilleriesResponse.json() as Array<
+    Omit<Distillery, 'bottles'> & { bottles?: Bottle[] }
+  >;
+  const needsBottleFallback = loadedDistilleries.some(
+    (distillery) => !Array.isArray(distillery.bottles),
+  );
+  let fallbackBottles: Bottle[] = [];
+
+  // Keep the storefront usable while an older deployed API still returns
+  // distilleries without the new nested bottles field.
+  if (needsBottleFallback) {
+    const bottlesResponse = await fetch(`${API_URL}/api/bottles`);
+    if (!bottlesResponse.ok) {
+      throw new Error(await errorMessage(bottlesResponse));
+    }
+    fallbackBottles = await bottlesResponse.json() as Bottle[];
+  }
+
+  return loadedDistilleries.map((distillery) => ({
+    ...distillery,
+    bottles: Array.isArray(distillery.bottles)
+      ? distillery.bottles
+      : fallbackBottles.filter((bottle) => bottle.distillery_id === distillery.id),
+  }));
+}
+
 export function DistilleriesTab() {
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
-  const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const queryClient = useQueryClient();
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
   const [selectedDistillery, setSelectedDistillery] = useState<Distillery | null>(null);
   const [selectedBottle, setSelectedBottle] = useState<Bottle | null>(null);
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
   const [userStates, setUserStates] = useState<Record<number, BottleActionState>>({});
-  const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const loadCatalog = useCallback(async () => {
-    setIsLoading(true);
-    setFeedback(null);
+  const catalogQuery = useQuery({
+    queryKey: ['catalog'],
+    queryFn: loadCatalog,
+    staleTime: 5 * 60 * 1000,
+    refetchOnMount: 'always',
+  });
+  const distilleries = catalogQuery.data ?? [];
+  const catalogError = catalogQuery.error instanceof Error
+    ? catalogQuery.error.message
+    : catalogQuery.error
+      ? 'Could not load the catalogue.'
+      : null;
 
-    try {
-      const distilleriesResponse = await fetch(`${API_URL}/api/distilleries`);
-      if (!distilleriesResponse.ok) {
-        throw new Error(await errorMessage(distilleriesResponse));
-      }
-
-      const loadedDistilleries = await distilleriesResponse.json() as Array<
-        Omit<Distillery, 'bottles'> & { bottles?: Bottle[] }
-      >;
-      const needsBottleFallback = loadedDistilleries.some(
-        (distillery) => !Array.isArray(distillery.bottles),
-      );
-      let fallbackBottles: Bottle[] = [];
-
-      // Keep the storefront usable while an older deployed API still returns
-      // distilleries without the new nested bottles field.
-      if (needsBottleFallback) {
-        const bottlesResponse = await fetch(`${API_URL}/api/bottles`);
-        if (!bottlesResponse.ok) {
-          throw new Error(await errorMessage(bottlesResponse));
-        }
-        fallbackBottles = await bottlesResponse.json() as Bottle[];
-      }
-
-      setDistilleries(loadedDistilleries.map((distillery) => ({
-        ...distillery,
-        bottles: Array.isArray(distillery.bottles)
-          ? distillery.bottles
-          : fallbackBottles.filter((bottle) => bottle.distillery_id === distillery.id),
-      })));
-
+  useEffect(() => {
+    const loadUserStates = async () => {
       if (!telegramId) {
         setUserStates({});
         return;
@@ -160,16 +172,10 @@ export function DistilleriesTab() {
         // Personal marks require configured Telegram server authentication.
         setUserStates({});
       }
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Could not load the catalogue.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [initDataRaw, telegramId]);
+    };
 
-  useEffect(() => {
-    void loadCatalog();
-  }, [loadCatalog]);
+    void loadUserStates();
+  }, [initDataRaw, telegramId]);
 
   const toggleAction = async (bottle: Bottle, actionType: 'favorite' | 'tried') => {
     if (!telegramId) {
@@ -198,7 +204,7 @@ export function DistilleriesTab() {
           is_tried: result.is_tried,
         },
       }));
-      setDistilleries((current) => current.map((distillery) => ({
+      queryClient.setQueryData<Distillery[]>(['catalog'], (current) => current?.map((distillery) => ({
         ...distillery,
         bottles: distillery.bottles.map((currentBottle) => currentBottle.id === bottle.id
           ? {
@@ -235,13 +241,13 @@ export function DistilleriesTab() {
         <h1 className="mt-2 text-2xl font-semibold text-white">Distilleries</h1>
       </header>
 
-      {feedback && (
+      {(feedback || catalogError) && (
         <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">
-          {feedback}
+          {feedback || catalogError}
         </p>
       )}
 
-      {isLoading ? (
+      {catalogQuery.isLoading ? (
         <p className="text-center text-sm text-slate-400">Loading distilleries...</p>
       ) : distilleries.length === 0 ? (
         <p className="text-center text-sm text-slate-400">The catalogue will be available soon.</p>

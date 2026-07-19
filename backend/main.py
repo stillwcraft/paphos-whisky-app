@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel, Field
 
 import models
@@ -942,7 +942,7 @@ def get_user_stats(
 @app.get("/api/distilleries", response_model=List[DistilleryWithBottlesResponse])
 def get_distilleries(db: Session = Depends(get_db)):
     return db.query(models.Distillery).options(
-        selectinload(models.Distillery.bottles)
+        joinedload(models.Distillery.bottles)
     ).order_by(models.Distillery.name).all()
 
 
