@@ -474,7 +474,7 @@ def ensure_user_review_schema() -> None:
                 )
 
 
-ensure_user_review_schema()
+#ensure_user_review_schema()
 
 app = FastAPI(title="Paphos Whisky Club API")
 
