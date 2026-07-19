@@ -7,15 +7,15 @@ type Label = 'bottle' | 'samples' | 'event';
 
 type EventItem = { id: number; title: string; date: string; description: string; price: number; samples_price: number | null; image_url: string | null; has_samples: boolean; registered_count: number; samples_count: number };
 type Distillery = { id: number; name: string; image_url: string | null; description: string | null };
-type Bottle = { id: number; name: string; distillery_id: number | null; label: Label; age: string | null; abv: string | null; price_per_sample: number; description: string; image_url: string | null };
+type Bottle = { id: number; name: string; distillery_id: number | null; label: Label; age: string | null; abv: string | null; cask: string | null; bottles: string | null; price_per_sample: number; description: string; image_url: string | null };
 type EventForm = Omit<EventItem, 'id' | 'registered_count' | 'samples_count'>;
 type DistilleryForm = Omit<Distillery, 'id'>;
-type BottleForm = { name: string; label: Label; age: string; abv: string; price_per_sample: string; description: string; image_url: string };
+type BottleForm = { name: string; label: Label; age: string; abv: string; cask: string; bottles: string; price_per_sample: string; description: string; image_url: string };
 type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'bottle'; item: Bottle };
 
 const emptyEvent: EventForm = { title: '', date: '', description: '', price: 0, samples_price: null, image_url: null, has_samples: false };
 const emptyDistillery: DistilleryForm = { name: '', image_url: null, description: null };
-const emptyBottle: BottleForm = { name: '', label: 'bottle', age: '', abv: '', price_per_sample: '', description: '', image_url: '' };
+const emptyBottle: BottleForm = { name: '', label: 'bottle', age: '', abv: '', cask: '', bottles: '', price_per_sample: '', description: '', image_url: '' };
 
 async function getError(response: Response) {
   try {
@@ -36,6 +36,28 @@ function BottleFields({ form, setForm, includeLabel }: { form: BottleForm; setFo
     <input required min="0" placeholder="Price" step="0.1" style={inputStyle} type="number" value={form.price_per_sample} onChange={(event) => setForm({ ...form, price_per_sample: event.target.value })} />
     <input placeholder="Age (optional)" style={inputStyle} value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
     <input placeholder="ABV (optional)" style={inputStyle} value={form.abv} onChange={(event) => setForm({ ...form, abv: event.target.value })} />
+    <label style={fieldGroupStyle}>
+      <span style={fieldLabelStyle}>Cask Type</span>
+      <input
+        aria-label="Cask Type"
+        name="cask"
+        placeholder="например, First-fill Oloroso Sherry Butt"
+        style={inputStyle}
+        value={form.cask}
+        onChange={(event) => setForm({ ...form, cask: event.target.value })}
+      />
+    </label>
+    <label style={fieldGroupStyle}>
+      <span style={fieldLabelStyle}>Total Bottles / Outturn</span>
+      <input
+        aria-label="Total Bottles / Outturn"
+        name="bottles"
+        placeholder="например, 1 of 312 or Limited Release"
+        style={inputStyle}
+        value={form.bottles}
+        onChange={(event) => setForm({ ...form, bottles: event.target.value })}
+      />
+    </label>
     {includeLabel && <select style={inputStyle} value={form.label} onChange={(event) => setForm({ ...form, label: event.target.value as Label })}><option value="bottle">bottle</option><option value="samples">samples</option><option value="event">event</option></select>}
     <textarea required placeholder="Description" rows={4} style={{ ...inputStyle, resize: 'vertical', whiteSpace: 'pre-wrap' }} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} />
   </div>;
@@ -105,7 +127,7 @@ export function AdminTab() {
     try {
       const response = await fetch(editing ? `${API_URL}/api/bottles/${editingId}` : `${API_URL}/api/bottles`, {
         method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
-        body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, image_url: form.image_url || null, price_per_sample: Number(form.price_per_sample) }),
+        body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, cask: form.cask || null, bottles: form.bottles || null, image_url: form.image_url || null, price_per_sample: Number(form.price_per_sample) }),
       });
       if (!response.ok) throw new Error(await getError(response));
       reset(); await loadContent(); setMessage(editing ? 'Card updated.' : 'Card created.');
@@ -121,7 +143,7 @@ export function AdminTab() {
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete item.'); }
   };
   const editBottle = (bottle: Bottle) => {
-    const form = { name: bottle.name, label: bottle.label, age: bottle.age ?? '', abv: bottle.abv ?? '', price_per_sample: String(bottle.price_per_sample), description: bottle.description, image_url: bottle.image_url ?? '' };
+    const form = { name: bottle.name, label: bottle.label, age: bottle.age ?? '', abv: bottle.abv ?? '', cask: bottle.cask ?? '', bottles: bottle.bottles ?? '', price_per_sample: String(bottle.price_per_sample), description: bottle.description, image_url: bottle.image_url ?? '' };
     if (bottle.distillery_id === null) { setTabBottleForm(form); setEditingTabBottleId(bottle.id); } else { setCatalogBottleForm(form); setCatalogDistilleryId(bottle.distillery_id); setEditingCatalogBottleId(bottle.id); setOpenBottleLists((current) => current.includes(bottle.distillery_id!) ? current : [...current, bottle.distillery_id!]); }
   };
 
@@ -171,6 +193,8 @@ const pageStyle: CSSProperties = { color: '#fff', padding: 16, paddingBottom: 90
 const sectionStyle: CSSProperties = { background: '#1a202c', borderRadius: 12, marginBottom: 14, padding: 14 };
 const summaryStyle: CSSProperties = { color: '#f59e0b', cursor: 'pointer', fontSize: 16, fontWeight: 700 };
 const formStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 };
+const fieldGroupStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 };
+const fieldLabelStyle: CSSProperties = { color: '#cbd5e0', fontSize: 13, fontWeight: 600 };
 const inputStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, boxSizing: 'border-box', color: '#fff', padding: 10, width: '100%' };
 const buttonStyle: CSSProperties = { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#000', cursor: 'pointer', fontWeight: 700, padding: '10px 12px' };
 const secondaryButtonStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: '8px 10px' };

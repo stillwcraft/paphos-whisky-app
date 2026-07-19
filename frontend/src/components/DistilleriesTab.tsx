@@ -11,6 +11,8 @@ type Bottle = {
   distillery_id: number;
   age: string | null;
   abv: string | null;
+  cask: string | null;
+  bottles: string | null;
   price_per_sample: number;
   description: string;
   image_url: string | null;
@@ -397,8 +399,28 @@ export function DistilleriesTab() {
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <h2 className="text-2xl font-semibold text-white">{selectedBottle.name}</h2>
               <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">Age</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.age || 'NAS'}</dd></div>
-                <div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">ABV</dt><dd className="mt-1 font-semibold text-white">{selectedBottle.abv || '—'}</dd></div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">Age</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.age || 'NAS'}</dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">ABV</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.abv || '—'}</dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">Cask</dt>
+                  <dd
+                    className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
+                    style={{ fontSize: selectedBottle.cask && selectedBottle.cask.length > 15 ? '11px' : '14px', lineHeight: 1.2 }}
+                    title={selectedBottle.cask ?? undefined}
+                  >
+                    {selectedBottle.cask || '—'}
+                  </dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">Bottles</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || '—'}</dd>
+                </div>
               </dl>
               <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample}</p>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>

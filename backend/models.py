@@ -59,6 +59,8 @@ class Bottle(Base):
     label = Column(String, default="bottle", nullable=False)
     age = Column(String, nullable=True)
     abv = Column(String, nullable=True)
+    cask = Column(String, nullable=True)
+    bottles = Column(String, nullable=True)
     price_per_sample = Column(Float)
     description = Column(String)
     image_url = Column(String, nullable=True)

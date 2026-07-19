@@ -157,6 +157,10 @@ def ensure_catalog_schema() -> None:
         bottle_columns = get_table_columns(connection, "bottles")
         if "abv" not in bottle_columns:
             connection.execute(text("ALTER TABLE bottles ADD COLUMN abv TEXT"))
+        if "cask" not in bottle_columns:
+            connection.execute(text("ALTER TABLE bottles ADD COLUMN cask TEXT"))
+        if "bottles" not in bottle_columns:
+            connection.execute(text("ALTER TABLE bottles ADD COLUMN bottles TEXT"))
         if "favorites_count" not in bottle_columns:
             connection.execute(
                 text(
@@ -559,12 +563,21 @@ class BottleCreate(BaseModel):
     label: Optional[BottleLabel] = "bottle"
     age: Optional[str] = None
     abv: Optional[str] = None
+    cask: Optional[str] = None
+    bottles: Optional[str] = None
     price_per_sample: float
     description: str
     image_url: Optional[str] = None
 
 
+class BottleUpdate(BottleCreate):
+    cask: Optional[str] = None
+    bottles: Optional[str] = None
+
+
 class BottleResponse(BottleCreate):
+    cask: Optional[str] = None
+    bottles: Optional[str] = None
     id: int
     favorites_count: int
     tried_count: int
@@ -1057,7 +1070,7 @@ def create_bottle(
 @app.put("/api/bottles/{bottle_id}", response_model=BottleResponse)
 def update_bottle(
     bottle_id: int,
-    bottle_data: BottleCreate,
+    bottle_data: BottleUpdate,
     db: Session = Depends(get_db),
     _: TelegramAuthContext = Depends(require_admin),
 ):
