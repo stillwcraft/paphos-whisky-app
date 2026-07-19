@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const PERSONAL_DATA_UNAVAILABLE = 'Favorites are temporarily unavailable. Please try again later.';
@@ -11,6 +12,8 @@ type Bottle = {
   distillery_id: number | null;
   age: string | null;
   abv: string | null;
+  cask: string | null;
+  bottles: string | null;
   price_per_sample: number;
   description: string;
   image_url: string | null;
@@ -61,18 +64,17 @@ export function FavoritesTab() {
   const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
   const [favoriteBottles, setFavoriteBottles] = useState<FavoriteBottle[]>([]);
-  const [userStates, setUserStates] = useState<Record<number, UserBottleState>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedBottleId, setExpandedBottleId] = useState<number | null>(null);
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   useEffect(() => {
     const loadFavorites = async () => {
       if (!telegramId) {
         setFavoriteBottles([]);
-        setUserStates({});
         setIsLoading(false);
         return;
       }
@@ -98,7 +100,6 @@ export function FavoritesTab() {
         ]);
         const statesByBottle = Object.fromEntries(states.map((state) => [state.bottle_id, state])) as Record<number, UserBottleState>;
         const distilleryNames = new Map(distilleries.map((distillery) => [distillery.id, distillery.name]));
-        setUserStates(statesByBottle);
         setFavoriteBottles(bottles
           .filter((bottle) => statesByBottle[bottle.id]?.is_favorite)
           .map((bottle) => ({ ...bottle, distilleryName: bottle.distillery_id ? distilleryNames.get(bottle.distillery_id) ?? 'Independent bottle' : 'Independent bottle' })));
@@ -115,6 +116,7 @@ export function FavoritesTab() {
   const closeBottle = () => {
     setIsPhotoExpanded(false);
     setExpandedBottleId(null);
+    setIsReviewOpen(false);
   };
   const expandedBottle = useMemo(
     () => favoriteBottles.find((bottle) => bottle.id === expandedBottleId),
@@ -138,14 +140,6 @@ export function FavoritesTab() {
       if (!response.ok) throw new Error(await getError(response));
 
       const result = await response.json() as ToggleActionResponse;
-      setUserStates((current) => ({
-        ...current,
-        [bottle.id]: {
-          bottle_id: bottle.id,
-          is_favorite: result.is_favorite,
-          is_tried: result.is_tried,
-        },
-      }));
       setFavoriteBottles((current) => result.is_favorite
         ? current.map((item) => item.id === bottle.id
           ? { ...item, favorites_count: result.favorites_count, tried_count: result.tried_count }
@@ -184,7 +178,7 @@ export function FavoritesTab() {
             <li key={bottle.id}>
               <button
                 className="flex w-full items-center gap-3 rounded-2xl border border-amber-400/15 bg-slate-800/70 p-4 text-left transition-colors hover:bg-slate-800"
-                onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); }}
+                onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); setIsReviewOpen(false); }}
                 type="button"
               >
                 <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
@@ -220,10 +214,31 @@ export function FavoritesTab() {
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
               <button className="rounded-xl border border-amber-300 bg-amber-400 px-3 py-3 text-sm font-semibold text-slate-950 transition-colors disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'favorite'); }} type="button">⭐ Favorites {expandedBottle.favorites_count > 0 && `(${expandedBottle.favorites_count})`}</button>
-              <button className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${userStates[expandedBottle.id]?.is_tried ? 'border-orange-300 bg-orange-400 text-slate-950' : 'border-slate-600 text-slate-100 hover:bg-white/5'}`} disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'tried'); }} type="button">🥃 Tried {expandedBottle.tried_count > 0 && `(${expandedBottle.tried_count})`}</button>
+              <button
+                className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (!telegramId) {
+                    setError('Open the app in Telegram to write a review.');
+                    return;
+                  }
+                  setIsReviewOpen(true);
+                }}
+                type="button"
+              >
+                📝 Review
+              </button>
             </div>
           </article>
         </div>
+      )}
+      {isReviewOpen && expandedBottle && telegramId !== undefined && (
+        <BottleReviewOverlay
+          bottleId={expandedBottle.id}
+          initDataRaw={initDataRaw}
+          onClose={() => setIsReviewOpen(false)}
+          telegramId={telegramId}
+        />
       )}
     </section>
   );

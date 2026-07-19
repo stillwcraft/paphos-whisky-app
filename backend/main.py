@@ -308,6 +308,174 @@ ensure_event_schema()
 ensure_catalog_schema()
 ensure_user_bottle_action_schema()
 
+
+def ensure_user_review_schema() -> None:
+    with engine.begin() as connection:
+        all_tables = set(inspect(connection).get_table_names())
+        if "user_reviews" not in all_tables:
+            models.UserReview.__table__.create(bind=connection)
+            all_tables.add("user_reviews")
+
+        review_columns = get_table_columns(connection, "user_reviews")
+        for col_name in ("nose", "taste", "finish"):
+            if col_name not in review_columns:
+                connection.execute(
+                    text(
+                        f"ALTER TABLE user_reviews "
+                        f"ADD COLUMN {col_name} INTEGER NOT NULL DEFAULT 80"
+                    )
+                )
+
+        review_inspector = inspect(connection)
+        review_indexes = review_inspector.get_indexes("user_reviews")
+        review_index_names = {idx["name"] for idx in review_indexes}
+        if "ix_user_reviews_telegram_id" not in review_index_names:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_user_reviews_telegram_id "
+                    "ON user_reviews (telegram_id)"
+                )
+            )
+        if "ix_user_reviews_bottle_id" not in review_index_names:
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_user_reviews_bottle_id "
+                    "ON user_reviews (bottle_id)"
+                )
+            )
+
+        review_unique = review_inspector.get_unique_constraints("user_reviews")
+        has_review_pair_unique = any(
+            set(c.get("column_names") or []) == {"telegram_id", "bottle_id"}
+            for c in review_unique
+        ) or any(
+            idx.get("unique")
+            and set(idx.get("column_names") or []) == {"telegram_id", "bottle_id"}
+            for idx in review_indexes
+        )
+        if not has_review_pair_unique:
+            dup_reviews = connection.execute(
+                text(
+                    """
+                    SELECT telegram_id, bottle_id, MIN(id) AS keep_id
+                    FROM user_reviews
+                    GROUP BY telegram_id, bottle_id
+                    HAVING COUNT(*) > 1
+                    """
+                )
+            ).mappings().all()
+            for row in dup_reviews:
+                if "user_review_tags" in all_tables:
+                    connection.execute(
+                        text(
+                            """
+                            DELETE FROM user_review_tags
+                            WHERE review_id != :keep_id
+                              AND review_id IN (
+                                  SELECT id
+                                  FROM user_reviews
+                                  WHERE telegram_id = :telegram_id
+                                    AND bottle_id = :bottle_id
+                              )
+                            """
+                        ),
+                        {
+                            "telegram_id": row["telegram_id"],
+                            "bottle_id": row["bottle_id"],
+                            "keep_id": row["keep_id"],
+                        },
+                    )
+                connection.execute(
+                    text(
+                        """
+                        DELETE FROM user_reviews
+                        WHERE telegram_id = :telegram_id
+                          AND bottle_id = :bottle_id
+                          AND id != :keep_id
+                        """
+                    ),
+                    {
+                        "telegram_id": row["telegram_id"],
+                        "bottle_id": row["bottle_id"],
+                        "keep_id": row["keep_id"],
+                    },
+                )
+            connection.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS "
+                    "uq_user_review_telegram_bottle_idx "
+                    "ON user_reviews (telegram_id, bottle_id)"
+                )
+            )
+
+        if "user_review_tags" not in all_tables:
+            models.UserReviewTag.__table__.create(bind=connection)
+        else:
+            tag_inspector = inspect(connection)
+            tag_indexes = tag_inspector.get_indexes("user_review_tags")
+            tag_index_names = {idx["name"] for idx in tag_indexes}
+            if "ix_user_review_tags_review_id" not in tag_index_names:
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_user_review_tags_review_id "
+                        "ON user_review_tags (review_id)"
+                    )
+                )
+            if "ix_user_review_tags_tasting_tag_id" not in tag_index_names:
+                connection.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS ix_user_review_tags_tasting_tag_id "
+                        "ON user_review_tags (tasting_tag_id)"
+                    )
+                )
+
+            tag_unique = tag_inspector.get_unique_constraints("user_review_tags")
+            has_tag_pair_unique = any(
+                set(c.get("column_names") or []) == {"review_id", "tasting_tag_id"}
+                for c in tag_unique
+            ) or any(
+                idx.get("unique")
+                and set(idx.get("column_names") or []) == {"review_id", "tasting_tag_id"}
+                for idx in tag_indexes
+            )
+            if not has_tag_pair_unique:
+                dup_tags = connection.execute(
+                    text(
+                        """
+                        SELECT review_id, tasting_tag_id, MIN(id) AS keep_id
+                        FROM user_review_tags
+                        GROUP BY review_id, tasting_tag_id
+                        HAVING COUNT(*) > 1
+                        """
+                    )
+                ).mappings().all()
+                for row in dup_tags:
+                    connection.execute(
+                        text(
+                            """
+                            DELETE FROM user_review_tags
+                            WHERE review_id = :review_id
+                              AND tasting_tag_id = :tasting_tag_id
+                              AND id != :keep_id
+                            """
+                        ),
+                        {
+                            "review_id": row["review_id"],
+                            "tasting_tag_id": row["tasting_tag_id"],
+                            "keep_id": row["keep_id"],
+                        },
+                    )
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS "
+                        "uq_user_review_tag_review_tasting_idx "
+                        "ON user_review_tags (review_id, tasting_tag_id)"
+                    )
+                )
+
+
+ensure_user_review_schema()
+
 app = FastAPI(title="Paphos Whisky Club API")
 
 # Настройка CORS, чтобы наш фронтенд на Vercel мог общаться с бэкендом
@@ -621,6 +789,33 @@ class BottleActionToggleResponse(UserBottleStateResponse):
     tried_count: int
 
 
+class ReviewCreate(BaseModel):
+    telegram_id: int
+    bottle_id: int
+    nose: int = Field(default=80, ge=0, le=100)
+    taste: int = Field(default=80, ge=0, le=100)
+    finish: int = Field(default=80, ge=0, le=100)
+    tag_ids: List[int] = Field(default_factory=list)
+
+
+class ReviewQuery(BaseModel):
+    telegram_id: int
+    bottle_id: int
+
+
+class ReviewResponse(BaseModel):
+    id: Optional[int]
+    telegram_id: int
+    bottle_id: int
+    nose: int
+    taste: int
+    finish: int
+    tag_ids: List[int]
+
+    class Config:
+        from_attributes = True
+
+
 class RegistrationBase(BaseModel):
     telegram_id: int
     username: Optional[str] = None
@@ -915,6 +1110,9 @@ def delete_tasting_tag(
     tag = db.query(models.TastingTag).filter(models.TastingTag.id == tag_id).first()
     if not tag:
         raise HTTPException(status_code=404, detail="Tasting tag not found")
+    db.query(models.UserReviewTag).filter(
+        models.UserReviewTag.tasting_tag_id == tag_id
+    ).delete(synchronize_session=False)
     db.delete(tag)
     db.commit()
     return
@@ -1099,8 +1297,21 @@ def delete_distillery(
         ).all()
     ]
     if bottle_ids:
+        review_ids = [
+            review_id
+            for (review_id,) in db.query(models.UserReview.id).filter(
+                models.UserReview.bottle_id.in_(bottle_ids)
+            ).all()
+        ]
         db.query(models.UserBottleAction).filter(
             models.UserBottleAction.bottle_id.in_(bottle_ids)
+        ).delete(synchronize_session=False)
+        if review_ids:
+            db.query(models.UserReviewTag).filter(
+                models.UserReviewTag.review_id.in_(review_ids)
+            ).delete(synchronize_session=False)
+        db.query(models.UserReview).filter(
+            models.UserReview.bottle_id.in_(bottle_ids)
         ).delete(synchronize_session=False)
     db.query(models.Bottle).filter(
         models.Bottle.distillery_id == distillery_id
@@ -1178,8 +1389,21 @@ def delete_bottle(
     bottle = db.query(models.Bottle).filter(models.Bottle.id == bottle_id).first()
     if not bottle:
         raise HTTPException(status_code=404, detail="Bottle not found")
+    review_ids = [
+        review_id
+        for (review_id,) in db.query(models.UserReview.id).filter(
+            models.UserReview.bottle_id == bottle_id
+        ).all()
+    ]
     db.query(models.UserBottleAction).filter(
         models.UserBottleAction.bottle_id == bottle_id
+    ).delete(synchronize_session=False)
+    if review_ids:
+        db.query(models.UserReviewTag).filter(
+            models.UserReviewTag.review_id.in_(review_ids)
+        ).delete(synchronize_session=False)
+    db.query(models.UserReview).filter(
+        models.UserReview.bottle_id == bottle_id
     ).delete(synchronize_session=False)
     db.delete(bottle)
     db.commit()
@@ -1273,3 +1497,153 @@ def get_user_bottle_states(
         (models.UserBottleAction.is_favorite.is_(True))
         | (models.UserBottleAction.is_tried.is_(True)),
     ).order_by(models.UserBottleAction.bottle_id).all()
+
+
+def build_review_response(review: models.UserReview) -> ReviewResponse:
+    return ReviewResponse(
+        id=review.id,
+        telegram_id=review.telegram_id,
+        bottle_id=review.bottle_id,
+        nose=review.nose,
+        taste=review.taste,
+        finish=review.finish,
+        tag_ids=[tag.id for tag in review.tags],
+    )
+
+
+@app.get("/api/reviews", response_model=ReviewResponse)
+def get_review(
+    review_query: ReviewQuery = Depends(),
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    telegram_id = ensure_telegram_id_matches(
+        authenticated_user,
+        review_query.telegram_id,
+    )
+    review = (
+        db.query(models.UserReview)
+        .options(joinedload(models.UserReview.tags))
+        .filter(
+            models.UserReview.telegram_id == telegram_id,
+            models.UserReview.bottle_id == review_query.bottle_id,
+        )
+        .first()
+    )
+    if review is None:
+        return ReviewResponse(
+            id=None,
+            telegram_id=telegram_id,
+            bottle_id=review_query.bottle_id,
+            nose=80,
+            taste=80,
+            finish=80,
+            tag_ids=[],
+        )
+    return build_review_response(review)
+
+
+@app.post("/api/reviews", response_model=ReviewResponse)
+def upsert_review(
+    review_data: ReviewCreate,
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    telegram_id = ensure_telegram_id_matches(authenticated_user, review_data.telegram_id)
+    bottle_id = review_data.bottle_id
+
+    bottle = (
+        db.query(models.Bottle)
+        .filter(models.Bottle.id == bottle_id)
+        .with_for_update()
+        .first()
+    )
+    if not bottle:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+
+    # Deduplicate tag IDs (preserve first occurrence order).
+    unique_tag_ids = list(dict.fromkeys(review_data.tag_ids))
+    if unique_tag_ids:
+        found_ids = {
+            tag_id
+            for (tag_id,) in db.query(models.TastingTag.id)
+            .filter(models.TastingTag.id.in_(unique_tag_ids))
+            .all()
+        }
+        unknown_ids = [tid for tid in unique_tag_ids if tid not in found_ids]
+        if unknown_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Unknown tasting tag IDs: {unknown_ids}",
+            )
+
+    review = db.query(models.UserReview).filter(
+        models.UserReview.telegram_id == telegram_id,
+        models.UserReview.bottle_id == bottle_id,
+    ).first()
+
+    if review is None:
+        review = models.UserReview(
+            telegram_id=telegram_id,
+            bottle_id=bottle_id,
+            nose=review_data.nose,
+            taste=review_data.taste,
+            finish=review_data.finish,
+        )
+        db.add(review)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            # Race condition: re-acquire lock and load existing row.
+            bottle = (
+                db.query(models.Bottle)
+                .filter(models.Bottle.id == bottle_id)
+                .with_for_update()
+                .first()
+            )
+            if not bottle:
+                raise HTTPException(status_code=404, detail="Bottle not found")
+            review = db.query(models.UserReview).filter(
+                models.UserReview.telegram_id == telegram_id,
+                models.UserReview.bottle_id == bottle_id,
+            ).first()
+            if review is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Failed to create review",
+                )
+            review.nose = review_data.nose
+            review.taste = review_data.taste
+            review.finish = review_data.finish
+    else:
+        review.nose = review_data.nose
+        review.taste = review_data.taste
+        review.finish = review_data.finish
+        db.flush()
+
+    # Replace tag associations atomically.
+    db.query(models.UserReviewTag).filter(
+        models.UserReviewTag.review_id == review.id
+    ).delete(synchronize_session=False)
+    for tag_id in unique_tag_ids:
+        db.add(models.UserReviewTag(review_id=review.id, tasting_tag_id=tag_id))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Selected tasting tags are no longer available",
+        ) from None
+
+    return ReviewResponse(
+        id=review.id,
+        telegram_id=review.telegram_id,
+        bottle_id=review.bottle_id,
+        nose=review.nose,
+        taste=review.taste,
+        finish=review.finish,
+        tag_ids=unique_tag_ids,
+    )

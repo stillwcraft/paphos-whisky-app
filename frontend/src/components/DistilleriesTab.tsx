@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -135,6 +136,7 @@ export function DistilleriesTab() {
   const [userStates, setUserStates] = useState<Record<number, BottleActionState>>({});
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   const catalogQuery = useQuery({
     queryKey: ['catalog'],
@@ -234,6 +236,7 @@ export function DistilleriesTab() {
   const closeBottleDetails = () => {
     setIsPhotoExpanded(false);
     setSelectedBottle(null);
+    setIsReviewOpen(false);
   };
 
   return (
@@ -302,6 +305,7 @@ export function DistilleriesTab() {
                               onClick={() => {
                                 setIsPhotoExpanded(false);
                                 setSelectedBottle(bottle);
+                                setIsReviewOpen(false);
                               }}
                               type="button"
                             >
@@ -435,16 +439,29 @@ export function DistilleriesTab() {
                 ⭐ Favorites {selectedBottle.favorites_count > 0 && `(${selectedBottle.favorites_count})`}
               </button>
               <button
-                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${selectedBottleState?.is_tried ? 'border-orange-300 bg-orange-400 text-slate-950' : 'border-slate-600 text-slate-100 hover:bg-white/5'}`}
-                disabled={isUpdatingBottleId === selectedBottle.id}
-                onClick={() => void toggleAction(selectedBottle, 'tried')}
+                className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
+                onClick={() => {
+                  if (!telegramId) {
+                    setFeedback('Open the app in Telegram to write a review.');
+                    return;
+                  }
+                  setIsReviewOpen(true);
+                }}
                 type="button"
               >
-                🥃 Tried {selectedBottle.tried_count > 0 && `(${selectedBottle.tried_count})`}
+                📝 Review
               </button>
             </div>
           </article>
         </div>
+      )}
+      {isReviewOpen && selectedBottle && telegramId !== undefined && (
+        <BottleReviewOverlay
+          bottleId={selectedBottle.id}
+          initDataRaw={initDataRaw}
+          onClose={() => setIsReviewOpen(false)}
+          telegramId={telegramId}
+        />
       )}
     </section>
   );

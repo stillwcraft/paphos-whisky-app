@@ -81,6 +81,12 @@ class Bottle(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    user_reviews = relationship(
+        "UserReview",
+        back_populates="bottle",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class UserBottleAction(Base):
@@ -105,3 +111,72 @@ class UserBottleAction(Base):
     is_tried = Column(Boolean, default=False, nullable=False)
 
     bottle = relationship("Bottle", back_populates="user_actions")
+
+
+class UserReview(Base):
+    __tablename__ = "user_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "telegram_id",
+            "bottle_id",
+            name="uq_user_review_telegram_bottle",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    telegram_id = Column(BigInteger, index=True, nullable=False)
+    bottle_id = Column(
+        Integer,
+        ForeignKey("bottles.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    nose = Column(Integer, nullable=False, default=80)
+    taste = Column(Integer, nullable=False, default=80)
+    finish = Column(Integer, nullable=False, default=80)
+
+    bottle = relationship("Bottle", back_populates="user_reviews")
+    review_tags = relationship(
+        "UserReviewTag",
+        back_populates="review",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    tags = relationship(
+        "TastingTag",
+        secondary="user_review_tags",
+        viewonly=True,
+        overlaps="review_tags,review,tasting_tag",
+    )
+
+
+class UserReviewTag(Base):
+    __tablename__ = "user_review_tags"
+    __table_args__ = (
+        UniqueConstraint(
+            "review_id",
+            "tasting_tag_id",
+            name="uq_user_review_tag_review_tasting",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    review_id = Column(
+        Integer,
+        ForeignKey("user_reviews.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    tasting_tag_id = Column(
+        Integer,
+        ForeignKey("tasting_tags.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+
+    review = relationship(
+        "UserReview",
+        back_populates="review_tags",
+        overlaps="tags",
+    )
+    tasting_tag = relationship("TastingTag", overlaps="tags")
