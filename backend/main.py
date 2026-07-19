@@ -1622,12 +1622,24 @@ def upsert_review(
         review.finish = review_data.finish
         db.flush()
 
-    # Replace tag associations atomically.
-    db.query(models.UserReviewTag).filter(
-        models.UserReviewTag.review_id == review.id
-    ).delete(synchronize_session=False)
-    for tag_id in unique_tag_ids:
-        db.add(models.UserReviewTag(review_id=review.id, tasting_tag_id=tag_id))
+    # Use the current Session transaction so the flushed review ID is visible.
+    db.execute(
+        text("DELETE FROM user_review_tags WHERE review_id = :review_id"),
+        {"review_id": review.id},
+    )
+    if unique_tag_ids:
+        db.execute(
+            text(
+                """
+                INSERT INTO user_review_tags (review_id, tasting_tag_id)
+                VALUES (:review_id, :tasting_tag_id)
+                """
+            ),
+            [
+                {"review_id": review.id, "tasting_tag_id": tag_id}
+                for tag_id in unique_tag_ids
+            ],
+        )
 
     try:
         db.commit()

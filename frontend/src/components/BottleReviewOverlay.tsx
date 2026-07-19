@@ -156,7 +156,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
           >
             ✕
           </button>
-          <h2 className="text-lg font-semibold text-white">Мой обзор</h2>
+          <h2 className="text-lg font-semibold text-white">My review</h2>
         </div>
 
         {isLoading ? (
@@ -173,7 +173,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
 
             <div className="py-6 text-center">
               <p className="tabular-nums text-7xl font-bold text-amber-400">{averageScore}</p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">Общий счёт</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">Points</p>
             </div>
 
             <div className="space-y-5 px-5">
@@ -231,7 +231,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
             onClick={() => void handleSave()}
             type="button"
           >
-            💾 Сохранить обзор
+            💾 Save review
           </button>
         </div>
       </article>
