@@ -557,6 +557,18 @@ class DistilleryResponse(DistilleryCreate):
         from_attributes = True
 
 
+class TastingTagCreate(BaseModel):
+    name: str
+    icon_url: str
+
+
+class TastingTagResponse(TastingTagCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
 class BottleCreate(BaseModel):
     name: str
     distillery_id: Optional[int] = None
@@ -846,6 +858,64 @@ def delete_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     db.delete(event)
+    db.commit()
+    return
+
+
+@app.get("/api/tasting-tags", response_model=List[TastingTagResponse])
+def get_tasting_tags(db: Session = Depends(get_db)):
+    return db.query(models.TastingTag).order_by(models.TastingTag.name).all()
+
+
+@app.post(
+    "/api/admin/tasting-tags",
+    response_model=TastingTagResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_tasting_tag(
+    tag_data: TastingTagCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    tag = models.TastingTag(**tag_data.model_dump())
+    db.add(tag)
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+@app.put("/api/admin/tasting-tags/{tag_id}", response_model=TastingTagResponse)
+def update_tasting_tag(
+    tag_id: int,
+    tag_data: TastingTagCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    tag = db.query(models.TastingTag).filter(models.TastingTag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tasting tag not found")
+
+    for field, value in tag_data.model_dump().items():
+        setattr(tag, field, value)
+
+    db.commit()
+    db.refresh(tag)
+    return tag
+
+
+@app.delete(
+    "/api/admin/tasting-tags/{tag_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_tasting_tag(
+    tag_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    tag = db.query(models.TastingTag).filter(models.TastingTag.id == tag_id).first()
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tasting tag not found")
+    db.delete(tag)
     db.commit()
     return
 

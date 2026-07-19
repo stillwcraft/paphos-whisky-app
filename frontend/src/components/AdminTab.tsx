@@ -7,14 +7,17 @@ type Label = 'bottle' | 'samples' | 'event';
 
 type EventItem = { id: number; title: string; date: string; description: string; price: number; samples_price: number | null; image_url: string | null; has_samples: boolean; registered_count: number; samples_count: number };
 type Distillery = { id: number; name: string; image_url: string | null; description: string | null };
+type TastingTag = { id: number; name: string; icon_url: string };
 type Bottle = { id: number; name: string; distillery_id: number | null; label: Label; age: string | null; abv: string | null; cask: string | null; bottles: string | null; price_per_sample: number; description: string; image_url: string | null };
 type EventForm = Omit<EventItem, 'id' | 'registered_count' | 'samples_count'>;
 type DistilleryForm = Omit<Distillery, 'id'>;
+type TastingTagForm = Omit<TastingTag, 'id'>;
 type BottleForm = { name: string; label: Label; age: string; abv: string; cask: string; bottles: string; price_per_sample: string; description: string; image_url: string };
-type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'bottle'; item: Bottle };
+type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'tag'; item: TastingTag } | { kind: 'bottle'; item: Bottle };
 
 const emptyEvent: EventForm = { title: '', date: '', description: '', price: 0, samples_price: null, image_url: null, has_samples: false };
 const emptyDistillery: DistilleryForm = { name: '', image_url: null, description: null };
+const emptyTastingTag: TastingTagForm = { name: '', icon_url: '' };
 const emptyBottle: BottleForm = { name: '', label: 'bottle', age: '', abv: '', cask: '', bottles: '', price_per_sample: '', description: '', image_url: '' };
 
 async function getError(response: Response) {
@@ -67,30 +70,36 @@ export function AdminTab() {
   const initDataRaw = useSignal(initData.raw);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const [tastingTags, setTastingTags] = useState<TastingTag[]>([]);
   const [bottles, setBottles] = useState<Bottle[]>([]);
   const [eventForm, setEventForm] = useState<EventForm>(emptyEvent);
   const [distilleryForm, setDistilleryForm] = useState<DistilleryForm>(emptyDistillery);
+  const [tastingTagForm, setTastingTagForm] = useState<TastingTagForm>(emptyTastingTag);
   const [catalogBottleForm, setCatalogBottleForm] = useState<BottleForm>(emptyBottle);
   const [tabBottleForm, setTabBottleForm] = useState<BottleForm>(emptyBottle);
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [editingDistilleryId, setEditingDistilleryId] = useState<number | null>(null);
+  const [editingTastingTagId, setEditingTastingTagId] = useState<number | null>(null);
   const [editingCatalogBottleId, setEditingCatalogBottleId] = useState<number | null>(null);
   const [editingTabBottleId, setEditingTabBottleId] = useState<number | null>(null);
   const [catalogDistilleryId, setCatalogDistilleryId] = useState<number | null>(null);
   const [openBottleLists, setOpenBottleLists] = useState<number[]>([]);
   const [deletion, setDeletion] = useState<Deletion | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [savingTastingTag, setSavingTastingTag] = useState(false);
 
   const loadContent = useCallback(async () => {
     try {
-      const [eventsResponse, distilleriesResponse, bottlesResponse] = await Promise.all([
-        fetch(`${API_URL}/api/events`), fetch(`${API_URL}/api/distilleries`), fetch(`${API_URL}/api/bottles`),
+      const [eventsResponse, distilleriesResponse, tastingTagsResponse, bottlesResponse] = await Promise.all([
+        fetch(`${API_URL}/api/events`), fetch(`${API_URL}/api/distilleries`), fetch(`${API_URL}/api/tasting-tags`), fetch(`${API_URL}/api/bottles`),
       ]);
       if (!eventsResponse.ok) throw new Error(await getError(eventsResponse));
       if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
+      if (!tastingTagsResponse.ok) throw new Error(await getError(tastingTagsResponse));
       if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
       setEvents(await eventsResponse.json() as EventItem[]);
       setDistilleries(await distilleriesResponse.json() as Distillery[]);
+      setTastingTags(await tastingTagsResponse.json() as TastingTag[]);
       setBottles(await bottlesResponse.json() as Bottle[]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load admin content.');
@@ -100,6 +109,7 @@ export function AdminTab() {
   useEffect(() => { void loadContent(); }, [loadContent]);
   const resetEvent = () => { setEditingEventId(null); setEventForm(emptyEvent); };
   const resetDistillery = () => { setEditingDistilleryId(null); setDistilleryForm(emptyDistillery); };
+  const resetTastingTag = () => { setEditingTastingTagId(null); setTastingTagForm(emptyTastingTag); };
   const resetCatalogBottle = () => { setEditingCatalogBottleId(null); setCatalogDistilleryId(null); setCatalogBottleForm(emptyBottle); };
   const resetTabBottle = () => { setEditingTabBottleId(null); setTabBottleForm(emptyBottle); };
 
@@ -121,6 +131,16 @@ export function AdminTab() {
       resetDistillery(); await loadContent(); setMessage(editing ? 'Distillery updated.' : 'Distillery created.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save distillery.'); }
   };
+  const saveTastingTag = async (event: FormEvent) => {
+    event.preventDefault();
+    const editing = editingTastingTagId !== null;
+    setSavingTastingTag(true);
+    try {
+      const response = await fetch(editing ? `${API_URL}/api/admin/tasting-tags/${editingTastingTagId}` : `${API_URL}/api/admin/tasting-tags`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) }, body: JSON.stringify(tastingTagForm) });
+      if (!response.ok) throw new Error(await getError(response));
+      resetTastingTag(); await loadContent(); setMessage(editing ? 'Tasting tag updated.' : 'Tasting tag created.');
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save tasting tag.'); } finally { setSavingTastingTag(false); }
+  };
   const saveBottle = async (event: FormEvent, form: BottleForm, distilleryId: number | null, editingId: number | null, reset: () => void) => {
     event.preventDefault();
     const editing = editingId !== null;
@@ -135,7 +155,7 @@ export function AdminTab() {
   };
   const remove = async () => {
     if (!deletion) return;
-    const path = deletion.kind === 'event' ? 'events' : deletion.kind === 'distillery' ? 'distilleries' : 'bottles';
+    const path = deletion.kind === 'event' ? 'events' : deletion.kind === 'distillery' ? 'distilleries' : deletion.kind === 'bottle' ? 'bottles' : 'admin/tasting-tags';
     try {
       const response = await fetch(`${API_URL}/api/${path}/${deletion.item.id}`, { method: 'DELETE', headers: telegramAuthHeaders(initDataRaw) });
       if (!response.ok) throw new Error(await getError(response));
@@ -181,6 +201,14 @@ export function AdminTab() {
           </div>}</div>;
       })}</div>
     </Accordion>
+    <Accordion title="🏷️ Manage Tasting Tags">
+      <form onSubmit={saveTastingTag} style={formStyle}>
+        <label style={fieldGroupStyle}><span style={fieldLabelStyle}>Tag Name</span><input required placeholder="Tag Name" style={inputStyle} value={tastingTagForm.name} onChange={(event) => setTastingTagForm({ ...tastingTagForm, name: event.target.value })} /></label>
+        <label style={fieldGroupStyle}><span style={fieldLabelStyle}>Icon URL</span><input required placeholder="Icon URL" style={inputStyle} type="url" value={tastingTagForm.icon_url} onChange={(event) => setTastingTagForm({ ...tastingTagForm, icon_url: event.target.value })} /></label>
+        <div style={buttonRow}><button disabled={savingTastingTag} style={buttonStyle} type="submit">{savingTastingTag ? 'Saving…' : editingTastingTagId === null ? 'Add Tag' : 'Save Changes'}</button>{editingTastingTagId !== null && <button disabled={savingTastingTag} style={secondaryButtonStyle} type="button" onClick={resetTastingTag}>Cancel</button>}</div>
+      </form>
+      <div style={listStyle}>{tastingTags.map((tag) => <div key={tag.id} style={rowStyle}><span style={{ alignItems: 'center', display: 'flex', gap: 8 }}><img alt="" src={tag.icon_url} style={tagIconStyle} onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }} />{tag.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingTastingTagId(tag.id); setTastingTagForm({ name: tag.name, icon_url: tag.icon_url }); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'tag', item: tag })}>🗑️ Delete</button></span></div>)}</div>
+    </Accordion>
     <Accordion title="🥃 Manage Bottles & Samples Tab">
       <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
       <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
@@ -208,5 +236,6 @@ const rowStyle: CSSProperties = { alignItems: 'center', background: '#2d3748', b
 const cardStyle: CSSProperties = { background: '#2d3748', borderRadius: 10, padding: 10 };
 const spoilerButtonStyle: CSSProperties = { ...smallButtonStyle, marginTop: 10 };
 const messageStyle: CSSProperties = { background: '#2d3748', borderRadius: 8, padding: 10 };
+const tagIconStyle: CSSProperties = { background: '#1a202c', borderRadius: '50%', flexShrink: 0, height: 24, objectFit: 'cover', width: 24 };
 const modalOverlayStyle: CSSProperties = { alignItems: 'center', background: 'rgba(0,0,0,.7)', display: 'flex', inset: 0, justifyContent: 'center', padding: 20, position: 'fixed', zIndex: 50 };
 const modalStyle: CSSProperties = { background: '#1a202c', border: '1px solid #4a5568', borderRadius: 12, maxWidth: 360, padding: 20, width: '100%' };

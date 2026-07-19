@@ -45,6 +45,14 @@ class Distillery(Base):
     )
 
 
+class TastingTag(Base):
+    __tablename__ = "tasting_tags"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    icon_url = Column(String, nullable=False)
+
+
 class Bottle(Base):
     __tablename__ = "bottles"
 
