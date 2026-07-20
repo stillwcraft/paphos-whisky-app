@@ -13,6 +13,7 @@ type EventItem = {
   date: string; description: string; description_i18n?: I18nResponse; price: number;
   samples_price: number | null; image_url: string | null; has_samples: boolean;
   registered_count: number; samples_count: number;
+  bottles?: Array<Pick<Bottle, 'id'>>;
 };
 type Distillery = {
   id: number; name: string; name_i18n?: I18nResponse; image_url: string | null;
@@ -31,7 +32,7 @@ type Bottle = {
 type EventForm = {
   title: string; title_i18n: I18nString; date: string; description: string;
   description_i18n: I18nString; price: number; samples_price: number | null;
-  image_url: string | null; has_samples: boolean;
+  image_url: string | null; has_samples: boolean; bottle_ids: number[];
 };
 type DistilleryForm = {
   name: string; name_i18n: I18nString; image_url: string | null;
@@ -61,7 +62,7 @@ function toI18n(translations: I18nResponse | undefined, fallback: string | null 
 const emptyEvent = (): EventForm => ({
   title: '', title_i18n: emptyI18n(), date: '', description: '',
   description_i18n: emptyI18n(), price: 0, samples_price: null, image_url: null,
-  has_samples: false,
+  has_samples: false, bottle_ids: [],
 });
 const emptyDistillery = (): DistilleryForm => ({
   name: '', name_i18n: emptyI18n(), image_url: null, description: null,
@@ -82,6 +83,7 @@ function eventFormFromItem(item: EventItem): EventForm {
     date: item.date, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description), price: item.price,
     samples_price: item.samples_price, image_url: item.image_url, has_samples: item.has_samples,
+    bottle_ids: item.bottles?.map((bottle) => bottle.id) ?? [],
   };
 }
 
@@ -325,6 +327,34 @@ export function AdminTab() {
         <I18nTextEditor label="Title" required translations={eventForm.title_i18n} onChange={(title_i18n) => setEventForm({ ...eventForm, title: title_i18n.en, title_i18n })} />
         <input required style={inputStyle} type="datetime-local" value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} />
         <I18nTextEditor label="Description" multiline required translations={eventForm.description_i18n} onChange={(description_i18n) => setEventForm({ ...eventForm, description: description_i18n.en, description_i18n })} />
+        <fieldset style={{ ...fieldGroupStyle, border: 0, margin: 0, padding: 0 }}>
+          <legend style={fieldLabelStyle}>Tasting Bottles</legend>
+          <div style={{ ...listStyle, marginTop: 0, maxHeight: 240, overflowY: 'auto' }}>
+            {bottles.length === 0 ? <span style={{ color: '#a0aec0', fontSize: 13 }}>No bottles available.</span> : bottles.map((bottle) => {
+              const selected = eventForm.bottle_ids.includes(bottle.id);
+              const distillery = distilleries.find((item) => item.id === bottle.distillery_id);
+              return <label key={bottle.id} style={{ ...rowStyle, border: selected ? '1px solid #f59e0b' : '1px solid transparent', cursor: 'pointer' }}>
+                <span style={{ alignItems: 'center', display: 'flex', gap: 8, minWidth: 0 }}>
+                  <input
+                    checked={selected}
+                    type="checkbox"
+                    onChange={() => setEventForm((current) => ({
+                      ...current,
+                      bottle_ids: selected
+                        ? current.bottle_ids.filter((id) => id !== bottle.id)
+                        : [...current.bottle_ids, bottle.id],
+                    }))}
+                  />
+                  <span style={{ minWidth: 0 }}>
+                    <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bottle.name}</strong>
+                    <small style={{ color: '#a0aec0' }}>{[distillery?.name, bottle.age, bottle.abv].filter(Boolean).join(' · ')}</small>
+                  </span>
+                </span>
+                {bottle.image_url && <img alt="" src={bottle.image_url} style={{ borderRadius: 4, height: 36, objectFit: 'cover', width: 28 }} />}
+              </label>;
+            })}
+          </div>
+        </fieldset>
         <input required min="0" placeholder="Price" style={inputStyle} type="number" value={eventForm.price || ''} onChange={(event) => setEventForm({ ...eventForm, price: Number(event.target.value) })} />
         <input min="0" placeholder="Samples Price (EUR)" step="0.1" style={inputStyle} type="number" value={eventForm.samples_price ?? ''} onChange={(event) => setEventForm({ ...eventForm, samples_price: event.target.value === '' ? null : Number(event.target.value) })} />
         <input placeholder="Image URL" style={inputStyle} value={eventForm.image_url ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value || null })} />

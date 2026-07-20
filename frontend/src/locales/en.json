@@ -61,6 +61,9 @@
     "empty_title": "Favorites are empty",
     "empty_description": "Add bottles from the Distilleries tab to see them here."
   },
+  "event": {
+    "tasting_lineup": "Tasting Lineup"
+  },
   "profile": {
     "default_name": "Whisky Club Member",
     "telegram_user": "Telegram user",

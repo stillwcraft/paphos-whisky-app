@@ -4,9 +4,39 @@ import ReactMarkdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
+import { BottleTagChart } from '@/components/BottleTagChart.tsx';
+import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
+
+type EventLineupBottle = {
+  id: number;
+  name: string;
+  name_i18n?: I18nString;
+  distillery_id: number | null;
+  age: string | null;
+  abv: string | null;
+  cask: string | null;
+  bottles: string | null;
+  price_per_sample: number;
+  description: string;
+  description_i18n?: I18nString;
+  image_url: string | null;
+  favorites_count: number;
+  tried_count: number;
+};
+
+type LineupBottleActionState = {
+  is_favorite: boolean;
+  is_tried: boolean;
+};
+
+type ToggleLineupResponse = LineupBottleActionState & {
+  bottle_id: number;
+  favorites_count: number;
+  tried_count: number;
+};
 
 type ClubEvent = {
   id: number;
@@ -22,6 +52,7 @@ type ClubEvent = {
   has_samples: boolean;
   registered_count: number;
   samples_count: number;
+  bottles?: EventLineupBottle[];
 };
 
 type Member = {
@@ -176,10 +207,11 @@ function BottomSheet({
 }
 
 export function EventsTab() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
   const languageCode = i18n.language;
+  const telegramId = initDataState?.user?.id;
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -190,6 +222,12 @@ export function EventsTab() {
   const [members, setMembers] = useState<Member[]>([]);
   const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
+  const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
+  const [isLineupReviewOpen, setIsLineupReviewOpen] = useState(false);
+  const [lineupReviewRevision, setLineupReviewRevision] = useState(0);
+  const [lineupUserStates, setLineupUserStates] = useState<Record<number, LineupBottleActionState>>({});
+  const [isUpdatingLineupBottle, setIsUpdatingLineupBottle] = useState<number | null>(null);
 
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
@@ -249,6 +287,34 @@ export function EventsTab() {
       behavior: 'auto',
     });
   }, [centeredEventIndex, orderedEvents.length]);
+
+  const expandedEvent = orderedEvents.find((event) => event.id === expandedEventId);
+
+  useEffect(() => {
+    if (!telegramId || !expandedEvent?.bottles?.length) {
+      setLineupUserStates({});
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadStates = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`,
+          { headers: telegramAuthHeaders(initDataRaw), signal: controller.signal },
+        );
+        if (!response.ok) return;
+        const states = await response.json() as Array<LineupBottleActionState & { bottle_id: number }>;
+        setLineupUserStates(Object.fromEntries(
+          states.map((s) => [s.bottle_id, { is_favorite: s.is_favorite, is_tried: s.is_tried }]),
+        ));
+      } catch {
+        // silently fail — lineup user states are optional enhancement
+      }
+    };
+    void loadStates();
+    return () => controller.abort();
+  }, [expandedEvent, initDataRaw, telegramId]);
 
   const updateParticipation = async (
     event: ClubEvent,
@@ -336,7 +402,58 @@ export function EventsTab() {
     setActiveTab('main');
     setMembers([]);
   };
-  const expandedEvent = orderedEvents.find((event) => event.id === expandedEventId);
+
+  const closeLineupBottle = () => {
+    setLineupBottle(null);
+    setIsLineupPhotoExpanded(false);
+    setIsLineupReviewOpen(false);
+  };
+
+  const toggleLineupBottleAction = async (bottle: EventLineupBottle, actionType: 'favorite' | 'tried') => {
+    if (!telegramId) {
+      setFeedback({ kind: 'error', message: t('bottle.open_telegram_to_save_marks') });
+      return;
+    }
+    setIsUpdatingLineupBottle(bottle.id);
+    setFeedback(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bottles/${bottle.id}/toggle-action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
+        body: JSON.stringify({ telegram_id: telegramId, action_type: actionType }),
+      });
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result = await response.json() as ToggleLineupResponse;
+      setLineupUserStates((current) => ({
+        ...current,
+        [bottle.id]: { is_favorite: result.is_favorite, is_tried: result.is_tried },
+      }));
+      setLineupBottle((current) => current?.id === bottle.id
+        ? {
+          ...current,
+          favorites_count: result.favorites_count,
+          tried_count: result.tried_count,
+        }
+        : current);
+      setEvents((current) => current.map((event) => ({
+        ...event,
+        bottles: event.bottles?.map((currentBottle) => currentBottle.id === bottle.id
+          ? {
+            ...currentBottle,
+            favorites_count: result.favorites_count,
+            tried_count: result.tried_count,
+          }
+          : currentBottle),
+      })));
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Could not update bottle.',
+      });
+    } finally {
+      setIsUpdatingLineupBottle(null);
+    }
+  };
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-8">
@@ -442,6 +559,46 @@ export function EventsTab() {
                   <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
                 </div>
               </div>
+
+              {expandedEvent.bottles && expandedEvent.bottles.length > 0 && (
+                <section className="mt-6">
+                  <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-amber-400">
+                    {t('event.tasting_lineup')}
+                  </h3>
+                  <ul className="space-y-2">
+                    {expandedEvent.bottles.map((bottle) => (
+                      <li key={bottle.id}>
+                        <button
+                          className="flex w-full items-center gap-3 rounded-2xl border border-amber-400/15 bg-slate-800/70 p-3 text-left transition-colors hover:bg-slate-800"
+                          onClick={() => {
+                            setLineupBottle(bottle);
+                            setIsLineupPhotoExpanded(false);
+                            setIsLineupReviewOpen(false);
+                          }}
+                          type="button"
+                        >
+                          <div className="h-12 w-10 shrink-0 overflow-hidden rounded-lg">
+                            {bottle.image_url
+                              ? <img alt="" className="h-full w-full object-cover" src={bottle.image_url} />
+                              : <div aria-hidden="true" className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/70 to-slate-950 text-2xl">🥃</div>
+                            }
+                          </div>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-white">{bottle.name}</span>
+                            <span className="mt-1 block text-xs text-slate-400">
+                              {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
+                            </span>
+                          </span>
+                          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-400/60" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
               <div className="mt-6 flex justify-between gap-3 text-lg font-semibold text-amber-400">
                 <span>Price: {expandedEvent.price} EUR</span>
                 {expandedEvent.samples_price !== null && <span>Samples: {expandedEvent.samples_price} EUR</span>}
@@ -480,6 +637,103 @@ export function EventsTab() {
             </div>
           </article>
         </div>
+      )}
+
+      {lineupBottle && (
+        <div
+          className="fixed inset-x-0 bottom-0 top-10 z-50 bg-slate-950/95 p-4 backdrop-blur-sm"
+          onClick={() => { if (isLineupPhotoExpanded) setIsLineupPhotoExpanded(false); }}
+        >
+          <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
+            <div
+              className={`relative shrink-0 overflow-hidden ${isLineupPhotoExpanded ? 'cursor-zoom-out' : 'cursor-zoom-in'}`}
+              onClick={(e) => { e.stopPropagation(); setIsLineupPhotoExpanded((c) => !c); }}
+              style={{ height: isLineupPhotoExpanded ? '55vh' : '200px', maxHeight: '60vh', transition: 'all 0.3s ease-in-out' }}
+            >
+              {lineupBottle.image_url
+                ? <img alt={lineupBottle.name} className="h-full w-full object-contain" src={lineupBottle.image_url} />
+                : <div aria-hidden="true" className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/70 via-slate-700 to-slate-950 text-6xl">🥃</div>
+              }
+              <button
+                aria-label={t('bottle.close_details')}
+                className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
+                onClick={(e) => { e.stopPropagation(); closeLineupBottle(); }}
+                type="button"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
+              <h2 className="text-2xl font-semibold text-white">{lineupBottle.name}</h2>
+              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">{t('bottle.age')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{lineupBottle.age || t('bottle.nas')}</dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">{t('bottle.abv')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{lineupBottle.abv || t('common.na')}</dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">{t('bottle.cask')}</dt>
+                  <dd
+                    className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
+                    style={{ fontSize: lineupBottle.cask && lineupBottle.cask.length > 15 ? '11px' : '14px', lineHeight: 1.2 }}
+                    title={lineupBottle.cask ?? undefined}
+                  >
+                    {lineupBottle.cask || t('common.na')}
+                  </dd>
+                </div>
+                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
+                  <dt className="text-slate-400">{t('bottle.bottles')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={lineupBottle.bottles ?? undefined}>
+                    {lineupBottle.bottles || t('common.na')}
+                  </dd>
+                </div>
+              </dl>
+              <BottleTagChart bottleId={lineupBottle.id} refreshRevision={lineupReviewRevision} />
+              <p className="mt-5 text-lg font-semibold text-amber-400">€{lineupBottle.price_per_sample}</p>
+              <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{lineupBottle.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
+              <button
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  lineupUserStates[lineupBottle.id]?.is_favorite
+                    ? 'border-amber-300 bg-amber-400 text-slate-950'
+                    : 'border-slate-600 text-slate-100 hover:bg-white/5'
+                }`}
+                disabled={isUpdatingLineupBottle === lineupBottle.id}
+                onClick={() => void toggleLineupBottleAction(lineupBottle, 'favorite')}
+                type="button"
+              >
+                ⭐ {t('bottle.favorites')} {lineupBottle.favorites_count > 0 && `(${lineupBottle.favorites_count})`}
+              </button>
+              <button
+                className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
+                onClick={() => {
+                  if (!telegramId) {
+                    setFeedback({ kind: 'error', message: t('bottle.open_telegram_to_write_review') });
+                    return;
+                  }
+                  setIsLineupReviewOpen(true);
+                }}
+                type="button"
+              >
+                📝 {t('bottle.review')}
+              </button>
+            </div>
+          </article>
+        </div>
+      )}
+
+      {isLineupReviewOpen && lineupBottle && telegramId !== undefined && (
+        <BottleReviewOverlay
+          bottleId={lineupBottle.id}
+          initDataRaw={initDataRaw}
+          onClose={() => setIsLineupReviewOpen(false)}
+          onSaved={() => setLineupReviewRevision((current) => current + 1)}
+          telegramId={telegramId}
+        />
       )}
 
       {sheetEvent && (

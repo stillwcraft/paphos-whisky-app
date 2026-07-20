@@ -327,10 +327,20 @@ def ensure_user_bottle_action_schema() -> None:
             )
 
 
+def ensure_event_bottles_schema() -> None:
+    """Create event_bottles association table if absent (SQLite/startup safety)."""
+    if engine.dialect.name != "sqlite":
+        return
+    inspector = inspect(engine)
+    if "event_bottles" not in inspector.get_table_names():
+        models.event_bottles_table.create(bind=engine)
+
+
 ensure_event_schema()
 ensure_catalog_schema()
 ensure_i18n_schema()
 ensure_user_bottle_action_schema()
+ensure_event_bottles_schema()
 
 
 def ensure_user_review_schema() -> None:
@@ -751,14 +761,7 @@ class EventCreate(BaseModel):
     samples_price: Optional[float] = None
     image_url: Optional[str] = None
     has_samples: bool = False
-
-class EventResponse(EventCreate):
-    id: int
-    registered_count: int
-    samples_count: int
-
-    class Config:
-        from_attributes = True
+    bottle_ids: List[int] = Field(default_factory=list)
 
 class DistilleryCreate(BaseModel):
     name: str
@@ -815,6 +818,26 @@ class BottleResponse(BottleCreate):
     id: int
     favorites_count: int
     tried_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class EventResponse(BaseModel):
+    id: int
+    title: str
+    title_i18n: Optional[I18nString] = None
+    name_i18n: Optional[I18nString] = None
+    date: str
+    description: str
+    description_i18n: Optional[I18nString] = None
+    price: float
+    samples_price: Optional[float] = None
+    image_url: Optional[str] = None
+    has_samples: bool = False
+    registered_count: int
+    samples_count: int
+    bottles: List[BottleResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -1005,6 +1028,7 @@ def build_event_response(
     lang: str = "en",
     registered_count: int = 0,
     samples_count: int = 0,
+    bottles: Optional[List[models.Bottle]] = None,
 ) -> EventResponse:
     title_i18n = event.title_i18n
     return EventResponse(
@@ -1025,6 +1049,7 @@ def build_event_response(
         has_samples=event.has_samples,
         registered_count=int(registered_count),
         samples_count=int(samples_count),
+        bottles=[build_bottle_response(b, lang=lang) for b in (bottles or [])],
     )
 
 
@@ -1105,11 +1130,61 @@ def build_distillery_with_bottles_response(
 
 def build_event_payload(event_data: EventCreate, *, exclude_unset: bool) -> dict:
     payload = event_data.model_dump(exclude_unset=exclude_unset)
+    payload.pop("bottle_ids", None)  # managed separately via event_bottles table
     if "title_i18n" in event_data.model_fields_set:
         payload["name_i18n"] = payload.pop("title_i18n", None)
     else:
         payload.pop("title_i18n", None)
     return payload
+
+
+def validate_bottle_ids(bottle_ids: List[int], db: Session) -> List[int]:
+    """Deduplicate and validate bottle IDs. Returns ordered deduped list; raises 422 on unknown."""
+    deduped = list(dict.fromkeys(bottle_ids))
+    if deduped:
+        found = {
+            bid
+            for (bid,) in db.query(models.Bottle.id)
+            .filter(models.Bottle.id.in_(deduped))
+            .all()
+        }
+        unknown = [bid for bid in deduped if bid not in found]
+        if unknown:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Unknown bottle IDs: {unknown}",
+            )
+    return deduped
+
+
+def load_event_bottles(event_id: int, db: Session) -> List[models.Bottle]:
+    """Load all bottles for a single event in one query."""
+    return (
+        db.query(models.Bottle)
+        .join(
+            models.event_bottles_table,
+            models.Bottle.id == models.event_bottles_table.c.bottle_id,
+        )
+        .filter(models.event_bottles_table.c.event_id == event_id)
+        .all()
+    )
+
+
+def load_bottles_for_events(event_ids: List[int], db: Session) -> Dict[int, List[models.Bottle]]:
+    """Load all bottles for multiple events in a single query (no N+1)."""
+    if not event_ids:
+        return {}
+    rows = (
+        db.query(models.event_bottles_table.c.event_id, models.Bottle)
+        .select_from(models.event_bottles_table)
+        .join(models.Bottle, models.Bottle.id == models.event_bottles_table.c.bottle_id)
+        .filter(models.event_bottles_table.c.event_id.in_(event_ids))
+        .all()
+    )
+    result: Dict[int, List[models.Bottle]] = {eid: [] for eid in event_ids}
+    for event_id, bottle in rows:
+        result[event_id].append(bottle)
+    return result
 
 
 def get_event_counts_subquery(db: Session):
@@ -1146,12 +1221,16 @@ def get_events(lang: str = "en", db: Session = Depends(get_db)):
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .all()
     )
+    if not events:
+        return []
+    bottles_by_event = load_bottles_for_events([e.id for e, _, _ in events], db)
     return [
         build_event_response(
             event,
             lang=lang,
             registered_count=registered_count,
             samples_count=samples_count,
+            bottles=bottles_by_event.get(event.id, []),
         )
         for event, registered_count, samples_count in events
     ]
@@ -1162,11 +1241,19 @@ def create_event(
     db: Session = Depends(get_db),
     _: TelegramAuthContext = Depends(require_admin),
 ):
+    bottle_ids = validate_bottle_ids(event_data.bottle_ids, db)
     new_event = models.Event(**build_event_payload(event_data, exclude_unset=False))
     db.add(new_event)
+    db.flush()
+    if bottle_ids:
+        db.execute(
+            models.event_bottles_table.insert(),
+            [{"event_id": new_event.id, "bottle_id": bid} for bid in bottle_ids],
+        )
     db.commit()
     db.refresh(new_event)
-    return build_event_response(new_event)
+    bottles = load_event_bottles(new_event.id, db)
+    return build_event_response(new_event, bottles=bottles)
 
 
 @app.put("/api/events/{event_id}", response_model=EventResponse)
@@ -1180,8 +1267,22 @@ def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    bottle_ids = validate_bottle_ids(event_data.bottle_ids, db)
+
     for field, value in build_event_payload(event_data, exclude_unset=True).items():
         setattr(event, field, value)
+
+    # Atomically replace bottle lineup: clear existing, insert new (deduped, verified)
+    db.execute(
+        models.event_bottles_table.delete().where(
+            models.event_bottles_table.c.event_id == event_id
+        )
+    )
+    if bottle_ids:
+        db.execute(
+            models.event_bottles_table.insert(),
+            [{"event_id": event_id, "bottle_id": bid} for bid in bottle_ids],
+        )
 
     db.commit()
     db.refresh(event)
@@ -1196,10 +1297,12 @@ def update_event(
         .filter(models.Event.id == event_id)
         .one()
     )
+    bottles = load_event_bottles(event_id, db)
     return build_event_response(
         event,
         registered_count=registered_count,
         samples_count=samples_count,
+        bottles=bottles,
     )
 
 
@@ -1212,6 +1315,11 @@ def delete_event(
     event = db.query(models.Event).filter(models.Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    db.execute(
+        models.event_bottles_table.delete().where(
+            models.event_bottles_table.c.event_id == event_id
+        )
+    )
     db.delete(event)
     db.commit()
     return
@@ -1639,6 +1747,11 @@ def delete_bottle(
     db.query(models.UserReview).filter(
         models.UserReview.bottle_id == bottle_id
     ).delete(synchronize_session=False)
+    db.execute(
+        models.event_bottles_table.delete().where(
+            models.event_bottles_table.c.bottle_id == bottle_id
+        )
+    )
     db.delete(bottle)
     db.commit()
     return

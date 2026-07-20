@@ -63,6 +63,9 @@
     "empty_title": "В избранном пока ничего нет",
     "empty_description": "Добавьте бутылки на вкладке «Дистиллерии», чтобы увидеть их здесь."
   },
+  "event": {
+    "tasting_lineup": "Линейка дегустации"
+  },
   "profile": {
     "default_name": "Участник Whisky Club",
     "telegram_user": "Пользователь Telegram",

@@ -19,6 +19,8 @@ type AdminEvent = {
   price: number;
   image_url: string | null;
   has_samples: boolean;
+  bottle_ids?: number[];
+  bottles?: Array<Pick<Bottle, 'id'>>;
 };
 
 type EventForm = {
@@ -28,6 +30,7 @@ type EventForm = {
   price: string;
   image_url: string;
   has_samples: boolean;
+  bottle_ids: number[];
 };
 
 const initialEventForm: EventForm = {
@@ -37,6 +40,7 @@ const initialEventForm: EventForm = {
   price: '',
   image_url: '',
   has_samples: false,
+  bottle_ids: [],
 };
 
 type Distillery = {
@@ -53,6 +57,7 @@ type Bottle = {
   name_i18n?: I18nString;
   distillery_id: number;
   age: number | null;
+  abv?: string | null;
   price_per_sample: number;
   description: string;
   description_i18n?: I18nString;
@@ -162,6 +167,7 @@ export function AdminTab() {
       price: String(currentEvent.price),
       image_url: currentEvent.image_url ?? '',
       has_samples: currentEvent.has_samples,
+      bottle_ids: currentEvent.bottle_ids ?? currentEvent.bottles?.map((bottle) => bottle.id) ?? [],
     });
     setFeedback(null);
   };
@@ -363,6 +369,51 @@ export function AdminTab() {
           className={inputClassName}
         />
         <textarea required value={eventForm.description} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} placeholder="Описание" rows={4} className={`${inputClassName} resize-none`} />
+        <div className="space-y-1.5">
+          <p className="px-1 text-xs font-medium text-slate-400">Бутылки для дегустации</p>
+          <div className="max-h-56 overflow-y-auto rounded-xl border border-white/10 bg-slate-900 p-2">
+            {bottles.length === 0 ? (
+              <p className="px-2 py-2 text-xs text-slate-500">Бутылки ещё не добавлены.</p>
+            ) : (
+              <ul className="space-y-0.5">
+                {bottles.map((bottle) => {
+                  const isSelected = eventForm.bottle_ids.includes(bottle.id);
+                  const distillery = distilleries.find((d) => d.id === bottle.distillery_id);
+                  return (
+                    <li key={bottle.id}>
+                      <label className={`flex cursor-pointer items-center gap-3 rounded-lg border p-2 transition-colors ${isSelected ? 'border-amber-400/30 bg-amber-400/10' : 'border-transparent hover:bg-white/5'}`}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() =>
+                            setEventForm((current) => ({
+                              ...current,
+                              bottle_ids: isSelected
+                                ? current.bottle_ids.filter((id) => id !== bottle.id)
+                                : [...current.bottle_ids, bottle.id],
+                            }))
+                          }
+                          className="h-4 w-4 shrink-0 accent-amber-400"
+                        />
+                        {bottle.image_url ? (
+                          <img src={bottle.image_url} alt="" className="h-9 w-7 shrink-0 rounded object-cover" />
+                        ) : (
+                          <div aria-hidden="true" className="flex h-9 w-7 shrink-0 items-center justify-center rounded bg-slate-700 text-sm">🥃</div>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium text-white">{bottle.name}</span>
+                          <span className="block text-[10px] text-slate-500">
+                            {[distillery?.name, bottle.age !== null ? `${bottle.age}y` : null, bottle.abv].filter(Boolean).join(' · ')}
+                          </span>
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
         <input required min="0" step="0.01" type="number" value={eventForm.price} onChange={(event) => setEventForm({ ...eventForm, price: event.target.value })} placeholder="Цена, EUR" className={inputClassName} />
         <input type="url" value={eventForm.image_url} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value })} placeholder="URL изображения (необязательно)" className={inputClassName} />
         <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/10 bg-slate-900 px-3 py-3 text-sm text-slate-200">

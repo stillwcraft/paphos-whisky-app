@@ -1,9 +1,17 @@
-from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Integer, JSON, String, Table, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from database import Base
 
 I18N_JSON = JSON().with_variant(JSONB, "postgresql")
+
+# Association table matching pre-existing Supabase event_bottles(event_id, bottle_id)
+event_bottles_table = Table(
+    "event_bottles",
+    Base.metadata,
+    Column("event_id", Integer, ForeignKey("events.id", ondelete="CASCADE"), primary_key=True),
+    Column("bottle_id", Integer, ForeignKey("bottles.id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class Event(Base):
@@ -20,6 +28,12 @@ class Event(Base):
     samples_price = Column(Float, nullable=True)
     image_url = Column(String, nullable=True)
     has_samples = Column(Boolean, default=False, nullable=False)
+    bottles = relationship(
+        "Bottle",
+        secondary=event_bottles_table,
+        back_populates="events",
+        passive_deletes=True,
+    )
 
 
 class Registration(Base):
@@ -98,6 +112,12 @@ class Bottle(Base):
         "UserReview",
         back_populates="bottle",
         cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    events = relationship(
+        "Event",
+        secondary=event_bottles_table,
+        back_populates="bottles",
         passive_deletes=True,
     )
 
