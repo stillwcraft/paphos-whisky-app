@@ -1,0 +1,74 @@
+{
+  "common": {
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "loading": "Загрузка...",
+    "error": "Произошла ошибка",
+    "na": "—",
+    "main_navigation": "Основная навигация"
+  },
+  "review": {
+    "title": "Мой отзыв",
+    "points": "Баллы",
+    "save": "Сохранить отзыв",
+    "nose": "Аромат",
+    "taste": "Вкус",
+    "finish": "Послевкусие",
+    "tasting_notes": "Вкусовые ноты",
+    "close_without_saving": "Закрыть отзыв без сохранения"
+  },
+  "bottle": {
+    "age": "Возраст",
+    "abv": "Крепость",
+    "cask": "Бочка",
+    "bottles": "Тираж",
+    "flavor_profile": "Вкусовой профиль",
+    "club_rating": "Рейтинг клуба",
+    "no_ratings": "Оценок пока нет. Будьте первым!",
+    "nas": "Без указания возраста",
+    "favorite": "Избранное",
+    "favorites": "Избранное",
+    "review": "Отзыв",
+    "open_telegram_to_save_marks": "Откройте приложение через Telegram, чтобы сохранить отметки о бутылке.",
+    "open_telegram_to_write_review": "Откройте приложение через Telegram, чтобы оставить отзыв.",
+    "open_telegram_to_view_favorites": "Откройте приложение через Telegram, чтобы посмотреть избранное.",
+    "close_details": "Закрыть карточку бутылки",
+    "close_distillery_details": "Закрыть карточку дистиллерии",
+    "open_distillery_details": "Открыть карточку {{name}}",
+    "show_bottles": "Показать бутылки {{name}}",
+    "hide_bottles": "Скрыть бутылки {{name}}",
+    "description_soon": "Описание будет добавлено позже.",
+    "catalog_empty": "Каталог скоро будет доступен.",
+    "no_bottles": "Бутылок пока нет.",
+    "whisky": "Виски",
+    "independent": "Независимый релиз",
+    "item_bottle": "Бутылка",
+    "item_samples": "Сэмплы",
+    "item_event": "Событие",
+    "no_items": "Новые бутылки и сэмплы скоро появятся.",
+    "votes_one": "{{count}} голос",
+    "votes_few": "{{count}} голоса",
+    "votes_many": "{{count}} голосов",
+    "votes_other": "{{count}} голоса"
+  },
+  "tabs": {
+    "events": "События",
+    "distilleries": "Дистиллерии",
+    "bottles": "Бутылки",
+    "favorites": "Избранное",
+    "profile": "Профиль",
+    "admin": "Админка"
+  },
+  "favorites": {
+    "empty_title": "В избранном пока ничего нет",
+    "empty_description": "Добавьте бутылки на вкладке «Дистиллерии», чтобы увидеть их здесь."
+  },
+  "profile": {
+    "default_name": "Участник Whisky Club",
+    "telegram_user": "Пользователь Telegram",
+    "avatar": "Аватар",
+    "tastings_attended": "Посещено дегустаций",
+    "tested_releases": "Попробовано релизов",
+    "language": "Язык"
+  }
+}

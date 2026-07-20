@@ -1,5 +1,6 @@
 import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 
 import { AdminTab } from '@/components/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
@@ -16,8 +17,7 @@ const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
 type Tab = {
   id: TabId;
-  label: string;
-  screen: string;
+  labelKey: string;
   Icon: ComponentType<IconProps>;
 };
 
@@ -68,13 +68,13 @@ const AdminIcon = (props: IconProps) => (
 );
 
 const tabs: Tab[] = [
-  { id: 'events', label: 'Events', screen: 'Экран Events', Icon: CalendarIcon },
-  { id: 'distilleries', label: 'Distilleries', screen: 'Экран Дистиллерии', Icon: DistilleryIcon },
-  { id: 'bottles', label: 'Bottles', screen: 'Экран Бутылки и сэмплы', Icon: BottleIcon },
-  { id: 'favorites', label: 'Favorites', screen: 'Favorites', Icon: StarIcon },
-  { id: 'profile', label: 'Profile', screen: 'Profile', Icon: UserIcon },
+  { id: 'events', labelKey: 'tabs.events', Icon: CalendarIcon },
+  { id: 'distilleries', labelKey: 'tabs.distilleries', Icon: DistilleryIcon },
+  { id: 'bottles', labelKey: 'tabs.bottles', Icon: BottleIcon },
+  { id: 'favorites', labelKey: 'tabs.favorites', Icon: StarIcon },
+  { id: 'profile', labelKey: 'tabs.profile', Icon: UserIcon },
 ];
-const adminTab: Tab = { id: 'admin', label: 'Админ', screen: 'Админ', Icon: AdminIcon };
+const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', Icon: AdminIcon };
 
 type FooterProps = {
   activeTab: TabId;
@@ -83,12 +83,13 @@ type FooterProps = {
 };
 
 function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
+  const { t } = useTranslation();
   const visibleTabs = isAdmin ? [...tabs, adminTab] : tabs;
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-amber-100/10 bg-slate-950/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
-      <nav aria-label="Основная навигация" className="mx-auto flex max-w-md justify-between">
-        {visibleTabs.map(({ id, label, Icon }) => {
+      <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
+        {visibleTabs.map(({ id, labelKey, Icon }) => {
           const isActive = activeTab === id;
 
           return (
@@ -102,7 +103,7 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
               }`}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
-              <span>{label}</span>
+              <span>{t(labelKey)}</span>
             </button>
           );
         })}
@@ -112,10 +113,11 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
 }
 
 export function App() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
-  const activeScreen = tabs.find((tab) => tab.id === activeTab)?.screen;
+  const activeScreen = t(`tabs.${activeTab}`);
 
   useEffect(() => {
     setIsAdmin(

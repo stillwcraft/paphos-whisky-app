@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -19,10 +19,10 @@ type ShopItem = {
   image_url: string | null;
 };
 
-const labelTitles: Record<BottleLabel, string> = {
-  bottle: 'Bottle',
-  samples: 'Samples',
-  event: 'Event',
+const labelTitleKeys: Record<BottleLabel, string> = {
+  bottle: 'bottle.item_bottle',
+  samples: 'bottle.item_samples',
+  event: 'bottle.item_event',
 };
 
 function BottleImage({
@@ -42,7 +42,8 @@ function BottleImage({
 }
 
 export function BottlesSamplesTab() {
-  const languageCode = useSignal(initData.state)?.user?.language_code;
+  const { i18n, t } = useTranslation();
+  const languageCode = i18n.language;
   const [items, setItems] = useState<ShopItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,14 +82,14 @@ export function BottlesSamplesTab() {
     <section className="mx-auto w-full max-w-md pt-8">
       <header className="mb-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Bottles & Samples</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.bottles')}</h1>
       </header>
       {isLoading ? (
-        <p className="text-center text-sm text-slate-400">Loading bottles...</p>
+        <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
       ) : error ? (
         <p className="text-center text-sm text-red-300">{error}</p>
       ) : items.length === 0 ? (
-        <p className="text-center text-sm text-slate-400">New bottles and samples will appear soon.</p>
+        <p className="text-center text-sm text-slate-400">{t('bottle.no_items')}</p>
       ) : (
         <div className="grid grid-cols-1 auto-rows-fr gap-4 min-[380px]:grid-cols-2">
           {items.map((item) => (
@@ -103,7 +104,7 @@ export function BottlesSamplesTab() {
               <div className="relative h-40 shrink-0">
                 <BottleImage alt={item.name} className="h-full w-full object-cover" imageUrl={item.image_url} />
                 <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-semibold text-slate-950">
-                  {labelTitles[item.label]}
+                  {t(labelTitleKeys[item.label])}
                 </span>
               </div>
               <div className="flex h-full flex-col p-4">
@@ -145,7 +146,7 @@ export function BottlesSamplesTab() {
             >
               <BottleImage alt={expandedBottle.name} className="h-full w-full object-contain" imageUrl={expandedBottle.image_url} />
               <button
-                aria-label="Close bottle details"
+                aria-label={t('bottle.close_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -159,7 +160,7 @@ export function BottlesSamplesTab() {
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
               <div>
                 <span className="inline-flex rounded-full bg-amber-400 px-2.5 py-1 text-xs font-semibold text-slate-950">
-                  {labelTitles[expandedBottle.label]}
+                  {t(labelTitleKeys[expandedBottle.label])}
                 </span>
                 <h2 className="mt-4 text-2xl font-semibold text-white">{expandedBottle.name}</h2>
                 <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>

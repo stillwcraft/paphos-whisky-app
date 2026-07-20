@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 import {
   Area,
@@ -43,6 +43,7 @@ type TagIconTickProps = {
 
 type TagTooltipProps = {
   active?: boolean;
+  formatVotes: (count: number) => string;
   payload?: Array<{
     payload?: BottleTagStat;
   }>;
@@ -67,7 +68,7 @@ function TagIconTick({ x = 0, y = 0, payload }: TagIconTickProps) {
   );
 }
 
-function TagTooltip({ active, payload }: TagTooltipProps) {
+function TagTooltip({ active, formatVotes, payload }: TagTooltipProps) {
   const tag = payload?.[0]?.payload;
 
   if (!active || !tag) {
@@ -84,13 +85,14 @@ function TagTooltip({ active, payload }: TagTooltipProps) {
         }}
         src={tag.icon_url}
       />
-      <span>{tag.name}: {tag.count} votes</span>
+      <span>{tag.name}: {formatVotes(tag.count)}</span>
     </div>
   );
 }
 
 export function BottleTagChart({ bottleId, refreshRevision }: Props) {
-  const languageCode = useSignal(initData.state)?.user?.language_code;
+  const { i18n, t } = useTranslation();
+  const languageCode = i18n.language;
   const [tagStats, setTagStats] = useState<BottleTagStat[]>([]);
   const [clubRating, setClubRating] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -142,19 +144,19 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
   return (
     <section className="mt-5 rounded-2xl border border-white/10 bg-slate-800/70 p-4">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-white">Flavor Profile</h3>
+        <h3 className="text-sm font-semibold text-white">{t('bottle.flavor_profile')}</h3>
         <span className="text-sm font-semibold text-amber-400">
-          Club Rating: {typeof clubRating === 'number' && Number.isFinite(clubRating)
+          {t('bottle.club_rating')}: {typeof clubRating === 'number' && Number.isFinite(clubRating)
             ? clubRating.toFixed(2)
-            : '—'}
+            : t('common.na')}
         </span>
       </div>
       {isLoading ? (
-        <p className="mt-4 text-sm text-slate-400">Загрузка...</p>
+        <p className="mt-4 text-sm text-slate-400">{t('common.loading')}</p>
       ) : error ? (
         <p className="mt-4 text-sm text-red-300">{error}</p>
       ) : tagStats.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-400">Пока нет оценок вкуса. Будьте первым!</p>
+        <p className="mt-4 text-sm text-slate-400">{t('bottle.no_ratings')}</p>
       ) : (
         <div className="mt-3 h-[180px]">
           <ResponsiveContainer height={180} width="100%">
@@ -181,7 +183,7 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
                 tickLine={false}
                 width={28}
               />
-              <Tooltip content={<TagTooltip />} cursor={{ stroke: '#eab308', strokeWidth: 1 }} />
+              <Tooltip content={<TagTooltip formatVotes={(count) => t('bottle.votes', { count })} />} cursor={{ stroke: '#eab308', strokeWidth: 1 }} />
               <Area
                 dataKey="count"
                 fill="url(#colorTag)"

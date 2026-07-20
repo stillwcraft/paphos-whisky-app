@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
@@ -132,9 +133,10 @@ async function loadCatalog(languageCode: string | undefined): Promise<Distillery
 }
 
 export function DistilleriesTab() {
+  const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
-  const languageCode = initDataState?.user?.language_code;
+  const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
   const queryClient = useQueryClient();
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
@@ -192,7 +194,7 @@ export function DistilleriesTab() {
 
   const toggleAction = async (bottle: Bottle, actionType: 'favorite' | 'tried') => {
     if (!telegramId) {
-      setFeedback('Open the app in Telegram to save bottle marks.');
+      setFeedback(t('bottle.open_telegram_to_save_marks'));
       return;
     }
 
@@ -217,7 +219,7 @@ export function DistilleriesTab() {
           is_tried: result.is_tried,
         },
       }));
-      queryClient.setQueryData<Distillery[]>(['catalog'], (current) => current?.map((distillery) => ({
+      queryClient.setQueryData<Distillery[]>(['catalog', languageCode], (current) => current?.map((distillery) => ({
         ...distillery,
         bottles: distillery.bottles.map((currentBottle) => currentBottle.id === bottle.id
           ? {
@@ -252,7 +254,7 @@ export function DistilleriesTab() {
     <section className="mx-auto w-full max-w-md pb-5 pt-8">
       <header className="mb-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Distilleries</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.distilleries')}</h1>
       </header>
 
       {(feedback || catalogError) && (
@@ -262,9 +264,9 @@ export function DistilleriesTab() {
       )}
 
       {catalogQuery.isLoading ? (
-        <p className="text-center text-sm text-slate-400">Loading distilleries...</p>
+        <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
       ) : distilleries.length === 0 ? (
-        <p className="text-center text-sm text-slate-400">The catalogue will be available soon.</p>
+        <p className="text-center text-sm text-slate-400">{t('bottle.catalog_empty')}</p>
       ) : (
         <div className="space-y-4">
           {distilleries.map((distillery) => {
@@ -274,7 +276,7 @@ export function DistilleriesTab() {
             return (
               <article key={distillery.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
                 <button
-                  aria-label={`Open ${distillery.name} details`}
+                  aria-label={t('bottle.open_distillery_details', { name: distillery.name })}
                   className="block h-44 w-full overflow-hidden text-left"
                   onClick={() => setSelectedDistillery(distillery)}
                   type="button"
@@ -290,7 +292,7 @@ export function DistilleriesTab() {
                   <button
                     aria-controls={panelId}
                     aria-expanded={isOpen}
-                    aria-label={isOpen ? `Hide ${distillery.name} bottles` : `Show ${distillery.name} bottles`}
+                    aria-label={t(isOpen ? 'bottle.hide_bottles' : 'bottle.show_bottles', { name: distillery.name })}
                     className="rounded-lg p-2 text-amber-400 transition-colors hover:bg-white/5"
                     onClick={() => setOpenDistilleryId((current) => current === distillery.id ? null : distillery.id)}
                     type="button"
@@ -304,7 +306,7 @@ export function DistilleriesTab() {
                 >
                   <div className="overflow-hidden">
                     {distillery.bottles.length === 0 ? (
-                      <p className="border-t border-white/10 px-5 py-4 text-sm text-slate-400">No bottles yet.</p>
+                      <p className="border-t border-white/10 px-5 py-4 text-sm text-slate-400">{t('bottle.no_bottles')}</p>
                     ) : (
                       <ul className="border-t border-white/10 px-4 py-2">
                         {distillery.bottles.map((bottle) => (
@@ -326,7 +328,7 @@ export function DistilleriesTab() {
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm font-medium text-slate-100">{bottle.name}</span>
                                 <span className="mt-1 block text-xs text-slate-400">
-                                  {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || 'Whisky'}
+                                  {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
                                 </span>
                               </span>
                             </button>
@@ -348,7 +350,7 @@ export function DistilleriesTab() {
             <div className="relative">
               <CatalogImage alt={selectedDistillery.name} className="h-56 w-full object-cover" source={selectedDistillery.image_url} />
               <button
-                aria-label="Close distillery details"
+                aria-label={t('bottle.close_distillery_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
                 onClick={() => setSelectedDistillery(null)}
                 type="button"
@@ -359,7 +361,7 @@ export function DistilleriesTab() {
             <div className="min-h-0 flex-1 overflow-y-auto p-6">
               <h2 className="text-2xl font-semibold text-white">{selectedDistillery.name}</h2>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>
-                {selectedDistillery.description || 'Description will be added soon.'}
+                {selectedDistillery.description || t('bottle.description_soon')}
               </p>
             </div>
           </article>
@@ -398,7 +400,7 @@ export function DistilleriesTab() {
                 <CatalogImage alt={selectedBottle.name} className="h-full w-full object-contain" source={null} />
               )}
               <button
-                aria-label="Close bottle details"
+                aria-label={t('bottle.close_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
                 onClick={(event) => {
                   event.stopPropagation();
@@ -413,26 +415,26 @@ export function DistilleriesTab() {
               <h2 className="text-2xl font-semibold text-white">{selectedBottle.name}</h2>
               <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">Age</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.age || 'NAS'}</dd>
+                  <dt className="text-slate-400">{t('bottle.age')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.age || t('bottle.nas')}</dd>
                 </div>
                 <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">ABV</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.abv || '—'}</dd>
+                  <dt className="text-slate-400">{t('bottle.abv')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.abv || t('common.na')}</dd>
                 </div>
                 <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">Cask</dt>
+                  <dt className="text-slate-400">{t('bottle.cask')}</dt>
                   <dd
                     className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
                     style={{ fontSize: selectedBottle.cask && selectedBottle.cask.length > 15 ? '11px' : '14px', lineHeight: 1.2 }}
                     title={selectedBottle.cask ?? undefined}
                   >
-                    {selectedBottle.cask || '—'}
+                    {selectedBottle.cask || t('common.na')}
                   </dd>
                 </div>
                 <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">Bottles</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || '—'}</dd>
+                  <dt className="text-slate-400">{t('bottle.bottles')}</dt>
+                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || t('common.na')}</dd>
                 </div>
               </dl>
               <BottleTagChart bottleId={selectedBottle.id} refreshRevision={reviewRevision} />
@@ -446,20 +448,20 @@ export function DistilleriesTab() {
                 onClick={() => void toggleAction(selectedBottle, 'favorite')}
                 type="button"
               >
-                ⭐ Favorites {selectedBottle.favorites_count > 0 && `(${selectedBottle.favorites_count})`}
+                ⭐ {t('bottle.favorites')} {selectedBottle.favorites_count > 0 && `(${selectedBottle.favorites_count})`}
               </button>
               <button
                 className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
                 onClick={() => {
                   if (!telegramId) {
-                    setFeedback('Open the app in Telegram to write a review.');
+                    setFeedback(t('bottle.open_telegram_to_write_review'));
                     return;
                   }
                   setIsReviewOpen(true);
                 }}
                 type="button"
               >
-                📝 Review
+                📝 {t('bottle.review')}
               </button>
             </div>
           </article>

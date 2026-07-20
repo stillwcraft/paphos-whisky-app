@@ -1,0 +1,72 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "na": "N/A",
+    "main_navigation": "Main navigation"
+  },
+  "review": {
+    "title": "My review",
+    "points": "Points",
+    "save": "Save review",
+    "nose": "Nose",
+    "taste": "Taste",
+    "finish": "Finish",
+    "tasting_notes": "Tasting notes",
+    "close_without_saving": "Close review without saving"
+  },
+  "bottle": {
+    "age": "Age",
+    "abv": "ABV",
+    "cask": "Cask",
+    "bottles": "Bottles",
+    "flavor_profile": "Flavor Profile",
+    "club_rating": "Club Rating",
+    "no_ratings": "No ratings yet. Be the first!",
+    "nas": "NAS",
+    "favorite": "Favorite",
+    "favorites": "Favorites",
+    "review": "Review",
+    "open_telegram_to_save_marks": "Open the app in Telegram to save bottle marks.",
+    "open_telegram_to_write_review": "Open the app in Telegram to write a review.",
+    "open_telegram_to_view_favorites": "Open the app in Telegram to view your favorites.",
+    "close_details": "Close bottle details",
+    "close_distillery_details": "Close distillery details",
+    "open_distillery_details": "Open {{name}} details",
+    "show_bottles": "Show {{name}} bottles",
+    "hide_bottles": "Hide {{name}} bottles",
+    "description_soon": "Description will be added soon.",
+    "catalog_empty": "The catalogue will be available soon.",
+    "no_bottles": "No bottles yet.",
+    "whisky": "Whisky",
+    "independent": "Independent bottle",
+    "item_bottle": "Bottle",
+    "item_samples": "Samples",
+    "item_event": "Event",
+    "no_items": "New bottles and samples will appear soon.",
+    "votes_one": "{{count}} vote",
+    "votes_other": "{{count}} votes"
+  },
+  "tabs": {
+    "events": "Events",
+    "distilleries": "Distilleries",
+    "bottles": "Bottles",
+    "favorites": "Favorites",
+    "profile": "Profile",
+    "admin": "Admin"
+  },
+  "favorites": {
+    "empty_title": "Favorites are empty",
+    "empty_description": "Add bottles from the Distilleries tab to see them here."
+  },
+  "profile": {
+    "default_name": "Whisky Club Member",
+    "telegram_user": "Telegram user",
+    "avatar": "Avatar",
+    "tastings_attended": "Tastings attended",
+    "tested_releases": "Tested releases",
+    "language": "Language"
+  }
+}

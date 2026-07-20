@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 
@@ -51,7 +51,8 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
-  const languageCode = useSignal(initData.state)?.user?.language_code;
+  const { i18n, t } = useTranslation();
+  const languageCode = i18n.language;
   const [nose, setNose] = useState(80);
   const [taste, setTaste] = useState(80);
   const [finish, setFinish] = useState(80);
@@ -147,9 +148,9 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   };
 
   const sliders: SliderConfig[] = [
-    { label: 'Nose', value: nose, onChange: (v) => setNose(v) },
-    { label: 'Taste', value: taste, onChange: (v) => setTaste(v) },
-    { label: 'Finish', value: finish, onChange: (v) => setFinish(v) },
+    { label: t('review.nose'), value: nose, onChange: (v) => setNose(v) },
+    { label: t('review.taste'), value: taste, onChange: (v) => setTaste(v) },
+    { label: t('review.finish'), value: finish, onChange: (v) => setFinish(v) },
   ];
 
   return (
@@ -157,19 +158,19 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
       <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
         <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-4">
           <button
-            aria-label="Close review without saving"
+            aria-label={t('review.close_without_saving')}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xl text-slate-400 transition-colors hover:bg-white/5 hover:text-white"
             onClick={onClose}
             type="button"
           >
             ✕
           </button>
-          <h2 className="text-lg font-semibold text-white">My review</h2>
+          <h2 className="text-lg font-semibold text-white">{t('review.title')}</h2>
         </div>
 
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center">
-            <p className="text-sm text-slate-400">Загрузка...</p>
+            <p className="text-sm text-slate-400">{t('common.loading')}</p>
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -181,7 +182,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
 
             <div className="py-6 text-center">
               <p className="tabular-nums text-7xl font-bold text-amber-400">{averageScore}</p>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">Points</p>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">{t('review.points')}</p>
             </div>
 
             <div className="space-y-5 px-5">
@@ -205,7 +206,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
 
             {tags.length > 0 && (
               <div className="mt-6 px-5 pb-6">
-                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Вкусовые ноты</h3>
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('review.tasting_notes')}</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {tags.map((tag) => {
                     const isSelected = selectedTagIds.includes(tag.id);
@@ -239,7 +240,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
             onClick={() => void handleSave()}
             type="button"
           >
-            💾 Save review
+            💾 {t('review.save')}
           </button>
         </div>
       </article>

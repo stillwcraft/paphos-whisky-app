@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import ReactMarkdown from 'react-markdown';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 
@@ -175,9 +176,10 @@ function BottomSheet({
 }
 
 export function EventsTab() {
+  const { i18n } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
-  const languageCode = initDataState?.user?.language_code;
+  const languageCode = i18n.language;
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);

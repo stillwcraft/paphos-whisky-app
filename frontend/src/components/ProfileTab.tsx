@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -15,6 +16,14 @@ type UserStats = {
   tastings_attended: number;
   tested_releases: number;
 };
+
+const languageOptions = [
+  { code: 'en', label: 'EN' },
+  { code: 'ru', label: 'RU' },
+  { code: 'uk', label: 'UK' },
+] as const;
+
+type LanguageCode = typeof languageOptions[number]['code'];
 
 declare global {
   interface Window {
@@ -38,6 +47,7 @@ function UserPlaceholderIcon() {
 }
 
 export function ProfileTab() {
+  const { i18n, t } = useTranslation();
   const tg = window.Telegram?.WebApp;
   const rawUser = tg?.initDataUnsafe?.user;
   const initDataState = useSignal(initData.state);
@@ -45,9 +55,15 @@ export function ProfileTab() {
   const userId = initDataState?.user?.id ?? rawUser?.id;
   const [stats, setStats] = useState<UserStats>({ tastings_attended: 0, tested_releases: 0 });
   const [statsError, setStatsError] = useState<string | null>(null);
-  const name = initDataState?.user?.first_name ?? rawUser?.first_name ?? 'Whisky Club Member';
+  const name = initDataState?.user?.first_name ?? rawUser?.first_name ?? t('profile.default_name');
   const username = initDataState?.user?.username ?? rawUser?.username;
   const photoUrl = initDataState?.user?.photo_url ?? rawUser?.photo_url;
+  const currentLanguage = (i18n.resolvedLanguage ?? i18n.language).toLowerCase().split(/[-_]/, 1)[0];
+
+  const changeLanguage = (language: LanguageCode) => {
+    void i18n.changeLanguage(language);
+    localStorage.setItem('app_lang', language);
+  };
 
   useEffect(() => {
     if (!userId) {
@@ -77,7 +93,7 @@ export function ProfileTab() {
       <article className="w-full rounded-3xl border border-amber-200/15 bg-slate-900/70 p-6 text-center shadow-2xl shadow-black/30 backdrop-blur">
         <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-amber-400 text-amber-400 shadow-lg shadow-amber-400/20">
           {photoUrl ? (
-            <img alt="Avatar" className="h-full w-full rounded-full object-cover" src={photoUrl} />
+            <img alt={t('profile.avatar')} className="h-full w-full rounded-full object-cover" src={photoUrl} />
           ) : (
             <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-800">
               {name ? <span className="text-2xl font-bold">{name[0]?.toUpperCase()}</span> : <UserPlaceholderIcon />}
@@ -86,18 +102,40 @@ export function ProfileTab() {
         </div>
 
         <h1 className="mt-5 text-2xl font-semibold text-white">{name}</h1>
-        <p className="mt-1 text-sm text-slate-400">{username ? `@${username}` : 'Telegram user'}</p>
+        <p className="mt-1 text-sm text-slate-400">{username ? `@${username}` : t('profile.telegram_user')}</p>
 
         {statsError && <p className="mt-5 text-xs text-red-300">{statsError}</p>}
         <div className="mt-7 grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-white/10 bg-slate-800/80 p-4">
             <p className="text-3xl font-bold text-white">{stats.tastings_attended}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">Tastings attended</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{t('profile.tastings_attended')}</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-slate-800/80 p-4">
             <p className="text-3xl font-bold text-white">{stats.tested_releases}</p>
-            <p className="mt-2 text-xs leading-5 text-slate-400">Tested releases</p>
+            <p className="mt-2 text-xs leading-5 text-slate-400">{t('profile.tested_releases')}</p>
           </div>
+        </div>
+        <div aria-label={t('profile.language')} className="mt-6 flex justify-center gap-2" role="group">
+          {languageOptions.map(({ code, label }) => {
+            const isSelected = currentLanguage === code;
+
+            return (
+              <button
+                key={code}
+                aria-pressed={isSelected}
+                className={`rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
+                  isSelected
+                    ? 'border-amber-400 bg-amber-400 text-slate-950'
+                    : 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200'
+                }`}
+                lang={code}
+                onClick={() => changeLanguage(code)}
+                type="button"
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </article>
     </section>

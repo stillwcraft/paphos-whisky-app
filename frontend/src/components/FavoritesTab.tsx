@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
@@ -65,10 +66,11 @@ function displayError(error: unknown, fallback: string) {
 }
 
 export function FavoritesTab() {
+  const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
-  const languageCode = initDataState?.user?.language_code;
+  const languageCode = i18n.language;
   const [favoriteBottles, setFavoriteBottles] = useState<FavoriteBottle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
@@ -109,7 +111,12 @@ export function FavoritesTab() {
         const distilleryNames = new Map(distilleries.map((distillery) => [distillery.id, distillery.name]));
         setFavoriteBottles(bottles
           .filter((bottle) => statesByBottle[bottle.id]?.is_favorite)
-          .map((bottle) => ({ ...bottle, distilleryName: bottle.distillery_id ? distilleryNames.get(bottle.distillery_id) ?? 'Independent bottle' : 'Independent bottle' })));
+          .map((bottle) => ({
+            ...bottle,
+            distilleryName: bottle.distillery_id
+              ? distilleryNames.get(bottle.distillery_id) ?? t('bottle.independent')
+              : t('bottle.independent'),
+          })));
       } catch (loadError) {
         setError(displayError(loadError, 'Could not load favorites.'));
       } finally {
@@ -118,7 +125,7 @@ export function FavoritesTab() {
     };
 
     void loadFavorites();
-  }, [initDataRaw, languageCode, telegramId]);
+  }, [initDataRaw, languageCode, t, telegramId]);
 
   const closeBottle = () => {
     setIsPhotoExpanded(false);
@@ -132,7 +139,7 @@ export function FavoritesTab() {
 
   const toggleAction = async (bottle: FavoriteBottle, actionType: 'favorite' | 'tried') => {
     if (!telegramId) {
-      setError('Open the app in Telegram to save bottle marks.');
+      setError(t('bottle.open_telegram_to_save_marks'));
       return;
     }
 
@@ -163,21 +170,21 @@ export function FavoritesTab() {
   };
 
   if (!telegramId) {
-    return <section className="flex min-h-[calc(100vh-7rem)] items-center justify-center"><p className="max-w-xs text-center text-sm leading-6 text-slate-400">Open the app in Telegram to view your favorites.</p></section>;
+    return <section className="flex min-h-[calc(100vh-7rem)] items-center justify-center"><p className="max-w-xs text-center text-sm leading-6 text-slate-400">{t('bottle.open_telegram_to_view_favorites')}</p></section>;
   }
-  if (isLoading) return <p className="pt-12 text-center text-sm text-slate-400">Loading favorites...</p>;
+  if (isLoading) return <p className="pt-12 text-center text-sm text-slate-400">{t('common.loading')}</p>;
   if (error && favoriteBottles.length === 0) return <p className="pt-12 text-center text-sm text-red-300">{error}</p>;
 
   return (
     <section className="mx-auto w-full max-w-md pt-8">
       <header className="mb-8 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Favorites</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.favorites')}</h1>
       </header>
       {error && <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{error}</p>}
       {favoriteBottles.length === 0 ? (
         <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center text-center">
-          <div className="max-w-xs"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-3xl text-slate-500">☆</div><h2 className="text-xl font-semibold text-white">Favorites are empty</h2><p className="mt-3 text-sm leading-6 text-slate-400">Add bottles from the Distilleries tab to see them here.</p></div>
+          <div className="max-w-xs"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-3xl text-slate-500">☆</div><h2 className="text-xl font-semibold text-white">{t('favorites.empty_title')}</h2><p className="mt-3 text-sm leading-6 text-slate-400">{t('favorites.empty_description')}</p></div>
         </div>
       ) : (
         <ul className="space-y-3">
@@ -190,7 +197,7 @@ export function FavoritesTab() {
               >
                 <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
                 <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distilleryName}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
-                <span aria-label="Favorite" className="text-xl text-amber-400">★</span>
+                <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
               </button>
             </li>
           ))}
@@ -210,31 +217,31 @@ export function FavoritesTab() {
               style={{ height: isPhotoExpanded ? '55vh' : '200px', maxHeight: '60vh', transition: 'all 0.3s ease-in-out' }}
             >
               <BottleImage alt={expandedBottle.name} className="h-full w-full object-contain" imageUrl={expandedBottle.image_url} />
-              <button aria-label="Close bottle details" className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); closeBottle(); }} type="button">✕</button>
+              <button aria-label={t('bottle.close_details')} className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); closeBottle(); }} type="button">✕</button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <p className="text-sm font-semibold text-amber-400">{expandedBottle.distilleryName}</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{expandedBottle.name}</h2>
-              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">Age</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.age || 'NAS'}</dd></div><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">ABV</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.abv || '—'}</dd></div></dl>
+              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.age')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.age || t('bottle.nas')}</dd></div><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.abv')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.abv || t('common.na')}</dd></div></dl>
               <p className="mt-5 text-lg font-semibold text-amber-400">€{expandedBottle.price_per_sample}</p>
               <BottleTagChart bottleId={expandedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
-              <button className="rounded-xl border border-amber-300 bg-amber-400 px-3 py-3 text-sm font-semibold text-slate-950 transition-colors disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'favorite'); }} type="button">⭐ Favorites {expandedBottle.favorites_count > 0 && `(${expandedBottle.favorites_count})`}</button>
+              <button className="rounded-xl border border-amber-300 bg-amber-400 px-3 py-3 text-sm font-semibold text-slate-950 transition-colors disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'favorite'); }} type="button">⭐ {t('bottle.favorites')} {expandedBottle.favorites_count > 0 && `(${expandedBottle.favorites_count})`}</button>
               <button
                 className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
                 onClick={(event) => {
                   event.stopPropagation();
                   if (!telegramId) {
-                    setError('Open the app in Telegram to write a review.');
+                    setError(t('bottle.open_telegram_to_write_review'));
                     return;
                   }
                   setIsReviewOpen(true);
                 }}
                 type="button"
               >
-                📝 Review
+                📝 {t('bottle.review')}
               </button>
             </div>
           </article>

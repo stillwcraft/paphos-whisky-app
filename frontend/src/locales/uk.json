@@ -1,0 +1,74 @@
+{
+  "common": {
+    "save": "Зберегти",
+    "cancel": "Скасувати",
+    "loading": "Завантаження...",
+    "error": "Сталася помилка",
+    "na": "—",
+    "main_navigation": "Головна навігація"
+  },
+  "review": {
+    "title": "Мій відгук",
+    "points": "Бали",
+    "save": "Зберегти відгук",
+    "nose": "Аромат",
+    "taste": "Смак",
+    "finish": "Післясмак",
+    "tasting_notes": "Смакові ноти",
+    "close_without_saving": "Закрити відгук без збереження"
+  },
+  "bottle": {
+    "age": "Вік",
+    "abv": "Міцність",
+    "cask": "Бочка",
+    "bottles": "Тираж",
+    "flavor_profile": "Смаковий профіль",
+    "club_rating": "Рейтинг клубу",
+    "no_ratings": "Оцінок поки немає. Будьте першим!",
+    "nas": "Без зазначення віку",
+    "favorite": "Улюблене",
+    "favorites": "Улюблене",
+    "review": "Відгук",
+    "open_telegram_to_save_marks": "Відкрийте застосунок у Telegram, щоб зберегти позначки про пляшку.",
+    "open_telegram_to_write_review": "Відкрийте застосунок у Telegram, щоб залишити відгук.",
+    "open_telegram_to_view_favorites": "Відкрийте застосунок у Telegram, щоб переглянути улюблене.",
+    "close_details": "Закрити картку пляшки",
+    "close_distillery_details": "Закрити картку дистилерії",
+    "open_distillery_details": "Відкрити картку {{name}}",
+    "show_bottles": "Показати пляшки {{name}}",
+    "hide_bottles": "Сховати пляшки {{name}}",
+    "description_soon": "Опис буде додано пізніше.",
+    "catalog_empty": "Каталог незабаром буде доступний.",
+    "no_bottles": "Пляшок поки немає.",
+    "whisky": "Віскі",
+    "independent": "Незалежний реліз",
+    "item_bottle": "Пляшка",
+    "item_samples": "Семпли",
+    "item_event": "Подія",
+    "no_items": "Нові пляшки та семпли незабаром з’являться.",
+    "votes_one": "{{count}} голос",
+    "votes_few": "{{count}} голоси",
+    "votes_many": "{{count}} голосів",
+    "votes_other": "{{count}} голоси"
+  },
+  "tabs": {
+    "events": "Події",
+    "distilleries": "Дистилерії",
+    "bottles": "Пляшки",
+    "favorites": "Улюблене",
+    "profile": "Профіль",
+    "admin": "Адмінка"
+  },
+  "favorites": {
+    "empty_title": "В улюбленому поки нічого немає",
+    "empty_description": "Додайте пляшки на вкладці «Дистилерії», щоб побачити їх тут."
+  },
+  "profile": {
+    "default_name": "Учасник Whisky Club",
+    "telegram_user": "Користувач Telegram",
+    "avatar": "Аватар",
+    "tastings_attended": "Відвідано дегустацій",
+    "tested_releases": "Спробувано релізів",
+    "language": "Мова"
+  }
+}
