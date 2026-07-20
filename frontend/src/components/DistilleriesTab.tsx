@@ -138,6 +138,7 @@ export function DistilleriesTab() {
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewRevision, setReviewRevision] = useState(0);
 
   const catalogQuery = useQuery({
     queryKey: ['catalog'],
@@ -427,7 +428,7 @@ export function DistilleriesTab() {
                   <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || '—'}</dd>
                 </div>
               </dl>
-              <BottleTagChart bottleId={selectedBottle.id} />
+              <BottleTagChart bottleId={selectedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample}</p>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>
             </div>
@@ -462,6 +463,7 @@ export function DistilleriesTab() {
           bottleId={selectedBottle.id}
           initDataRaw={initDataRaw}
           onClose={() => setIsReviewOpen(false)}
+          onSaved={() => setReviewRevision((current) => current + 1)}
           telegramId={telegramId}
         />
       )}

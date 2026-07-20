@@ -30,6 +30,7 @@ type Props = {
   telegramId: number;
   initDataRaw: string | undefined;
   onClose: () => void;
+  onSaved: () => void;
 };
 
 async function extractErrorMessage(response: Response): Promise<string> {
@@ -44,7 +45,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return `Server error: ${response.status}`;
 }
 
-export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose }: Props) {
+export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
   const [nose, setNose] = useState(80);
   const [taste, setTaste] = useState(80);
   const [finish, setFinish] = useState(80);
@@ -130,6 +131,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
         }),
       });
       if (!response.ok) throw new Error(await extractErrorMessage(response));
+      onSaved();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save review.');

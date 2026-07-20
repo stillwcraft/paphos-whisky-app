@@ -18,8 +18,14 @@ type BottleTagStat = {
   count: number;
 };
 
+type BottleTagStatsResponse = {
+  club_rating: number | null;
+  tags: BottleTagStat[];
+};
+
 type Props = {
   bottleId: number;
+  refreshRevision?: number;
 };
 
 type TagIconTickProps = {
@@ -78,8 +84,9 @@ function TagTooltip({ active, payload }: TagTooltipProps) {
   );
 }
 
-export function BottleTagChart({ bottleId }: Props) {
+export function BottleTagChart({ bottleId, refreshRevision }: Props) {
   const [tagStats, setTagStats] = useState<BottleTagStat[]>([]);
+  const [clubRating, setClubRating] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +97,8 @@ export function BottleTagChart({ bottleId }: Props) {
     const loadTagStats = async () => {
       setIsLoading(true);
       setError(null);
+      setTagStats([]);
+      setClubRating(null);
 
       try {
         const response = await fetch(`${API_URL}/api/bottles/${bottleId}/tag-stats`, {
@@ -99,9 +108,10 @@ export function BottleTagChart({ bottleId }: Props) {
           throw new Error(`Server error: ${response.status}`);
         }
 
-        const stats = await response.json() as BottleTagStat[];
+        const stats = await response.json() as BottleTagStatsResponse;
         if (active) {
-          setTagStats(stats);
+          setTagStats(stats.tags);
+          setClubRating(stats.club_rating);
         }
       } catch (loadError) {
         if (!active || (loadError instanceof Error && loadError.name === 'AbortError')) {
@@ -121,11 +131,18 @@ export function BottleTagChart({ bottleId }: Props) {
       active = false;
       controller.abort();
     };
-  }, [bottleId]);
+  }, [bottleId, refreshRevision]);
 
   return (
     <section className="mt-5 rounded-2xl border border-white/10 bg-slate-800/70 p-4">
-      <h3 className="text-sm font-semibold text-white">📊 Flavor Profile</h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-white">Flavor Profile</h3>
+        <span className="text-sm font-semibold text-amber-400">
+          Club Rating: {typeof clubRating === 'number' && Number.isFinite(clubRating)
+            ? clubRating.toFixed(2)
+            : '—'}
+        </span>
+      </div>
       {isLoading ? (
         <p className="mt-4 text-sm text-slate-400">Загрузка...</p>
       ) : error ? (

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -70,6 +71,7 @@ export function FavoritesTab() {
   const [expandedBottleId, setExpandedBottleId] = useState<number | null>(null);
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
+  const [reviewRevision, setReviewRevision] = useState(0);
 
   useEffect(() => {
     const loadFavorites = async () => {
@@ -210,6 +212,7 @@ export function FavoritesTab() {
               <h2 className="mt-3 text-2xl font-semibold text-white">{expandedBottle.name}</h2>
               <dl className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">Age</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.age || 'NAS'}</dd></div><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">ABV</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.abv || '—'}</dd></div></dl>
               <p className="mt-5 text-lg font-semibold text-amber-400">€{expandedBottle.price_per_sample}</p>
+              <BottleTagChart bottleId={expandedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>
             </div>
             <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
@@ -237,6 +240,7 @@ export function FavoritesTab() {
           bottleId={expandedBottle.id}
           initDataRaw={initDataRaw}
           onClose={() => setIsReviewOpen(false)}
+          onSaved={() => setReviewRevision((current) => current + 1)}
           telegramId={telegramId}
         />
       )}

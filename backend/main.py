@@ -773,6 +773,11 @@ class BottleTagStatResponse(BaseModel):
     count: int
 
 
+class BottleTagStatsResponse(BaseModel):
+    club_rating: Optional[float]
+    tags: List[BottleTagStatResponse]
+
+
 class DistilleryWithBottlesResponse(DistilleryResponse):
     bottles: List[BottleResponse] = Field(default_factory=list)
 
@@ -1334,12 +1339,12 @@ def get_bottles(db: Session = Depends(get_db)):
 
 @app.get(
     "/api/bottles/{bottle_id}/tag-stats",
-    response_model=List[BottleTagStatResponse],
+    response_model=BottleTagStatsResponse,
 )
 def get_bottle_tag_stats(
     bottle_id: int,
     db: Session = Depends(get_db),
-) -> List[BottleTagStatResponse]:
+) -> BottleTagStatsResponse:
     bottle_exists = db.query(models.Bottle.id).filter(
         models.Bottle.id == bottle_id
     ).first()
@@ -1372,17 +1377,28 @@ def get_bottle_tag_stats(
             models.TastingTag.name.asc(),
             models.TastingTag.id.asc(),
         )
+        .limit(10)
         .all()
     )
-    return [
-        BottleTagStatResponse(
-            id=tag_id,
-            name=name,
-            icon_url=icon_url,
-            count=int(count),
+    rating = db.query(
+        func.avg(
+            (models.UserReview.nose + models.UserReview.taste + models.UserReview.finish)
+            / 3.0
         )
-        for tag_id, name, icon_url, count in tag_stats
-    ]
+    ).filter(models.UserReview.bottle_id == bottle_id).scalar()
+
+    return BottleTagStatsResponse(
+        club_rating=round(float(rating), 2) if rating is not None else None,
+        tags=[
+            BottleTagStatResponse(
+                id=tag_id,
+                name=name,
+                icon_url=icon_url,
+                count=int(count),
+            )
+            for tag_id, name, icon_url, count in tag_stats
+        ],
+    )
 
 
 @app.post("/api/bottles", response_model=BottleResponse, status_code=status.HTTP_201_CREATED)
