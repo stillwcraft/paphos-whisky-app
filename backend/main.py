@@ -498,8 +498,6 @@ def ensure_user_review_schema() -> None:
                 )
 
 
-ensure_user_review_schema()
-
 app = FastAPI(title="Paphos Whisky Club API")
 
 # Настройка CORS, чтобы наш фронтенд на Vercel мог общаться с бэкендом
