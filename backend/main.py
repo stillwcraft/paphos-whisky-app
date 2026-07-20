@@ -766,6 +766,13 @@ class BottleResponse(BottleCreate):
         from_attributes = True
 
 
+class BottleTagStatResponse(BaseModel):
+    id: int
+    name: str
+    icon_url: str
+    count: int
+
+
 class DistilleryWithBottlesResponse(DistilleryResponse):
     bottles: List[BottleResponse] = Field(default_factory=list)
 
@@ -1323,6 +1330,60 @@ def delete_distillery(
 @app.get("/api/bottles", response_model=List[BottleResponse])
 def get_bottles(db: Session = Depends(get_db)):
     return db.query(models.Bottle).all()
+
+
+@app.get(
+    "/api/bottles/{bottle_id}/tag-stats",
+    response_model=List[BottleTagStatResponse],
+)
+def get_bottle_tag_stats(
+    bottle_id: int,
+    db: Session = Depends(get_db),
+) -> List[BottleTagStatResponse]:
+    bottle_exists = db.query(models.Bottle.id).filter(
+        models.Bottle.id == bottle_id
+    ).first()
+    if not bottle_exists:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+
+    tag_stats = (
+        db.query(
+            models.TastingTag.id.label("id"),
+            models.TastingTag.name.label("name"),
+            models.TastingTag.icon_url.label("icon_url"),
+            func.count(models.UserReviewTag.id).label("count"),
+        )
+        .join(
+            models.UserReviewTag,
+            models.UserReviewTag.tasting_tag_id == models.TastingTag.id,
+        )
+        .join(
+            models.UserReview,
+            models.UserReview.id == models.UserReviewTag.review_id,
+        )
+        .filter(models.UserReview.bottle_id == bottle_id)
+        .group_by(
+            models.TastingTag.id,
+            models.TastingTag.name,
+            models.TastingTag.icon_url,
+        )
+        .order_by(
+            func.count(models.UserReviewTag.id).desc(),
+            models.TastingTag.name.asc(),
+            models.TastingTag.id.asc(),
+        )
+        .all()
+    )
+    return [
+        BottleTagStatResponse(
+            id=tag_id,
+            name=name,
+            icon_url=icon_url,
+            count=int(count),
+        )
+        for tag_id, name, icon_url, count in tag_stats
+    ]
+
 
 @app.post("/api/bottles", response_model=BottleResponse, status_code=status.HTTP_201_CREATED)
 def create_bottle(

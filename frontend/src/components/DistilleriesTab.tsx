@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -426,6 +427,7 @@ export function DistilleriesTab() {
                   <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || '—'}</dd>
                 </div>
               </dl>
+              <BottleTagChart bottleId={selectedBottle.id} />
               <p className="mt-5 text-lg font-semibold text-amber-400">€{selectedBottle.price_per_sample}</p>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>
             </div>
