@@ -2,14 +2,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import ReactMarkdown from 'react-markdown';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { localizedApiUrl } from '@/localization.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type ClubEvent = {
   id: number;
   title: string;
+  title_i18n?: I18nString;
+  name_i18n?: I18nString;
   date: string;
   description: string;
+  description_i18n?: I18nString;
   price: number;
   samples_price: number | null;
   image_url: string | null;
@@ -172,6 +177,7 @@ function BottomSheet({
 export function EventsTab() {
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
+  const languageCode = initDataState?.user?.language_code;
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -186,7 +192,7 @@ export function EventsTab() {
   const loadEvents = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events`);
+      const response = await fetch(localizedApiUrl(`${API_BASE_URL}/api/events`, languageCode));
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
       }
@@ -199,7 +205,7 @@ export function EventsTab() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [languageCode]);
 
   useEffect(() => {
     void loadEvents();

@@ -1,16 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
+import { localizedApiUrl } from '@/localization.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
 type BottleLabel = 'bottle' | 'samples' | 'event';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type ShopItem = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   distillery_id: number | null;
   label: BottleLabel;
   price_per_sample: number;
   description: string;
+  description_i18n?: I18nString;
   image_url: string | null;
 };
 
@@ -37,6 +42,7 @@ function BottleImage({
 }
 
 export function BottlesSamplesTab() {
+  const languageCode = useSignal(initData.state)?.user?.language_code;
   const [items, setItems] = useState<ShopItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +52,7 @@ export function BottlesSamplesTab() {
   useEffect(() => {
     const loadItems = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/bottles`);
+        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
         }
@@ -60,7 +66,7 @@ export function BottlesSamplesTab() {
     };
 
     void loadItems();
-  }, []);
+  }, [languageCode]);
 
   const expandedBottle = useMemo(
     () => items.find((item) => item.id === expandedBottleId),

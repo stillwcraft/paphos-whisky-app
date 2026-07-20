@@ -3,7 +3,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qsl
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -21,6 +21,7 @@ models.Base.metadata.create_all(bind=engine)
 
 
 BottleLabel = Literal["bottle", "samples", "event"]
+I18nString = Dict[str, str]
 TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
 TELEGRAM_INIT_DATA_FUTURE_SKEW = timedelta(minutes=5)
 
@@ -215,6 +216,28 @@ def ensure_catalog_schema() -> None:
                 )
 
 
+def ensure_i18n_schema() -> None:
+    json_type = "JSONB" if engine.dialect.name == "postgresql" else "JSON"
+    i18n_columns = {
+        "events": ("name_i18n", "description_i18n"),
+        "tasting_tags": ("name_i18n", "description_i18n"),
+        "bottles": ("name_i18n", "description_i18n"),
+        "distilleries": ("name_i18n", "description_i18n"),
+    }
+
+    with engine.begin() as connection:
+        for table_name, columns in i18n_columns.items():
+            existing_columns = get_table_columns(connection, table_name)
+            for column_name in columns:
+                if column_name not in existing_columns:
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE {table_name} "
+                            f"ADD COLUMN {column_name} {json_type}"
+                        )
+                    )
+
+
 def ensure_user_bottle_action_schema() -> None:
     inspector = inspect(engine)
     if "user_bottle_actions" not in inspector.get_table_names():
@@ -306,6 +329,7 @@ def ensure_user_bottle_action_schema() -> None:
 
 ensure_event_schema()
 ensure_catalog_schema()
+ensure_i18n_schema()
 ensure_user_bottle_action_schema()
 
 
@@ -474,7 +498,7 @@ def ensure_user_review_schema() -> None:
                 )
 
 
-#ensure_user_review_schema()
+ensure_user_review_schema()
 
 app = FastAPI(title="Paphos Whisky Club API")
 
@@ -491,6 +515,29 @@ app.add_middleware(
 class TelegramAuthContext(BaseModel):
     telegram_id: int
     user: dict
+
+
+def get_localized_string(
+    i18n_dict: Optional[I18nString],
+    lang: str,
+    default_text: Optional[str],
+) -> str:
+    values: Any = i18n_dict
+    if isinstance(values, str):
+        try:
+            values = json.loads(values)
+        except (TypeError, json.JSONDecodeError):
+            values = None
+
+    normalized_lang = (lang or "").strip().lower().replace("_", "-").split("-", 1)[0]
+    requested_lang = normalized_lang if normalized_lang in {"en", "ru", "uk"} else None
+    if isinstance(values, dict):
+        for locale in (requested_lang, "en", "ru"):
+            value = values.get(locale) if locale else None
+            if isinstance(value, str) and value.strip():
+                return value
+
+    return default_text if isinstance(default_text, str) else ""
 
 
 def get_bot_token() -> str:
@@ -697,8 +744,11 @@ def require_admin(
 # --- Схемы валидации данных (Pydantic) ---
 class EventCreate(BaseModel):
     title: str
+    title_i18n: Optional[I18nString] = None
+    name_i18n: Optional[I18nString] = None
     date: str
     description: str
+    description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None
     image_url: Optional[str] = None
@@ -714,8 +764,10 @@ class EventResponse(EventCreate):
 
 class DistilleryCreate(BaseModel):
     name: str
+    name_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
     description: Optional[str] = None
+    description_i18n: Optional[I18nString] = None
 
 
 class DistilleryResponse(DistilleryCreate):
@@ -727,6 +779,8 @@ class DistilleryResponse(DistilleryCreate):
 
 class TastingTagCreate(BaseModel):
     name: str
+    name_i18n: Optional[I18nString] = None
+    description_i18n: Optional[I18nString] = None
     icon_url: str
 
 
@@ -739,6 +793,7 @@ class TastingTagResponse(TastingTagCreate):
 
 class BottleCreate(BaseModel):
     name: str
+    name_i18n: Optional[I18nString] = None
     distillery_id: Optional[int] = None
     label: Optional[BottleLabel] = "bottle"
     age: Optional[str] = None
@@ -747,6 +802,7 @@ class BottleCreate(BaseModel):
     bottles: Optional[str] = None
     price_per_sample: float
     description: str
+    description_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
 
 
@@ -948,14 +1004,23 @@ def parse_event_date_to_utc(date_value: Optional[str]) -> Optional[datetime]:
 def build_event_response(
     event: models.Event,
     *,
+    lang: str = "en",
     registered_count: int = 0,
     samples_count: int = 0,
 ) -> EventResponse:
+    title_i18n = event.title_i18n
     return EventResponse(
         id=event.id,
-        title=event.title,
+        title=get_localized_string(title_i18n, lang, event.title),
+        title_i18n=title_i18n,
+        name_i18n=title_i18n,
         date=event.date,
-        description=event.description,
+        description=get_localized_string(
+            event.description_i18n,
+            lang,
+            event.description,
+        ),
+        description_i18n=event.description_i18n,
         price=event.price,
         samples_price=event.samples_price,
         image_url=event.image_url,
@@ -963,6 +1028,90 @@ def build_event_response(
         registered_count=int(registered_count),
         samples_count=int(samples_count),
     )
+
+
+def build_tasting_tag_response(
+    tag: models.TastingTag,
+    *,
+    lang: str = "en",
+) -> TastingTagResponse:
+    return TastingTagResponse(
+        id=tag.id,
+        name=get_localized_string(tag.name_i18n, lang, tag.name),
+        name_i18n=tag.name_i18n,
+        description_i18n=tag.description_i18n,
+        icon_url=tag.icon_url,
+    )
+
+
+def build_bottle_response(
+    bottle: models.Bottle,
+    *,
+    lang: str = "en",
+) -> BottleResponse:
+    return BottleResponse(
+        id=bottle.id,
+        name=get_localized_string(bottle.name_i18n, lang, bottle.name),
+        name_i18n=bottle.name_i18n,
+        distillery_id=bottle.distillery_id,
+        label=bottle.label,
+        age=bottle.age,
+        abv=bottle.abv,
+        cask=bottle.cask,
+        bottles=bottle.bottles,
+        price_per_sample=bottle.price_per_sample,
+        description=get_localized_string(
+            bottle.description_i18n,
+            lang,
+            bottle.description,
+        ),
+        description_i18n=bottle.description_i18n,
+        image_url=bottle.image_url,
+        favorites_count=bottle.favorites_count,
+        tried_count=bottle.tried_count,
+    )
+
+
+def build_distillery_response(
+    distillery: models.Distillery,
+    *,
+    lang: str = "en",
+) -> DistilleryResponse:
+    return DistilleryResponse(
+        id=distillery.id,
+        name=get_localized_string(distillery.name_i18n, lang, distillery.name),
+        name_i18n=distillery.name_i18n,
+        image_url=distillery.image_url,
+        description=get_localized_string(
+            distillery.description_i18n,
+            lang,
+            distillery.description,
+        ),
+        description_i18n=distillery.description_i18n,
+    )
+
+
+def build_distillery_with_bottles_response(
+    distillery: models.Distillery,
+    *,
+    lang: str = "en",
+) -> DistilleryWithBottlesResponse:
+    return DistilleryWithBottlesResponse(
+        **build_distillery_response(distillery, lang=lang).model_dump(),
+        bottles=[
+            build_bottle_response(bottle, lang=lang)
+            for bottle in distillery.bottles
+        ],
+    )
+
+
+def build_event_payload(event_data: EventCreate, *, exclude_unset: bool) -> dict:
+    payload = event_data.model_dump(exclude_unset=exclude_unset)
+    if "title_i18n" in event_data.model_fields_set:
+        payload["name_i18n"] = payload.pop("title_i18n", None)
+    else:
+        payload.pop("title_i18n", None)
+    return payload
 
 
 def get_event_counts_subquery(db: Session):
@@ -988,7 +1137,7 @@ def get_event_counts_subquery(db: Session):
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
 
 @app.get("/api/events", response_model=List[EventResponse])
-def get_events(db: Session = Depends(get_db)):
+def get_events(lang: str = "en", db: Session = Depends(get_db)):
     event_counts = get_event_counts_subquery(db)
     events = (
         db.query(
@@ -1002,6 +1151,7 @@ def get_events(db: Session = Depends(get_db)):
     return [
         build_event_response(
             event,
+            lang=lang,
             registered_count=registered_count,
             samples_count=samples_count,
         )
@@ -1014,7 +1164,7 @@ def create_event(
     db: Session = Depends(get_db),
     _: TelegramAuthContext = Depends(require_admin),
 ):
-    new_event = models.Event(**event_data.model_dump())
+    new_event = models.Event(**build_event_payload(event_data, exclude_unset=False))
     db.add(new_event)
     db.commit()
     db.refresh(new_event)
@@ -1032,7 +1182,7 @@ def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    for field, value in event_data.model_dump().items():
+    for field, value in build_event_payload(event_data, exclude_unset=True).items():
         setattr(event, field, value)
 
     db.commit()
@@ -1070,8 +1220,9 @@ def delete_event(
 
 
 @app.get("/api/tasting-tags", response_model=List[TastingTagResponse])
-def get_tasting_tags(db: Session = Depends(get_db)):
-    return db.query(models.TastingTag).order_by(models.TastingTag.name).all()
+def get_tasting_tags(lang: str = "en", db: Session = Depends(get_db)):
+    tags = db.query(models.TastingTag).order_by(models.TastingTag.name).all()
+    return [build_tasting_tag_response(tag, lang=lang) for tag in tags]
 
 
 @app.post(
@@ -1088,7 +1239,7 @@ def create_tasting_tag(
     db.add(tag)
     db.commit()
     db.refresh(tag)
-    return tag
+    return build_tasting_tag_response(tag)
 
 
 @app.put("/api/admin/tasting-tags/{tag_id}", response_model=TastingTagResponse)
@@ -1102,12 +1253,12 @@ def update_tasting_tag(
     if not tag:
         raise HTTPException(status_code=404, detail="Tasting tag not found")
 
-    for field, value in tag_data.model_dump().items():
+    for field, value in tag_data.model_dump(exclude_unset=True).items():
         setattr(tag, field, value)
 
     db.commit()
     db.refresh(tag)
-    return tag
+    return build_tasting_tag_response(tag)
 
 
 @app.delete(
@@ -1233,10 +1384,14 @@ def get_user_stats(
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---
 
 @app.get("/api/distilleries", response_model=List[DistilleryWithBottlesResponse])
-def get_distilleries(db: Session = Depends(get_db)):
-    return db.query(models.Distillery).options(
+def get_distilleries(lang: str = "en", db: Session = Depends(get_db)):
+    distilleries = db.query(models.Distillery).options(
         joinedload(models.Distillery.bottles)
     ).order_by(models.Distillery.name).all()
+    return [
+        build_distillery_with_bottles_response(distillery, lang=lang)
+        for distillery in distilleries
+    ]
 
 
 @app.post(
@@ -1259,7 +1414,7 @@ def create_distillery(
     db.add(distillery)
     db.commit()
     db.refresh(distillery)
-    return distillery
+    return build_distillery_response(distillery)
 
 
 @app.put("/api/distilleries/{distillery_id}", response_model=DistilleryResponse)
@@ -1282,12 +1437,12 @@ def update_distillery(
     if same_name_distillery:
         raise HTTPException(status_code=409, detail="Distillery already exists")
 
-    for field, value in distillery_data.model_dump().items():
+    for field, value in distillery_data.model_dump(exclude_unset=True).items():
         setattr(distillery, field, value)
 
     db.commit()
     db.refresh(distillery)
-    return distillery
+    return build_distillery_response(distillery)
 
 
 @app.delete("/api/distilleries/{distillery_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1333,8 +1488,9 @@ def delete_distillery(
 
 
 @app.get("/api/bottles", response_model=List[BottleResponse])
-def get_bottles(db: Session = Depends(get_db)):
-    return db.query(models.Bottle).all()
+def get_bottles(lang: str = "en", db: Session = Depends(get_db)):
+    bottles = db.query(models.Bottle).all()
+    return [build_bottle_response(bottle, lang=lang) for bottle in bottles]
 
 
 @app.get(
@@ -1344,6 +1500,7 @@ def get_bottles(db: Session = Depends(get_db)):
 def get_bottle_tag_stats(
     bottle_id: int,
     db: Session = Depends(get_db),
+    lang: str = "en",
 ) -> BottleTagStatsResponse:
     bottle_exists = db.query(models.Bottle.id).filter(
         models.Bottle.id == bottle_id
@@ -1355,6 +1512,7 @@ def get_bottle_tag_stats(
         db.query(
             models.TastingTag.id.label("id"),
             models.TastingTag.name.label("name"),
+            models.TastingTag.name_i18n.label("name_i18n"),
             models.TastingTag.icon_url.label("icon_url"),
             func.count(models.UserReviewTag.review_id).label("count"),
         )
@@ -1370,6 +1528,7 @@ def get_bottle_tag_stats(
         .group_by(
             models.TastingTag.id,
             models.TastingTag.name,
+            models.TastingTag.name_i18n,
             models.TastingTag.icon_url,
         )
         .order_by(
@@ -1392,11 +1551,11 @@ def get_bottle_tag_stats(
         tags=[
             BottleTagStatResponse(
                 id=tag_id,
-                name=name,
+                name=get_localized_string(name_i18n, lang, name),
                 icon_url=icon_url,
                 count=int(count),
             )
-            for tag_id, name, icon_url, count in tag_stats
+            for tag_id, name, name_i18n, icon_url, count in tag_stats
         ],
     )
 
@@ -1422,7 +1581,7 @@ def create_bottle(
     db.add(new_bottle)
     db.commit()
     db.refresh(new_bottle)
-    return new_bottle
+    return build_bottle_response(new_bottle)
 
 
 @app.put("/api/bottles/{bottle_id}", response_model=BottleResponse)
@@ -1445,8 +1604,8 @@ def update_bottle(
         if not distillery:
             raise HTTPException(status_code=404, detail="Distillery not found")
 
-    bottle_payload = bottle_data.model_dump()
-    if bottle_payload["label"] is None:
+    bottle_payload = bottle_data.model_dump(exclude_unset=True)
+    if bottle_payload.get("label") is None and "label" in bottle_payload:
         bottle_payload["label"] = "bottle"
 
     for field, value in bottle_payload.items():
@@ -1454,7 +1613,7 @@ def update_bottle(
 
     db.commit()
     db.refresh(bottle)
-    return bottle
+    return build_bottle_response(bottle)
 
 
 @app.delete("/api/bottles/{bottle_id}", status_code=status.HTTP_204_NO_CONTENT)

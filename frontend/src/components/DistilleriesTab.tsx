@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type Bottle = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   distillery_id: number;
   age: string | null;
   abv: string | null;
@@ -17,6 +20,7 @@ type Bottle = {
   bottles: string | null;
   price_per_sample: number;
   description: string;
+  description_i18n?: I18nString;
   image_url: string | null;
   favorites_count: number;
   tried_count: number;
@@ -25,8 +29,10 @@ type Bottle = {
 type Distillery = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   image_url: string | null;
   description: string | null;
+  description_i18n?: I18nString;
   bottles: Bottle[];
 };
 
@@ -93,8 +99,8 @@ async function errorMessage(response: Response) {
   return `Server error: ${response.status}`;
 }
 
-async function loadCatalog(): Promise<Distillery[]> {
-  const distilleriesResponse = await fetch(`${API_URL}/api/distilleries`);
+async function loadCatalog(languageCode: string | undefined): Promise<Distillery[]> {
+  const distilleriesResponse = await fetch(localizedApiUrl(`${API_URL}/api/distilleries`, languageCode));
   if (!distilleriesResponse.ok) {
     throw new Error(await errorMessage(distilleriesResponse));
   }
@@ -110,7 +116,7 @@ async function loadCatalog(): Promise<Distillery[]> {
   // Keep the storefront usable while an older deployed API still returns
   // distilleries without the new nested bottles field.
   if (needsBottleFallback) {
-    const bottlesResponse = await fetch(`${API_URL}/api/bottles`);
+    const bottlesResponse = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
     if (!bottlesResponse.ok) {
       throw new Error(await errorMessage(bottlesResponse));
     }
@@ -128,6 +134,7 @@ async function loadCatalog(): Promise<Distillery[]> {
 export function DistilleriesTab() {
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
+  const languageCode = initDataState?.user?.language_code;
   const telegramId = initDataState?.user?.id;
   const queryClient = useQueryClient();
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
@@ -141,8 +148,8 @@ export function DistilleriesTab() {
   const [reviewRevision, setReviewRevision] = useState(0);
 
   const catalogQuery = useQuery({
-    queryKey: ['catalog'],
-    queryFn: loadCatalog,
+    queryKey: ['catalog', languageCode],
+    queryFn: () => loadCatalog(languageCode),
     staleTime: 5 * 60 * 1000,
     refetchOnMount: 'always',
   });

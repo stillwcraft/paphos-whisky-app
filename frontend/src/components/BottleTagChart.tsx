@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
+import { localizedApiUrl } from '@/localization.ts';
 import {
   Area,
   AreaChart,
@@ -10,10 +12,13 @@ import {
 } from 'recharts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type BottleTagStat = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
+  description_i18n?: I18nString;
   icon_url: string;
   count: number;
 };
@@ -85,6 +90,7 @@ function TagTooltip({ active, payload }: TagTooltipProps) {
 }
 
 export function BottleTagChart({ bottleId, refreshRevision }: Props) {
+  const languageCode = useSignal(initData.state)?.user?.language_code;
   const [tagStats, setTagStats] = useState<BottleTagStat[]>([]);
   const [clubRating, setClubRating] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -101,7 +107,7 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
       setClubRating(null);
 
       try {
-        const response = await fetch(`${API_URL}/api/bottles/${bottleId}/tag-stats`, {
+        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles/${bottleId}/tag-stats`, languageCode), {
           signal: controller.signal,
         });
         if (!response.ok) {
@@ -131,7 +137,7 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
       active = false;
       controller.abort();
     };
-  }, [bottleId, refreshRevision]);
+  }, [bottleId, languageCode, refreshRevision]);
 
   return (
     <section className="mt-5 rounded-2xl border border-white/10 bg-slate-800/70 p-4">

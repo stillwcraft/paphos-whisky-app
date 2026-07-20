@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { localizedApiUrl } from '@/localization.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type TastingTag = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
+  description_i18n?: I18nString;
   icon_url: string;
 };
 
@@ -46,6 +51,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
+  const languageCode = useSignal(initData.state)?.user?.language_code;
   const [nose, setNose] = useState(80);
   const [taste, setTaste] = useState(80);
   const [finish, setFinish] = useState(80);
@@ -71,7 +77,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
             `${API_URL}/api/reviews?telegram_id=${encodeURIComponent(telegramId)}&bottle_id=${encodeURIComponent(bottleId)}`,
             { headers: telegramAuthHeaders(initDataRaw), signal: controller.signal },
           ),
-          fetch(`${API_URL}/api/tasting-tags`, { signal: controller.signal }),
+          fetch(localizedApiUrl(`${API_URL}/api/tasting-tags`, languageCode), { signal: controller.signal }),
         ]);
 
         if (!active) return;
@@ -106,7 +112,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
       active = false;
       controller.abort();
     };
-  }, [bottleId, telegramId, initDataRaw]);
+  }, [bottleId, telegramId, initDataRaw, languageCode]);
 
   const toggleTag = (tagId: number) => {
     setSelectedTagIds((current) =>

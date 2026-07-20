@@ -1,14 +1,21 @@
-from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import BigInteger, Boolean, Column, Float, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship, synonym
 from database import Base
+
+I18N_JSON = JSON().with_variant(JSONB, "postgresql")
+
 
 class Event(Base):
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
+    name_i18n = Column(I18N_JSON, nullable=True)
+    title_i18n = synonym("name_i18n")
     date = Column(String)  # Например: "25 Июля, 19:00"
     description = Column(String)
+    description_i18n = Column(I18N_JSON, nullable=True)
     price = Column(Float)
     samples_price = Column(Float, nullable=True)
     image_url = Column(String, nullable=True)
@@ -35,8 +42,10 @@ class Distillery(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True, unique=True, nullable=False)
+    name_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
     description = Column(String, nullable=True)
+    description_i18n = Column(I18N_JSON, nullable=True)
     bottles = relationship(
         "Bottle",
         back_populates="distillery",
@@ -50,6 +59,8 @@ class TastingTag(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    name_i18n = Column(I18N_JSON, nullable=True)
+    description_i18n = Column(I18N_JSON, nullable=True)
     icon_url = Column(String, nullable=False)
 
 
@@ -58,6 +69,7 @@ class Bottle(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    name_i18n = Column(I18N_JSON, nullable=True)
     distillery_id = Column(
         Integer,
         ForeignKey("distilleries.id", ondelete="CASCADE"),
@@ -71,6 +83,7 @@ class Bottle(Base):
     bottles = Column(String, nullable=True)
     price_per_sample = Column(Float)
     description = Column(String)
+    description_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
     favorites_count = Column(Integer, default=0, nullable=False)
     tried_count = Column(Integer, default=0, nullable=False)

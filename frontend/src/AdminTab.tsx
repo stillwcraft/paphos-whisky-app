@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type Feedback = {
   kind: 'success' | 'error';
@@ -10,8 +11,11 @@ type Feedback = {
 type AdminEvent = {
   id: number;
   title: string;
+  title_i18n?: I18nString;
+  name_i18n?: I18nString;
   date: string;
   description: string;
+  description_i18n?: I18nString;
   price: number;
   image_url: string | null;
   has_samples: boolean;
@@ -38,16 +42,20 @@ const initialEventForm: EventForm = {
 type Distillery = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   image_url: string | null;
+  description_i18n?: I18nString;
 };
 
 type Bottle = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   distillery_id: number;
   age: number | null;
   price_per_sample: number;
   description: string;
+  description_i18n?: I18nString;
   image_url: string | null;
 };
 

@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const PERSONAL_DATA_UNAVAILABLE = 'Favorites are temporarily unavailable. Please try again later.';
+type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type Bottle = {
   id: number;
   name: string;
+  name_i18n?: I18nString;
   distillery_id: number | null;
   age: string | null;
   abv: string | null;
@@ -17,12 +20,13 @@ type Bottle = {
   bottles: string | null;
   price_per_sample: number;
   description: string;
+  description_i18n?: I18nString;
   image_url: string | null;
   favorites_count: number;
   tried_count: number;
 };
 
-type Distillery = { id: number; name: string };
+type Distillery = { id: number; name: string; name_i18n?: I18nString; description_i18n?: I18nString };
 type UserBottleState = { bottle_id: number; is_favorite: boolean; is_tried: boolean };
 type FavoriteBottle = Bottle & { distilleryName: string };
 type ToggleActionResponse = UserBottleState & { favorites_count: number; tried_count: number };
@@ -64,6 +68,7 @@ export function FavoritesTab() {
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
   const telegramId = initDataState?.user?.id;
+  const languageCode = initDataState?.user?.language_code;
   const [favoriteBottles, setFavoriteBottles] = useState<FavoriteBottle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
@@ -85,8 +90,8 @@ export function FavoritesTab() {
       setError(null);
       try {
         const [bottlesResponse, distilleriesResponse, statesResponse] = await Promise.all([
-          fetch(`${API_URL}/api/bottles`),
-          fetch(`${API_URL}/api/distilleries`),
+          fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode)),
+          fetch(localizedApiUrl(`${API_URL}/api/distilleries`, languageCode)),
           fetch(`${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`, {
             headers: telegramAuthHeaders(initDataRaw),
           }),
@@ -113,7 +118,7 @@ export function FavoritesTab() {
     };
 
     void loadFavorites();
-  }, [initDataRaw, telegramId]);
+  }, [initDataRaw, languageCode, telegramId]);
 
   const closeBottle = () => {
     setIsPhotoExpanded(false);
