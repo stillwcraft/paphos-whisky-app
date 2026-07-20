@@ -1351,7 +1351,7 @@ def get_bottle_tag_stats(
             models.TastingTag.id.label("id"),
             models.TastingTag.name.label("name"),
             models.TastingTag.icon_url.label("icon_url"),
-            func.count(models.UserReviewTag.id).label("count"),
+            func.count(models.UserReviewTag.review_id).label("count"),
         )
         .join(
             models.UserReviewTag,
@@ -1368,7 +1368,7 @@ def get_bottle_tag_stats(
             models.TastingTag.icon_url,
         )
         .order_by(
-            func.count(models.UserReviewTag.id).desc(),
+            func.count(models.UserReviewTag.review_id).desc(),
             models.TastingTag.name.asc(),
             models.TastingTag.id.asc(),
         )
