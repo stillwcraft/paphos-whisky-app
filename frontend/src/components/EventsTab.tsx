@@ -38,14 +38,12 @@ type ToggleLineupResponse = LineupBottleActionState & {
   tried_count: number;
 };
 
-type ClubEvent = {
+type EventSummary = {
   id: number;
   title: string;
   title_i18n?: I18nString;
   name_i18n?: I18nString;
   date: string;
-  description: string;
-  description_i18n?: I18nString;
   price: number;
   samples_price: number | null;
   image_url: string | null;
@@ -53,7 +51,13 @@ type ClubEvent = {
   show_participants: boolean;
   registered_count: number;
   samples_count: number;
-  bottles?: EventLineupBottle[];
+  bottle_count: number;
+};
+
+type EventDetail = EventSummary & {
+  description: string;
+  description_i18n?: I18nString;
+  bottles: EventLineupBottle[];
 };
 
 type Member = {
@@ -100,13 +104,13 @@ function BottomSheet({
   upcomingEvent,
 }: {
   activeTab: SheetTab;
-  event: ClubEvent;
+  event: EventSummary;
   members: Member[];
   mode: SheetMode;
   onClose: () => void;
   onCancel: () => void;
   onSelectTab: (tab: SheetTab) => void;
-  upcomingEvent: ClubEvent | undefined;
+  upcomingEvent: EventSummary | undefined;
 }) {
   const visibleMembers = members.filter((member) => (
     mode === 'registration' ? member.registered : member.samples
@@ -161,14 +165,6 @@ function BottomSheet({
                 <div className="p-4">
                   <p className="text-xs font-semibold text-amber-400">{formatDate(upcomingEvent.date)}</p>
                   <h3 className="mt-2 text-lg font-semibold text-white">{upcomingEvent.title}</h3>
-                  <div
-                    className="mt-2 text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3"
-                    style={{ overflowY: 'auto', maxHeight: '50vh', paddingRight: '10px' }}
-                  >
-                    <div className="markdown-content">
-                      <ReactMarkdown>{upcomingEvent.description}</ReactMarkdown>
-                    </div>
-                  </div>
                   <p className="mt-4 text-sm font-semibold text-amber-400">€{upcomingEvent.price}</p>
                 </div>
               </article>
@@ -213,15 +209,17 @@ export function EventsTab() {
   const initDataRaw = useSignal(initData.raw);
   const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
-  const [events, setEvents] = useState<ClubEvent[]>([]);
+  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [eventDetails, setEventDetails] = useState<Record<number, EventDetail>>({});
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
-  const [sheetEvent, setSheetEvent] = useState<ClubEvent | null>(null);
+  const [sheetEvent, setSheetEvent] = useState<EventSummary | null>(null);
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
   const [activeTab, setActiveTab] = useState<SheetTab>('main');
   const [members, setMembers] = useState<Member[]>([]);
   const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
+  const [loadingEventDetailId, setLoadingEventDetailId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
   const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
@@ -237,7 +235,7 @@ export function EventsTab() {
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
       }
-      setEvents(await response.json() as ClubEvent[]);
+      setEvents(await response.json() as EventSummary[]);
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -252,6 +250,11 @@ export function EventsTab() {
     void loadEvents();
   }, [loadEvents]);
 
+  useEffect(() => {
+    setEventDetails({});
+    setExpandedEventId(null);
+  }, [languageCode]);
+
   const upcomingEvent = useMemo(() => {
     const now = Date.now();
     return [...events]
@@ -264,6 +267,7 @@ export function EventsTab() {
     ),
     [events],
   );
+  const nearestEvent = upcomingEvent ?? orderedEvents[orderedEvents.length - 1];
   const centeredEventIndex = useMemo(() => {
     const now = new Date();
     const nextEventIndex = orderedEvents.findIndex(
@@ -289,7 +293,48 @@ export function EventsTab() {
     });
   }, [centeredEventIndex, orderedEvents.length]);
 
-  const expandedEvent = orderedEvents.find((event) => event.id === expandedEventId);
+  const expandedEvent = expandedEventId === null ? null : eventDetails[expandedEventId] ?? null;
+
+  const fetchEventDetail = useCallback(async (eventId: number): Promise<EventDetail> => {
+    const response = await fetch(
+      localizedApiUrl(`${API_BASE_URL}/api/events/${eventId}`, languageCode),
+    );
+    if (!response.ok) {
+      throw new Error(await getErrorMessage(response));
+    }
+    const detail = await response.json() as EventDetail;
+    setEventDetails((current) => ({ ...current, [detail.id]: detail }));
+    return detail;
+  }, [languageCode]);
+
+  useEffect(() => {
+    if (!nearestEvent || eventDetails[nearestEvent.id]) {
+      return;
+    }
+
+    void fetchEventDetail(nearestEvent.id).catch(() => {
+      // The timeline stays usable when the optional preview cannot be loaded.
+    });
+  }, [eventDetails, fetchEventDetail, nearestEvent]);
+
+  const openEventDetails = useCallback(async (eventId: number) => {
+    setExpandedEventId(eventId);
+    if (eventDetails[eventId]) {
+      return;
+    }
+
+    setLoadingEventDetailId(eventId);
+    try {
+      await fetchEventDetail(eventId);
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось загрузить детали события.',
+      });
+    } finally {
+      setLoadingEventDetailId((current) => current === eventId ? null : current);
+    }
+  }, [eventDetails, fetchEventDetail]);
 
   useEffect(() => {
     if (!telegramId || !expandedEvent?.bottles?.length) {
@@ -318,7 +363,7 @@ export function EventsTab() {
   }, [expandedEvent, initDataRaw, telegramId]);
 
   const updateParticipation = async (
-    event: ClubEvent,
+    event: EventSummary,
     mode: SheetMode,
     value: boolean,
     openSheet: boolean,
@@ -436,16 +481,21 @@ export function EventsTab() {
           tried_count: result.tried_count,
         }
         : current);
-      setEvents((current) => current.map((event) => ({
-        ...event,
-        bottles: event.bottles?.map((currentBottle) => currentBottle.id === bottle.id
-          ? {
-            ...currentBottle,
-            favorites_count: result.favorites_count,
-            tried_count: result.tried_count,
-          }
-          : currentBottle),
-      })));
+      setEventDetails((current) => Object.fromEntries(
+        Object.entries(current).map(([eventId, event]) => [
+          eventId,
+          {
+            ...event,
+            bottles: event.bottles.map((currentBottle) => currentBottle.id === bottle.id
+              ? {
+                ...currentBottle,
+                favorites_count: result.favorites_count,
+                tried_count: result.tried_count,
+              }
+              : currentBottle),
+          },
+        ]),
+      ));
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -479,26 +529,30 @@ export function EventsTab() {
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
+              const preview = nearestEvent?.id === event.id ? eventDetails[event.id] : undefined;
 
               return (
                 <li
                   key={event.id}
                   data-event-index={index}
-                  onClick={() => setExpandedEventId(event.id)}
+                  onClick={() => void openEventDetails(event.id)}
                   className="h-[64dvh] w-full snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
                 >
                   {event.image_url && <img src={event.image_url} alt="" className="h-40 w-full object-cover" />}
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
                     <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
-                    <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
-                      <div className="markdown-content">
-                        <ReactMarkdown>{event.description}</ReactMarkdown>
+                    {preview?.description && (
+                      <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
+                        <div className="markdown-content">
+                          <ReactMarkdown>{preview.description}</ReactMarkdown>
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="mt-auto flex justify-between gap-3 pt-3 text-sm font-semibold text-amber-400">
                       <span>€{event.price}</span>
                       {event.samples_price !== null && <span>🥃 €{event.samples_price}</span>}
+                      {event.bottle_count > 0 && <span>🥃 {event.bottle_count}</span>}
                     </div>
                     <div className="mt-3 flex gap-2">
                       <button
@@ -537,10 +591,11 @@ export function EventsTab() {
         </div>
       )}
 
-      {expandedEvent && (
+      {expandedEventId !== null && (
         <div className="fixed inset-x-0 bottom-0 top-10 z-40 bg-slate-950/95 p-4 backdrop-blur-sm">
           <style>{'@keyframes event-expand { from { opacity: 0; transform: translateY(2rem); } to { opacity: 1; transform: translateY(0); } }'}</style>
           <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50" style={{ animation: 'event-expand 220ms ease-out' }}>
+            {expandedEvent ? <>
             <div className="relative">
               {expandedEvent.image_url && <img src={expandedEvent.image_url} alt="" className="h-56 w-full object-cover" />}
               <button
@@ -636,6 +691,17 @@ export function EventsTab() {
                 );
               })()}
             </div>
+            </> : <div className="relative flex flex-1 items-center justify-center px-6 text-center text-sm text-slate-400">
+              <button
+                aria-label="Закрыть карточку события"
+                className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
+                onClick={() => setExpandedEventId(null)}
+                type="button"
+              >
+                ✕
+              </button>
+              {loadingEventDetailId === expandedEventId ? 'Loading event details…' : 'Could not load event details.'}
+            </div>}
           </article>
         </div>
       )}

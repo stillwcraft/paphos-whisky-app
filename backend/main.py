@@ -835,7 +835,7 @@ class BottleResponse(BottleCreate):
         from_attributes = True
 
 
-class EventResponse(BaseModel):
+class EventDetailResponse(BaseModel):
     id: int
     title: str
     title_i18n: Optional[I18nString] = None
@@ -854,6 +854,25 @@ class EventResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+EventResponse = EventDetailResponse
+
+
+class EventSummaryResponse(BaseModel):
+    id: int
+    title: str
+    title_i18n: Optional[I18nString] = None
+    name_i18n: Optional[I18nString] = None
+    date: str
+    price: float
+    samples_price: Optional[float] = None
+    image_url: Optional[str] = None
+    has_samples: bool = False
+    show_participants: bool = True
+    registered_count: int
+    samples_count: int
+    bottle_count: int
 
 
 class BottleTagStatResponse(BaseModel):
@@ -1067,6 +1086,32 @@ def build_event_response(
     )
 
 
+def build_event_summary_response(
+    event: models.Event,
+    *,
+    lang: str = "en",
+    registered_count: int = 0,
+    samples_count: int = 0,
+    bottle_count: int = 0,
+) -> EventSummaryResponse:
+    title_i18n = event.title_i18n
+    return EventSummaryResponse(
+        id=event.id,
+        title=get_localized_string(title_i18n, lang, event.title),
+        title_i18n=title_i18n,
+        name_i18n=title_i18n,
+        date=event.date,
+        price=event.price,
+        samples_price=event.samples_price,
+        image_url=event.image_url,
+        has_samples=event.has_samples,
+        show_participants=event.show_participants,
+        registered_count=int(registered_count),
+        samples_count=int(samples_count),
+        bottle_count=int(bottle_count),
+    )
+
+
 def build_tasting_tag_response(
     tag: models.TastingTag,
     *,
@@ -1221,33 +1266,75 @@ def get_event_counts_subquery(db: Session):
     )
 
 
+def get_event_bottle_counts_subquery(db: Session):
+    return (
+        db.query(
+            models.event_bottles_table.c.event_id.label("event_id"),
+            func.count(models.event_bottles_table.c.bottle_id).label("bottle_count"),
+        )
+        .group_by(models.event_bottles_table.c.event_id)
+        .subquery()
+    )
+
+
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
 
-@app.get("/api/events", response_model=List[EventResponse])
+@app.get("/api/events", response_model=List[EventSummaryResponse])
 def get_events(lang: str = "en", db: Session = Depends(get_db)):
     event_counts = get_event_counts_subquery(db)
+    bottle_counts = get_event_bottle_counts_subquery(db)
     events = (
+        db.query(
+            models.Event,
+            func.coalesce(event_counts.c.registered_count, 0).label("registered_count"),
+            func.coalesce(event_counts.c.samples_count, 0).label("samples_count"),
+            func.coalesce(bottle_counts.c.bottle_count, 0).label("bottle_count"),
+        )
+        .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
+        .outerjoin(bottle_counts, models.Event.id == bottle_counts.c.event_id)
+        .all()
+    )
+    return [
+        build_event_summary_response(
+            event,
+            lang=lang,
+            registered_count=registered_count,
+            samples_count=samples_count,
+            bottle_count=bottle_count,
+        )
+        for event, registered_count, samples_count, bottle_count in events
+    ]
+
+
+@app.get("/api/events/{event_id}", response_model=EventDetailResponse)
+def get_event_detail(
+    event_id: int,
+    lang: str = "en",
+    db: Session = Depends(get_db),
+):
+    event_counts = get_event_counts_subquery(db)
+    result = (
         db.query(
             models.Event,
             func.coalesce(event_counts.c.registered_count, 0).label("registered_count"),
             func.coalesce(event_counts.c.samples_count, 0).label("samples_count"),
         )
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
-        .all()
+        .filter(models.Event.id == event_id)
+        .first()
     )
-    if not events:
-        return []
-    bottles_by_event = load_bottles_for_events([e.id for e, _, _ in events], db)
-    return [
-        build_event_response(
-            event,
-            lang=lang,
-            registered_count=registered_count,
-            samples_count=samples_count,
-            bottles=bottles_by_event.get(event.id, []),
-        )
-        for event, registered_count, samples_count in events
-    ]
+    if not result:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event, registered_count, samples_count = result
+    return build_event_response(
+        event,
+        lang=lang,
+        registered_count=registered_count,
+        samples_count=samples_count,
+        bottles=load_event_bottles(event.id, db),
+    )
+
 
 @app.post("/api/events", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 def create_event(

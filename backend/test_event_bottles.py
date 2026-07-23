@@ -8,11 +8,14 @@ from sqlalchemy import text
 from fastapi import HTTPException
 from main import (
     build_event_response,
+    build_event_summary_response,
     create_event,
     delete_bottle,
     delete_event,
     EventCreate,
     EventUpdate,
+    get_event_detail,
+    get_events,
     validate_bottle_ids,
     load_event_bottles,
     load_bottles_for_events,
@@ -208,6 +211,44 @@ class EventBottleTest(unittest.TestCase):
     def test_response_bottles_empty_by_default(self):
         response = build_event_response(self.event, lang="en")
         self.assertEqual(response.bottles, [])
+
+    def test_summary_excludes_descriptions_and_bottles(self):
+        summary = build_event_summary_response(
+            self.event,
+            lang="en",
+            registered_count=2,
+            samples_count=1,
+            bottle_count=3,
+        )
+
+        self.assertEqual(summary.bottle_count, 3)
+        self.assertNotIn("description", summary.model_dump())
+        self.assertNotIn("bottles", summary.model_dump())
+
+    def test_event_list_returns_lightweight_summary_with_bottle_count(self):
+        self.db.execute(
+            models.event_bottles_table.insert(),
+            {"event_id": self.event.id, "bottle_id": self.bottle1.id},
+        )
+        self.db.commit()
+
+        summary = next(event for event in get_events("en", self.db) if event.id == self.event.id)
+
+        self.assertEqual(summary.bottle_count, 1)
+        self.assertNotIn("description", summary.model_dump())
+        self.assertNotIn("bottles", summary.model_dump())
+
+    def test_event_detail_returns_description_and_lineup(self):
+        self.db.execute(
+            models.event_bottles_table.insert(),
+            {"event_id": self.event.id, "bottle_id": self.bottle1.id},
+        )
+        self.db.commit()
+
+        detail = get_event_detail(self.event.id, "en", self.db)
+
+        self.assertEqual(detail.description, "Test event")
+        self.assertEqual([bottle.id for bottle in detail.bottles], [self.bottle1.id])
 
     # --- association table persistence ---
 
