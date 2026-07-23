@@ -267,7 +267,6 @@ export function EventsTab() {
     ),
     [events],
   );
-  const nearestEvent = upcomingEvent ?? orderedEvents[orderedEvents.length - 1];
   const centeredEventIndex = useMemo(() => {
     const now = new Date();
     const nextEventIndex = orderedEvents.findIndex(
@@ -295,9 +294,13 @@ export function EventsTab() {
 
   const expandedEvent = expandedEventId === null ? null : eventDetails[expandedEventId] ?? null;
 
-  const fetchEventDetail = useCallback(async (eventId: number): Promise<EventDetail> => {
+  const fetchEventDetail = useCallback(async (
+    eventId: number,
+    signal?: AbortSignal,
+  ): Promise<EventDetail> => {
     const response = await fetch(
       localizedApiUrl(`${API_BASE_URL}/api/events/${eventId}`, languageCode),
+      { signal },
     );
     if (!response.ok) {
       throw new Error(await getErrorMessage(response));
@@ -308,14 +311,16 @@ export function EventsTab() {
   }, [languageCode]);
 
   useEffect(() => {
-    if (!nearestEvent || eventDetails[nearestEvent.id]) {
+    if (events.length === 0) {
       return;
     }
 
-    void fetchEventDetail(nearestEvent.id).catch(() => {
-      // The timeline stays usable when the optional preview cannot be loaded.
-    });
-  }, [eventDetails, fetchEventDetail, nearestEvent]);
+    const controller = new AbortController();
+    void Promise.allSettled(
+      events.map((event) => fetchEventDetail(event.id, controller.signal)),
+    );
+    return () => controller.abort();
+  }, [events, fetchEventDetail]);
 
   const openEventDetails = useCallback(async (eventId: number) => {
     setExpandedEventId(eventId);
@@ -529,7 +534,7 @@ export function EventsTab() {
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
-              const preview = nearestEvent?.id === event.id ? eventDetails[event.id] : undefined;
+              const detail = eventDetails[event.id];
 
               return (
                 <li
@@ -542,17 +547,16 @@ export function EventsTab() {
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
                     <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
                     <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
-                    {preview?.description && (
+                    {detail?.description && (
                       <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
                         <div className="markdown-content">
-                          <ReactMarkdown>{preview.description}</ReactMarkdown>
+                          <ReactMarkdown>{detail.description}</ReactMarkdown>
                         </div>
                       </div>
                     )}
                     <div className="mt-auto flex justify-between gap-3 pt-3 text-sm font-semibold text-amber-400">
                       <span>€{event.price}</span>
                       {event.samples_price !== null && <span>🥃 €{event.samples_price}</span>}
-                      {event.bottle_count > 0 && <span>🥃 {event.bottle_count}</span>}
                     </div>
                     <div className="mt-3 flex gap-2">
                       <button
