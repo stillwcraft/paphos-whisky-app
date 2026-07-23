@@ -50,6 +50,7 @@ type ClubEvent = {
   samples_price: number | null;
   image_url: string | null;
   has_samples: boolean;
+  show_participants: boolean;
   registered_count: number;
   samples_count: number;
   bottles?: EventLineupBottle[];
@@ -456,8 +457,8 @@ export function EventsTab() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-md pb-5 pt-8">
-      <header className="mb-8 px-5 text-center">
+    <section className="mx-auto w-full max-w-md pb-6 pt-4">
+      <header className="mb-4 text-center">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
         <h1 className="mt-2 text-2xl font-semibold text-white">Events</h1>
       </header>
@@ -471,10 +472,10 @@ export function EventsTab() {
       ) : (
         <div
           ref={timelineRef}
-          className="h-[calc(100dvh-14rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+          className="h-[calc(100dvh-10rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
         >
-          <ol className="h-full space-y-4 px-5">
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '8vh' }} />
+          <ol className="h-full space-y-4">
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '2vh' }} />
             {orderedEvents.map((event, index) => {
               const isPast = new Date(event.date).valueOf() < new Date().valueOf();
               const isDisabled = isPast || isSubmitting === event.id;
@@ -484,7 +485,7 @@ export function EventsTab() {
                   key={event.id}
                   data-event-index={index}
                   onClick={() => setExpandedEventId(event.id)}
-                  className="h-[64dvh] snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
+                  className="h-[64dvh] w-full snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
                 >
                   {event.image_url && <img src={event.image_url} alt="" className="h-40 w-full object-cover" />}
                   <article className="flex h-[calc(100%-10rem)] flex-col p-5">
@@ -496,8 +497,8 @@ export function EventsTab() {
                       </div>
                     </div>
                     <div className="mt-auto flex justify-between gap-3 pt-3 text-sm font-semibold text-amber-400">
-                      <span>Price: {event.price} EUR</span>
-                      {event.samples_price !== null && <span>Samples: {event.samples_price} EUR</span>}
+                      <span>€{event.price}</span>
+                      {event.samples_price !== null && <span>🥃 €{event.samples_price}</span>}
                     </div>
                     <div className="mt-3 flex gap-2">
                       <button
@@ -510,7 +511,7 @@ export function EventsTab() {
                         className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Register
-                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{event.registered_count}</span>
+                        {event.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{event.registered_count}</span>}
                       </button>
                       {event.has_samples && (
                         <button
@@ -523,7 +524,7 @@ export function EventsTab() {
                           className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           Samples
-                          <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{event.samples_count}</span>
+                          {event.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{event.samples_count}</span>}
                         </button>
                       )}
                     </div>
@@ -531,7 +532,7 @@ export function EventsTab() {
                 </li>
               );
             })}
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '8vh' }} />
+            <li aria-hidden="true" className="pointer-events-none" style={{ height: '2vh' }} />
           </ol>
         </div>
       )}
@@ -600,8 +601,8 @@ export function EventsTab() {
               )}
 
               <div className="mt-6 flex justify-between gap-3 text-lg font-semibold text-amber-400">
-                <span>Price: {expandedEvent.price} EUR</span>
-                {expandedEvent.samples_price !== null && <span>Samples: {expandedEvent.samples_price} EUR</span>}
+                <span>€{expandedEvent.price}</span>
+                {expandedEvent.samples_price !== null && <span>🥃 €{expandedEvent.samples_price}</span>}
               </div>
             </div>
             <div className="border-t border-white/10 bg-slate-900 p-4">
@@ -618,7 +619,7 @@ export function EventsTab() {
                       className="flex-1 rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Register
-                      <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{expandedEvent.registered_count}</span>
+                      {expandedEvent.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{expandedEvent.registered_count}</span>}
                     </button>
                     {expandedEvent.has_samples && (
                       <button
@@ -628,7 +629,7 @@ export function EventsTab() {
                         className="flex-1 rounded-xl bg-slate-600 px-4 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Samples
-                        <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{expandedEvent.samples_count}</span>
+                        {expandedEvent.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{expandedEvent.samples_count}</span>}
                       </button>
                     )}
                   </div>

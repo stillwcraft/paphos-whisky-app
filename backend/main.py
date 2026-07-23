@@ -89,6 +89,13 @@ def ensure_event_schema() -> None:
                     "ADD COLUMN has_samples BOOLEAN NOT NULL DEFAULT FALSE"
                 )
             )
+        if "show_participants" not in event_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE events "
+                    "ADD COLUMN show_participants BOOLEAN NOT NULL DEFAULT TRUE"
+                )
+            )
         if "samples_price" not in event_columns:
             samples_price_type = (
                 "DOUBLE PRECISION"
@@ -761,7 +768,12 @@ class EventCreate(BaseModel):
     samples_price: Optional[float] = None
     image_url: Optional[str] = None
     has_samples: bool = False
+    show_participants: bool = True
     bottle_ids: List[int] = Field(default_factory=list)
+
+
+class EventUpdate(EventCreate):
+    pass
 
 class DistilleryCreate(BaseModel):
     name: str
@@ -835,6 +847,7 @@ class EventResponse(BaseModel):
     samples_price: Optional[float] = None
     image_url: Optional[str] = None
     has_samples: bool = False
+    show_participants: bool = True
     registered_count: int
     samples_count: int
     bottles: List[BottleResponse] = Field(default_factory=list)
@@ -1047,6 +1060,7 @@ def build_event_response(
         samples_price=event.samples_price,
         image_url=event.image_url,
         has_samples=event.has_samples,
+        show_participants=event.show_participants,
         registered_count=int(registered_count),
         samples_count=int(samples_count),
         bottles=[build_bottle_response(b, lang=lang) for b in (bottles or [])],
@@ -1259,7 +1273,7 @@ def create_event(
 @app.put("/api/events/{event_id}", response_model=EventResponse)
 def update_event(
     event_id: int,
-    event_data: EventCreate,
+    event_data: EventUpdate,
     db: Session = Depends(get_db),
     _: TelegramAuthContext = Depends(require_admin),
 ):

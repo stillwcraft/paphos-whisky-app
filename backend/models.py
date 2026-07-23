@@ -28,6 +28,7 @@ class Event(Base):
     samples_price = Column(Float, nullable=True)
     image_url = Column(String, nullable=True)
     has_samples = Column(Boolean, default=False, nullable=False)
+    show_participants = Column(Boolean, default=True, nullable=False)
     bottles = relationship(
         "Bottle",
         secondary=event_bottles_table,

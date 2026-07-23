@@ -12,6 +12,7 @@ from main import (
     delete_bottle,
     delete_event,
     EventCreate,
+    EventUpdate,
     validate_bottle_ids,
     load_event_bottles,
     load_bottles_for_events,
@@ -193,6 +194,12 @@ class EventBottleTest(unittest.TestCase):
         self.assertEqual(response.bottles[0].favorites_count, 2)
         self.assertEqual(response.bottles[0].tried_count, 1)
 
+    def test_response_includes_participant_badge_visibility(self):
+        self.event.show_participants = False
+        response = build_event_response(self.event, lang="en")
+
+        self.assertFalse(response.show_participants)
+
     def test_response_has_bottles_not_bottle_ids(self):
         response = build_event_response(self.event, lang="en", bottles=[self.bottle1])
         self.assertTrue(hasattr(response, "bottles"))
@@ -252,7 +259,7 @@ class EventBottleTest(unittest.TestCase):
 
         updated = update_event(
             self.event.id,
-            EventCreate(
+            EventUpdate(
                 title=self.event.title,
                 date=self.event.date,
                 description=self.event.description,
