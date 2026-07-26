@@ -234,7 +234,15 @@ export function AdminTab() {
       if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
       if (!tastingTagsResponse.ok) throw new Error(await getError(tastingTagsResponse));
       if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
-      setEvents(await eventsResponse.json() as EventItem[]);
+      const eventSummaries = await eventsResponse.json() as Array<Pick<EventItem, 'id'>>;
+      const eventDetailResponses = await Promise.all(
+        eventSummaries.map((event) => fetch(`${API_URL}/api/events/${event.id}?lang=en`)),
+      );
+      const failedEventDetail = eventDetailResponses.find((response) => !response.ok);
+      if (failedEventDetail) throw new Error(await getError(failedEventDetail));
+      setEvents(await Promise.all(
+        eventDetailResponses.map((response) => response.json() as Promise<EventItem>),
+      ));
       setDistilleries(await distilleriesResponse.json() as Distillery[]);
       setTastingTags(await tastingTagsResponse.json() as TastingTag[]);
       setBottles(await bottlesResponse.json() as Bottle[]);
