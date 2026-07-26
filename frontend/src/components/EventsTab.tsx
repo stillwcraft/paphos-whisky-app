@@ -341,6 +341,21 @@ export function EventsTab() {
     }
   }, [eventDetails, fetchEventDetail]);
 
+  const refreshEventCounts = useCallback(async (eventId: number) => {
+    try {
+      const detail = await fetchEventDetail(eventId);
+      setEvents((current) => current.map((event) => event.id === eventId
+        ? {
+          ...event,
+          registered_count: detail.registered_count,
+          samples_count: detail.samples_count,
+        }
+        : event));
+    } catch {
+      // Counts remain unchanged until the next list refresh if the background request fails.
+    }
+  }, [fetchEventDetail]);
+
   useEffect(() => {
     if (!telegramId || !expandedEvent?.bottles?.length) {
       setLineupUserStates({});
@@ -409,6 +424,7 @@ export function EventsTab() {
         setMembers([]);
       } else {
         setSheetEvent(null);
+        void refreshEventCounts(event.id);
       }
     } catch (error) {
       setFeedback({
@@ -449,6 +465,9 @@ export function EventsTab() {
   };
 
   const closeSheet = () => {
+    if (sheetEvent) {
+      void refreshEventCounts(sheetEvent.id);
+    }
     setSheetEvent(null);
     setActiveTab('main');
     setMembers([]);
