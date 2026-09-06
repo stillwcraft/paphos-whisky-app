@@ -117,11 +117,13 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedBottleId, setSelectedBottleId] = useState<number | null>(null);
+  const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const activeScreen = t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
+  const clearSelectedDistillery = useCallback(() => setSelectedDistilleryId(null), []);
 
   useEffect(() => {
     setIsAdmin(
@@ -150,6 +152,13 @@ export function App() {
       return;
     }
 
+    const distilleryMatch = /^distillery_(\d+)$/.exec(startParam);
+    if (distilleryMatch) {
+      setActiveTab('distilleries');
+      setSelectedDistilleryId(Number(distilleryMatch[1]));
+      return;
+    }
+
     const matchingTab = tabs.find((tab) => tab.id === startParam);
     if (matchingTab) {
       setActiveTab(matchingTab.id);
@@ -168,6 +177,8 @@ export function App() {
             <DistilleriesTab
               selectedBottleId={selectedBottleId}
               onSelectedBottleHandled={clearSelectedBottle}
+              selectedDistilleryId={selectedDistilleryId}
+              onSelectedDistilleryHandled={clearSelectedDistillery}
             />
           ) : activeTab === 'bottles' ? (
             <BottlesSamplesTab />

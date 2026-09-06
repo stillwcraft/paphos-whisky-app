@@ -135,9 +135,13 @@ async function loadCatalog(languageCode: string | undefined): Promise<Distillery
 export function DistilleriesTab({
   selectedBottleId = null,
   onSelectedBottleHandled,
+  selectedDistilleryId = null,
+  onSelectedDistilleryHandled,
 }: {
   selectedBottleId?: number | null;
   onSelectedBottleHandled?: () => void;
+  selectedDistilleryId?: number | null;
+  onSelectedDistilleryHandled?: () => void;
 }) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
@@ -169,6 +173,23 @@ export function DistilleriesTab({
       : null;
 
   useEffect(() => {
+    if (selectedDistilleryId === null || catalogQuery.isLoading) {
+      return;
+    }
+
+    const distillery = distilleries.find((item) => item.id === selectedDistilleryId);
+    if (distillery) {
+      setSelectedDistillery(distillery);
+    }
+    onSelectedDistilleryHandled?.();
+  }, [
+    catalogQuery.isLoading,
+    distilleries,
+    onSelectedDistilleryHandled,
+    selectedDistilleryId,
+  ]);
+
+  useEffect(() => {
     if (selectedBottleId === null || catalogQuery.isLoading) {
       return;
     }
@@ -180,11 +201,47 @@ export function DistilleriesTab({
       setIsPhotoExpanded(false);
       setSelectedBottle(bottle);
       setIsReviewOpen(false);
+      onSelectedBottleHandled?.();
+      return;
     }
-    onSelectedBottleHandled?.();
+
+    let isCancelled = false;
+    const loadBottle = async () => {
+      try {
+        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
+        if (!response.ok) {
+          throw new Error(await errorMessage(response));
+        }
+        const loadedBottle = (await response.json() as Bottle[]).find(
+          (item) => item.id === selectedBottleId,
+        );
+        if (!loadedBottle) {
+          throw new Error('Bottle not found.');
+        }
+        if (!isCancelled) {
+          setIsPhotoExpanded(false);
+          setSelectedBottle(loadedBottle);
+          setIsReviewOpen(false);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setFeedback(error instanceof Error ? error.message : 'Could not load bottle.');
+        }
+      } finally {
+        if (!isCancelled) {
+          onSelectedBottleHandled?.();
+        }
+      }
+    };
+    void loadBottle();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     catalogQuery.isLoading,
     distilleries,
+    languageCode,
     onSelectedBottleHandled,
     selectedBottleId,
   ]);

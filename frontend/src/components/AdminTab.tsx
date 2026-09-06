@@ -3,6 +3,7 @@ import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const DEEP_LINK_BASE_URL = 'https://t.me/CyprusWhiskyClubBot/NoMoreDram';
 type Label = 'bottle' | 'samples' | 'event';
 type Locale = 'en' | 'ru' | 'uk';
 type I18nString = Record<Locale, string>;
@@ -327,6 +328,20 @@ export function AdminTab() {
     const form = bottleFormFromItem(bottle);
     if (bottle.distillery_id === null) { setTabBottleForm(form); setEditingTabBottleId(bottle.id); } else { setCatalogBottleForm(form); setCatalogDistilleryId(bottle.distillery_id); setEditingCatalogBottleId(bottle.id); setOpenBottleLists((current) => current.includes(bottle.distillery_id!) ? current : [...current, bottle.distillery_id!]); }
   };
+  const copyDeepLink = async (kind: 'event' | 'bottle' | 'distillery', id: number) => {
+    const link = `${DEEP_LINK_BASE_URL}?startapp=${kind}_${id}`;
+    if (!navigator.clipboard) {
+      setMessage('Clipboard access is unavailable.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setMessage('Deep link copied.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not copy deep link.');
+    }
+  };
 
   return <div style={pageStyle}>
     <h2 style={{ color: '#f59e0b', marginTop: 0 }}>⚙️ Admin</h2>
@@ -371,7 +386,7 @@ export function AdminTab() {
         <label style={labelStyle}><input checked={eventForm.show_participants} type="checkbox" onChange={(event) => setEventForm({ ...eventForm, show_participants: event.target.checked })} /> Show participants / samples count badge</label>
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingEventId === null ? 'Create Event' : 'Save Changes'}</button>{editingEventId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetEvent}>Cancel</button>}</div>
       </form>
-      <div style={listStyle}>{events.map((item) => <div key={item.id} style={rowStyle}><span>{item.title}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingEventId(item.id); setEventForm(eventFormFromItem(item)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'event', item })}>🗑️ Delete</button></span></div>)}</div>
+      <div style={listStyle}>{events.map((item) => <div key={item.id} style={rowStyle}><span>{item.title}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('event', item.id)}>🔗 Copy Link</button><button style={smallButtonStyle} type="button" onClick={() => { setEditingEventId(item.id); setEventForm(eventFormFromItem(item)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'event', item })}>🗑️ Delete</button></span></div>)}</div>
     </Accordion>
     <Accordion title="📁 Manage Distilleries">
       <form onSubmit={saveDistillery} style={formStyle}>
@@ -384,10 +399,10 @@ export function AdminTab() {
         const isOpen = openBottleLists.includes(distillery.id);
         const distilleryBottles = bottles.filter((bottle) => bottle.distillery_id === distillery.id);
         const editingHere = catalogDistilleryId === distillery.id;
-        return <div key={distillery.id} style={cardStyle}><div style={rowStyle}><strong>{distillery.name}</strong><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingDistilleryId(distillery.id); setDistilleryForm(distilleryFormFromItem(distillery)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'distillery', item: distillery })}>🗑️ Delete</button></span></div>
+        return <div key={distillery.id} style={cardStyle}><div style={rowStyle}><strong>{distillery.name}</strong><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('distillery', distillery.id)}>🔗 Copy Link</button><button style={smallButtonStyle} type="button" onClick={() => { setEditingDistilleryId(distillery.id); setDistilleryForm(distilleryFormFromItem(distillery)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'distillery', item: distillery })}>🗑️ Delete</button></span></div>
           <button style={spoilerButtonStyle} type="button" onClick={() => setOpenBottleLists((current) => current.includes(distillery.id) ? current.filter((id) => id !== distillery.id) : [...current, distillery.id])}>🥃 {isOpen ? 'Hide Bottles' : 'Show Bottles'}</button>
           {isOpen && <div style={{ marginTop: 10 }}>{editingHere ? <form onSubmit={(event) => void saveBottle(event, catalogBottleForm, distillery.id, editingCatalogBottleId, resetCatalogBottle)}><BottleFields form={catalogBottleForm} setForm={setCatalogBottleForm} includeLabel={false} /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingCatalogBottleId === null ? 'Add Bottle' : 'Save Changes'}</button><button style={secondaryButtonStyle} type="button" onClick={resetCatalogBottle}>Cancel</button></div></form> : <button style={smallButtonStyle} type="button" onClick={() => { setCatalogDistilleryId(distillery.id); setCatalogBottleForm({ ...emptyBottle(), label: 'bottle' }); }}>Add Bottle</button>}
-            <div style={listStyle}>{distilleryBottles.map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
+            <div style={listStyle}>{distilleryBottles.map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗 Copy Link</button><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
           </div>}</div>;
       })}</div>
     </Accordion>
@@ -402,7 +417,7 @@ export function AdminTab() {
     </Accordion>
     <Accordion title="🥃 Manage Bottles & Samples Tab">
       <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
-      <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
+      <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗 Copy Link</button><button style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️ Remove</button></span></div>)}</div>
     </Accordion>
     {deletion && <div style={modalOverlayStyle} role="presentation"><div aria-modal="true" role="dialog" style={modalStyle}><h3>Confirm deletion</h3><p>Delete {deletion.kind === 'event' ? deletion.item.title : deletion.item.name}?</p><div style={buttonRow}><button style={secondaryButtonStyle} type="button" onClick={() => setDeletion(null)}>Cancel</button><button style={dangerButtonStyle} type="button" onClick={() => void remove()}>Delete</button></div></div></div>}
   </div>;
