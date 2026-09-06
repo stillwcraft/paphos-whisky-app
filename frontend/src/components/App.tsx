@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType, type SVGProps } from 'react';
+import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 
@@ -115,9 +115,13 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
 export function App() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>('events');
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [selectedBottleId, setSelectedBottleId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const activeScreen = t(`tabs.${activeTab}`);
+  const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
+  const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
 
   useEffect(() => {
     setIsAdmin(
@@ -126,13 +130,45 @@ export function App() {
     );
   }, [initDataState]);
 
+  useEffect(() => {
+    const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    if (!startParam) {
+      return;
+    }
+
+    const eventMatch = /^event_(\d+)$/.exec(startParam);
+    if (eventMatch) {
+      setActiveTab('events');
+      setSelectedEventId(Number(eventMatch[1]));
+      return;
+    }
+
+    const bottleMatch = /^bottle_(\d+)$/.exec(startParam);
+    if (bottleMatch) {
+      setActiveTab('distilleries');
+      setSelectedBottleId(Number(bottleMatch[1]));
+      return;
+    }
+
+    const matchingTab = tabs.find((tab) => tab.id === startParam);
+    if (matchingTab) {
+      setActiveTab(matchingTab.id);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-900 text-white">
       <main className="min-h-screen px-6 pb-28">
           {activeTab === 'events' ? (
-            <EventsTab />
+            <EventsTab
+              selectedEventId={selectedEventId}
+              onSelectedEventHandled={clearSelectedEvent}
+            />
           ) : activeTab === 'distilleries' ? (
-            <DistilleriesTab />
+            <DistilleriesTab
+              selectedBottleId={selectedBottleId}
+              onSelectedBottleHandled={clearSelectedBottle}
+            />
           ) : activeTab === 'bottles' ? (
             <BottlesSamplesTab />
           ) : activeTab === 'favorites' ? (

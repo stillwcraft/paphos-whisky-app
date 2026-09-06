@@ -30,6 +30,7 @@ declare global {
     Telegram?: {
       WebApp?: {
         initDataUnsafe?: {
+          start_param?: string;
           user?: TelegramUser;
         };
       };

@@ -203,7 +203,13 @@ function BottomSheet({
   );
 }
 
-export function EventsTab() {
+export function EventsTab({
+  selectedEventId = null,
+  onSelectedEventHandled,
+}: {
+  selectedEventId?: number | null;
+  onSelectedEventHandled?: () => void;
+}) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
@@ -340,6 +346,15 @@ export function EventsTab() {
       setLoadingEventDetailId((current) => current === eventId ? null : current);
     }
   }, [eventDetails, fetchEventDetail]);
+
+  useEffect(() => {
+    if (selectedEventId === null) {
+      return;
+    }
+
+    void openEventDetails(selectedEventId);
+    onSelectedEventHandled?.();
+  }, [onSelectedEventHandled, openEventDetails, selectedEventId]);
 
   const refreshEventCounts = useCallback(async (eventId: number) => {
     try {

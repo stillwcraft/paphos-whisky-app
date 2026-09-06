@@ -132,7 +132,13 @@ async function loadCatalog(languageCode: string | undefined): Promise<Distillery
   }));
 }
 
-export function DistilleriesTab() {
+export function DistilleriesTab({
+  selectedBottleId = null,
+  onSelectedBottleHandled,
+}: {
+  selectedBottleId?: number | null;
+  onSelectedBottleHandled?: () => void;
+}) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
@@ -161,6 +167,27 @@ export function DistilleriesTab() {
     : catalogQuery.error
       ? 'Could not load the catalogue.'
       : null;
+
+  useEffect(() => {
+    if (selectedBottleId === null || catalogQuery.isLoading) {
+      return;
+    }
+
+    const bottle = distilleries
+      .flatMap((distillery) => distillery.bottles)
+      .find((item) => item.id === selectedBottleId);
+    if (bottle) {
+      setIsPhotoExpanded(false);
+      setSelectedBottle(bottle);
+      setIsReviewOpen(false);
+    }
+    onSelectedBottleHandled?.();
+  }, [
+    catalogQuery.isLoading,
+    distilleries,
+    onSelectedBottleHandled,
+    selectedBottleId,
+  ]);
 
   useEffect(() => {
     const loadUserStates = async () => {
