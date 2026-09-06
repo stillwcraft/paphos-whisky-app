@@ -82,6 +82,11 @@ def rebuild_sqlite_bottles_table(
 def ensure_event_schema() -> None:
     event_columns = get_table_columns(engine, "events")
     with engine.begin() as connection:
+        for column_name in ("image_url_left", "image_url_right"):
+            if column_name not in event_columns:
+                connection.execute(
+                    text(f"ALTER TABLE events ADD COLUMN {column_name} VARCHAR")
+                )
         if "has_samples" not in event_columns:
             connection.execute(
                 text(
@@ -766,7 +771,9 @@ class EventCreate(BaseModel):
     description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None
+    image_url_left: Optional[str] = None
     image_url: Optional[str] = None
+    image_url_right: Optional[str] = None
     has_samples: bool = False
     show_participants: bool = True
     bottle_ids: List[int] = Field(default_factory=list)
@@ -845,7 +852,9 @@ class EventDetailResponse(BaseModel):
     description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None
+    image_url_left: Optional[str] = None
     image_url: Optional[str] = None
+    image_url_right: Optional[str] = None
     has_samples: bool = False
     show_participants: bool = True
     registered_count: int
@@ -1077,7 +1086,9 @@ def build_event_response(
         description_i18n=event.description_i18n,
         price=event.price,
         samples_price=event.samples_price,
+        image_url_left=event.image_url_left,
         image_url=event.image_url,
+        image_url_right=event.image_url_right,
         has_samples=event.has_samples,
         show_participants=event.show_participants,
         registered_count=int(registered_count),
@@ -1103,7 +1114,9 @@ def build_event_summary_response(
         date=event.date,
         price=event.price,
         samples_price=event.samples_price,
+        image_url_left=event.image_url_left,
         image_url=event.image_url,
+        image_url_right=event.image_url_right,
         has_samples=event.has_samples,
         show_participants=event.show_participants,
         registered_count=int(registered_count),

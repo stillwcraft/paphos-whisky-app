@@ -90,7 +90,7 @@ export function ProfileTab() {
   }, [initDataRaw, userId]);
 
   return (
-    <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center py-8">
+    <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center pb-8 pt-[env(safe-area-inset-top)]">
       <article className="w-full rounded-3xl border border-amber-200/15 bg-slate-900/70 p-6 text-center shadow-2xl shadow-black/30 backdrop-blur">
         <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-amber-400 text-amber-400 shadow-lg shadow-amber-400/20">
           {photoUrl ? (

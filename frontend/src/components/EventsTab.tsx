@@ -46,7 +46,9 @@ type EventSummary = {
   date: string;
   price: number;
   samples_price: number | null;
+  image_url_left: string | null;
   image_url: string | null;
+  image_url_right: string | null;
   has_samples: boolean;
   show_participants: boolean;
   registered_count: number;
@@ -91,6 +93,80 @@ function formatDate(date: string) {
       dateStyle: 'long',
       timeStyle: 'short',
     }).format(parsedDate);
+}
+
+function EventGalleryCard({
+  event,
+  onOpen,
+}: {
+  event: EventSummary;
+  onOpen: () => void;
+}) {
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(1);
+  const imageUrls = [
+    event.image_url_left ?? event.image_url,
+    event.image_url,
+    event.image_url_right ?? event.image_url,
+  ];
+
+  useEffect(() => {
+    const gallery = galleryRef.current;
+    if (!gallery) {
+      return;
+    }
+
+    const scrollToCenter = () => gallery.scrollTo({
+      left: gallery.clientWidth,
+      behavior: 'auto',
+    });
+    const frame = requestAnimationFrame(scrollToCenter);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  const updateActiveImage = () => {
+    const gallery = galleryRef.current;
+    if (!gallery || gallery.clientWidth === 0) {
+      return;
+    }
+    setActiveImageIndex(Math.min(2, Math.max(0, Math.round(gallery.scrollLeft / gallery.clientWidth))));
+  };
+
+  return (
+    <article className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
+      <style>{'.event-gallery::-webkit-scrollbar { display: none; }'}</style>
+      <div
+        ref={galleryRef}
+        className="event-gallery flex h-full snap-x snap-mandatory overflow-x-auto"
+        onScroll={updateActiveImage}
+        style={{ scrollbarWidth: 'none' }}
+      >
+        {imageUrls.map((imageUrl, index) => (
+          <button
+            key={index}
+            aria-label={`Open ${event.title}`}
+            className="min-w-full snap-center bg-slate-800"
+            onClick={onOpen}
+            type="button"
+          >
+            {imageUrl ? (
+              <img alt="" className="h-full w-full object-cover" src={imageUrl} />
+            ) : (
+              <div aria-hidden="true" className="h-full w-full bg-gradient-to-br from-amber-700/70 to-slate-950" />
+            )}
+          </button>
+        ))}
+      </div>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center gap-2">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className={`h-2 w-2 rounded-full ${activeImageIndex === index ? 'bg-amber-400' : 'bg-white/50'}`}
+          />
+        ))}
+      </div>
+    </article>
+  );
 }
 
 function BottomSheet({
@@ -546,12 +622,7 @@ export function EventsTab({
   };
 
   return (
-    <section className="mx-auto w-full max-w-md pb-6 pt-4">
-      <header className="mb-4 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">Events</h1>
-      </header>
-
+    <section className="mx-auto w-full max-w-md pb-6 pt-[env(safe-area-inset-top)]">
       {feedback && <p className="mx-5 mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{feedback.message}</p>}
 
       {isLoading ? (
@@ -561,70 +632,14 @@ export function EventsTab({
       ) : (
         <div
           ref={timelineRef}
-          className="h-[calc(100dvh-10rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+          className="h-[calc(100dvh-6rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
         >
           <ol className="h-full space-y-4">
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '2vh' }} />
-            {orderedEvents.map((event, index) => {
-              const isPast = new Date(event.date).valueOf() < new Date().valueOf();
-              const isDisabled = isPast || isSubmitting === event.id;
-              const detail = eventDetails[event.id];
-
-              return (
-                <li
-                  key={event.id}
-                  data-event-index={index}
-                  onClick={() => void openEventDetails(event.id)}
-                  className="h-[64dvh] w-full snap-center cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-xl shadow-black/20"
-                >
-                  {event.image_url && <img src={event.image_url} alt="" className="h-40 w-full object-cover" />}
-                  <article className="flex h-[calc(100%-10rem)] flex-col p-5">
-                    <p className="text-xs font-semibold text-amber-400">{formatDate(event.date)}</p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">{event.title}</h2>
-                    {detail?.description && (
-                      <div className="mt-3 max-h-48 overflow-hidden text-sm leading-6 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-3 [&_strong]:font-semibold [&_ul]:my-3">
-                        <div className="markdown-content">
-                          <ReactMarkdown>{detail.description}</ReactMarkdown>
-                        </div>
-                      </div>
-                    )}
-                    <div className="mt-auto flex justify-between gap-3 pt-3 text-sm font-semibold text-amber-400">
-                      <span>€{event.price}</span>
-                      {event.samples_price !== null && <span>🥃 €{event.samples_price}</span>}
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={(clickEvent) => {
-                          clickEvent.stopPropagation();
-                          void updateParticipation(event, 'registration', true, true);
-                        }}
-                        className="flex-1 rounded-lg bg-amber-400 px-3 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Register
-                        {event.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-slate-950">{event.registered_count}</span>}
-                      </button>
-                      {event.has_samples && (
-                        <button
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={(clickEvent) => {
-                            clickEvent.stopPropagation();
-                            void updateParticipation(event, 'samples', true, true);
-                          }}
-                          className="flex-1 rounded-lg bg-slate-600 px-3 py-2.5 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-500 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          Samples
-                          {event.show_participants && <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-red-200 px-1 text-[11px] font-bold text-red-950">{event.samples_count}</span>}
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                </li>
-              );
-            })}
-            <li aria-hidden="true" className="pointer-events-none" style={{ height: '2vh' }} />
+            {orderedEvents.map((event, index) => (
+              <li key={event.id} data-event-index={index}>
+                <EventGalleryCard event={event} onOpen={() => void openEventDetails(event.id)} />
+              </li>
+            ))}
           </ol>
         </div>
       )}

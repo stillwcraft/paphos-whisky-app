@@ -26,7 +26,9 @@ class Event(Base):
     description_i18n = Column(I18N_JSON, nullable=True)
     price = Column(Float)
     samples_price = Column(Float, nullable=True)
+    image_url_left = Column(String, nullable=True)
     image_url = Column(String, nullable=True)
+    image_url_right = Column(String, nullable=True)
     has_samples = Column(Boolean, default=False, nullable=False)
     show_participants = Column(Boolean, default=True, nullable=False)
     bottles = relationship(

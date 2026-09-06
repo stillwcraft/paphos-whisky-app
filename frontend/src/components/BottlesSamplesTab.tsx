@@ -79,11 +79,7 @@ export function BottlesSamplesTab() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-md pt-8">
-      <header className="mb-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.bottles')}</h1>
-      </header>
+    <section className="mx-auto w-full max-w-md pt-[env(safe-area-inset-top)]">
       {isLoading ? (
         <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
       ) : error ? (

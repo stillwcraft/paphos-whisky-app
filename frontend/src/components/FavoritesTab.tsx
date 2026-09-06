@@ -176,11 +176,7 @@ export function FavoritesTab() {
   if (error && favoriteBottles.length === 0) return <p className="pt-12 text-center text-sm text-red-300">{error}</p>;
 
   return (
-    <section className="mx-auto w-full max-w-md pt-8">
-      <header className="mb-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.favorites')}</h1>
-      </header>
+    <section className="mx-auto w-full max-w-md pt-[env(safe-area-inset-top)]">
       {error && <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{error}</p>}
       {favoriteBottles.length === 0 ? (
         <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center text-center">

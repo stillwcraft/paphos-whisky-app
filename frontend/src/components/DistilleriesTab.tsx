@@ -335,12 +335,7 @@ export function DistilleriesTab({
   };
 
   return (
-    <section className="mx-auto w-full max-w-md pb-5 pt-8">
-      <header className="mb-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">Whisky Club</p>
-        <h1 className="mt-2 text-2xl font-semibold text-white">{t('tabs.distilleries')}</h1>
-      </header>
-
+    <section className="mx-auto w-full max-w-md pb-5 pt-[env(safe-area-inset-top)]">
       {(feedback || catalogError) && (
         <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">
           {feedback || catalogError}

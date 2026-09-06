@@ -12,7 +12,8 @@ type I18nResponse = Partial<I18nString>;
 type EventItem = {
   id: number; title: string; title_i18n?: I18nResponse; name_i18n?: I18nResponse;
   date: string; description: string; description_i18n?: I18nResponse; price: number;
-  samples_price: number | null; image_url: string | null; has_samples: boolean;
+  samples_price: number | null; image_url_left: string | null; image_url: string | null;
+  image_url_right: string | null; has_samples: boolean;
   show_participants: boolean; registered_count: number; samples_count: number;
   bottles?: Array<Pick<Bottle, 'id'>>;
 };
@@ -33,7 +34,8 @@ type Bottle = {
 type EventForm = {
   title: string; title_i18n: I18nString; date: string; description: string;
   description_i18n: I18nString; price: number; samples_price: number | null;
-  image_url: string | null; has_samples: boolean; show_participants: boolean; bottle_ids: number[];
+  image_url_left: string | null; image_url: string | null; image_url_right: string | null;
+  has_samples: boolean; show_participants: boolean; bottle_ids: number[];
 };
 type DistilleryForm = {
   name: string; name_i18n: I18nString; image_url: string | null;
@@ -62,7 +64,8 @@ function toI18n(translations: I18nResponse | undefined, fallback: string | null 
 
 const emptyEvent = (): EventForm => ({
   title: '', title_i18n: emptyI18n(), date: '', description: '',
-  description_i18n: emptyI18n(), price: 0, samples_price: null, image_url: null,
+  description_i18n: emptyI18n(), price: 0, samples_price: null, image_url_left: null,
+  image_url: null, image_url_right: null,
   has_samples: false, show_participants: true, bottle_ids: [],
 });
 const emptyDistillery = (): DistilleryForm => ({
@@ -83,7 +86,9 @@ function eventFormFromItem(item: EventItem): EventForm {
     title: item.title, title_i18n: toI18n(item.title_i18n ?? item.name_i18n, item.title),
     date: item.date, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description), price: item.price,
-    samples_price: item.samples_price, image_url: item.image_url, has_samples: item.has_samples,
+    samples_price: item.samples_price, image_url_left: item.image_url_left,
+    image_url: item.image_url, image_url_right: item.image_url_right,
+    has_samples: item.has_samples,
     show_participants: item.show_participants,
     bottle_ids: item.bottles?.map((bottle) => bottle.id) ?? [],
   };
@@ -344,7 +349,6 @@ export function AdminTab() {
   };
 
   return <div style={pageStyle}>
-    <h2 style={{ color: '#f59e0b', marginTop: 0 }}>⚙️ Admin</h2>
     {message && <p style={messageStyle}>{message}</p>}
     <Accordion title="📅 Manage Events">
       <form onSubmit={saveEvent} style={formStyle}>
@@ -381,7 +385,9 @@ export function AdminTab() {
         </fieldset>
         <input required min="0" placeholder="Price" style={inputStyle} type="number" value={eventForm.price || ''} onChange={(event) => setEventForm({ ...eventForm, price: Number(event.target.value) })} />
         <input min="0" placeholder="Samples Price (EUR)" step="0.1" style={inputStyle} type="number" value={eventForm.samples_price ?? ''} onChange={(event) => setEventForm({ ...eventForm, samples_price: event.target.value === '' ? null : Number(event.target.value) })} />
-        <input placeholder="Image URL" style={inputStyle} value={eventForm.image_url ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value || null })} />
+        <input placeholder="Left Image URL" style={inputStyle} value={eventForm.image_url_left ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url_left: event.target.value || null })} />
+        <input placeholder="Center Image URL (Default)" style={inputStyle} value={eventForm.image_url ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url: event.target.value || null })} />
+        <input placeholder="Right Image URL" style={inputStyle} value={eventForm.image_url_right ?? ''} onChange={(event) => setEventForm({ ...eventForm, image_url_right: event.target.value || null })} />
         <label style={labelStyle}><input checked={eventForm.has_samples} type="checkbox" onChange={(event) => setEventForm({ ...eventForm, has_samples: event.target.checked })} /> Samples available</label>
         <label style={labelStyle}><input checked={eventForm.show_participants} type="checkbox" onChange={(event) => setEventForm({ ...eventForm, show_participants: event.target.checked })} /> Show participants / samples count badge</label>
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingEventId === null ? 'Create Event' : 'Save Changes'}</button>{editingEventId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetEvent}>Cancel</button>}</div>
