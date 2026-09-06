@@ -79,7 +79,7 @@ export function BottlesSamplesTab() {
   };
 
   return (
-    <section className="mx-auto w-full max-w-md pt-[env(safe-area-inset-top)]">
+    <section className="mx-auto w-full max-w-md pt-[calc(env(safe-area-inset-top)+1rem)]">
       {isLoading ? (
         <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
       ) : error ? (
