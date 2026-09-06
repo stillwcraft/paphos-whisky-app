@@ -876,7 +876,9 @@ class EventSummaryResponse(BaseModel):
     date: str
     price: float
     samples_price: Optional[float] = None
+    image_url_left: Optional[str] = None
     image_url: Optional[str] = None
+    image_url_right: Optional[str] = None
     has_samples: bool = False
     show_participants: bool = True
     registered_count: int
