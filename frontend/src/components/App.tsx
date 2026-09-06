@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ComponentType, type SVGProps } from 'react';
-import { initData, useSignal } from '@tma.js/sdk-react';
+import { initData, retrieveLaunchParams, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 
 import { AdminTab } from '@/components/AdminTab.tsx';
@@ -133,7 +133,8 @@ export function App() {
   }, [initDataState]);
 
   useEffect(() => {
-    const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    const startParam = retrieveLaunchParams().tgWebAppStartParam
+      ?? window.Telegram?.WebApp?.initDataUnsafe?.start_param;
     if (!startParam) {
       return;
     }
