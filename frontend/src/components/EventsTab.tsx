@@ -694,16 +694,16 @@ export function EventsTab({
                     {expandedEvent.bottles.map((bottle) => (
                       <li key={bottle.id}>
                         <button
-                          className="w-full overflow-hidden rounded-2xl border border-amber-400/15 text-left transition-colors"
+                          className="relative w-full overflow-hidden rounded-2xl border border-amber-400/15 bg-slate-800/70 text-left transition-colors hover:bg-slate-800"
                           onClick={() => {
                             setLineupBottle(bottle);
                             setIsLineupPhotoExpanded(false);
                             setIsLineupReviewOpen(false);
                           }}
-                          style={bottle.background_url ? { backgroundImage: `url(${bottle.background_url})`, backgroundPosition: 'center', backgroundRepeat: 'repeat', backgroundSize: '40px 40px' } : undefined}
                           type="button"
                         >
-                          <span className={`flex items-center gap-3 p-3 ${bottle.background_url ? 'bg-slate-950/70 backdrop-blur-[1px]' : 'bg-slate-800/70 hover:bg-slate-800'}`}>
+                          {bottle.background_url && <img alt="" className="pointer-events-none absolute -bottom-2 -right-3 z-0 h-[120%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                          <span className="relative z-10 flex items-center gap-3 p-3">
                             <span className="h-12 w-10 shrink-0 overflow-hidden rounded-lg">
                               {bottle.image_url
                                 ? <img alt="" className="h-full w-full object-cover" src={bottle.image_url} />

@@ -192,7 +192,7 @@ function BottleFields({ backgrounds, form, setForm, includeLabel }: { background
     />
     <input placeholder="Photo URL" style={inputStyle} value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} />
     <label style={fieldGroupStyle}>
-      <span style={fieldLabelStyle}>Card Background Pattern</span>
+      <span style={fieldLabelStyle}>Card Watermark Art</span>
       <select style={inputStyle} value={form.background_url ?? ''} onChange={(event) => setForm({ ...form, background_url: event.target.value || null })}>
         <option value="">Default / None</option>
         {backgrounds.map((background) => <option key={background.id} value={background.image_url}>{background.name}</option>)}
@@ -473,7 +473,7 @@ export function AdminTab() {
       </form>
       <div style={listStyle}>{tastingTags.map((tag) => <div key={tag.id} style={rowStyle}><span style={{ alignItems: 'center', display: 'flex', gap: 8 }}><img alt="" src={tag.icon_url} style={tagIconStyle} onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }} />{tag.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingTastingTagId(tag.id); setTastingTagForm(tastingTagFormFromItem(tag)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'tag', item: tag })}>🗑️ Delete</button></span></div>)}</div>
     </Accordion>
-    <Accordion title="🖼 Manage Card Backgrounds">
+    <Accordion title="🖼 Manage Card Watermarks">
       <form onSubmit={saveBackground} style={formStyle}>
         <input placeholder="Background Pattern Name" required style={inputStyle} value={backgroundName} onChange={(event) => setBackgroundName(event.target.value)} />
         <input placeholder="Background Image URL" required style={inputStyle} type="url" value={backgroundImageUrl} onChange={(event) => setBackgroundImageUrl(event.target.value)} />

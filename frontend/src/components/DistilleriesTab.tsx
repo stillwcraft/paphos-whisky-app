@@ -392,16 +392,16 @@ export function DistilleriesTab({
                         {distillery.bottles.map((bottle) => (
                           <li key={bottle.id}>
                             <button
-                              className="w-full overflow-hidden rounded-xl text-left transition-colors"
+                              className="relative w-full overflow-hidden rounded-xl text-left transition-colors hover:bg-white/5"
                               onClick={() => {
                                 setIsPhotoExpanded(false);
                                 setSelectedBottle(bottle);
                                 setIsReviewOpen(false);
                               }}
-                              style={bottle.background_url ? { backgroundImage: `url(${bottle.background_url})`, backgroundPosition: 'center', backgroundRepeat: 'repeat', backgroundSize: '40px 40px' } : undefined}
                               type="button"
                             >
-                              <span className={`flex items-center gap-3 px-1 py-3 ${bottle.background_url ? 'bg-slate-950/70 backdrop-blur-[1px]' : 'hover:bg-white/5'}`}>
+                              {bottle.background_url && <img alt="" className="pointer-events-none absolute -bottom-2 -right-3 z-0 h-[120%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                              <span className="relative z-10 flex items-center gap-3 px-1 py-3">
                                 <CatalogImage
                                   alt=""
                                   className="h-14 w-12 shrink-0 rounded-lg object-cover"
