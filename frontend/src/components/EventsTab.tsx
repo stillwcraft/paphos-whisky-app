@@ -23,6 +23,7 @@ type EventLineupBottle = {
   description: string;
   description_i18n?: I18nString;
   image_url: string | null;
+  background_url: string | null;
   favorites_count: number;
   tried_count: number;
 };
@@ -132,6 +133,17 @@ function EventGalleryCard({
     setActiveImageIndex(Math.min(2, Math.max(0, Math.round(gallery.scrollLeft / gallery.clientWidth))));
   };
 
+  const selectImage = (index: number) => {
+    const gallery = galleryRef.current;
+    if (!gallery) {
+      return;
+    }
+    gallery.scrollTo({
+      left: gallery.clientWidth * index,
+      behavior: 'smooth',
+    });
+  };
+
   return (
     <article className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
       <style>{'.event-gallery::-webkit-scrollbar { display: none; }'}</style>
@@ -157,11 +169,15 @@ function EventGalleryCard({
           </button>
         ))}
       </div>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center gap-2">
+      <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
         {[0, 1, 2].map((index) => (
-          <span
+          <button
             key={index}
-            className={`h-2 w-2 rounded-full ${activeImageIndex === index ? 'bg-amber-400' : 'bg-white/50'}`}
+            aria-label={`Show image ${index + 1}`}
+            aria-pressed={activeImageIndex === index}
+            className={`h-2 w-2 rounded-full transition-colors ${activeImageIndex === index ? 'bg-amber-400' : 'bg-white/50'}`}
+            onClick={() => selectImage(index)}
+            type="button"
           />
         ))}
       </div>
@@ -678,29 +694,32 @@ export function EventsTab({
                     {expandedEvent.bottles.map((bottle) => (
                       <li key={bottle.id}>
                         <button
-                          className="flex w-full items-center gap-3 rounded-2xl border border-amber-400/15 bg-slate-800/70 p-3 text-left transition-colors hover:bg-slate-800"
+                          className="w-full overflow-hidden rounded-2xl border border-amber-400/15 text-left transition-colors"
                           onClick={() => {
                             setLineupBottle(bottle);
                             setIsLineupPhotoExpanded(false);
                             setIsLineupReviewOpen(false);
                           }}
+                          style={bottle.background_url ? { backgroundImage: `url(${bottle.background_url})`, backgroundPosition: 'center', backgroundRepeat: 'repeat', backgroundSize: '40px 40px' } : undefined}
                           type="button"
                         >
-                          <div className="h-12 w-10 shrink-0 overflow-hidden rounded-lg">
-                            {bottle.image_url
-                              ? <img alt="" className="h-full w-full object-cover" src={bottle.image_url} />
-                              : <div aria-hidden="true" className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/70 to-slate-950 text-2xl">🥃</div>
-                            }
-                          </div>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-white">{bottle.name}</span>
-                            <span className="mt-1 block text-xs text-slate-400">
-                              {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
+                          <span className={`flex items-center gap-3 p-3 ${bottle.background_url ? 'bg-slate-950/70 backdrop-blur-[1px]' : 'bg-slate-800/70 hover:bg-slate-800'}`}>
+                            <span className="h-12 w-10 shrink-0 overflow-hidden rounded-lg">
+                              {bottle.image_url
+                                ? <img alt="" className="h-full w-full object-cover" src={bottle.image_url} />
+                                : <span aria-hidden="true" className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/70 to-slate-950 text-2xl">🥃</span>
+                              }
                             </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-semibold text-white">{bottle.name}</span>
+                              <span className="mt-1 block text-xs text-slate-400">
+                                {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
+                              </span>
+                            </span>
+                            <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-400/60" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path d="m9 18 6-6-6-6" />
+                            </svg>
                           </span>
-                          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-400/60" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
                         </button>
                       </li>
                     ))}

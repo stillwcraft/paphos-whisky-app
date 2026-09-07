@@ -195,6 +195,8 @@ def ensure_catalog_schema() -> None:
                     "VARCHAR NOT NULL DEFAULT 'bottle'"
                 )
             )
+        if "background_url" not in bottle_columns:
+            connection.execute(text("ALTER TABLE bottles ADD COLUMN background_url VARCHAR"))
 
         bottle_columns = get_table_columns(connection, "bottles")
         age_column = bottle_columns.get("age")
@@ -811,6 +813,18 @@ class TastingTagResponse(TastingTagCreate):
         from_attributes = True
 
 
+class BottleBackgroundCreate(BaseModel):
+    name: str
+    image_url: str
+
+
+class BottleBackgroundResponse(BottleBackgroundCreate):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
 class BottleCreate(BaseModel):
     name: str
     name_i18n: Optional[I18nString] = None
@@ -824,6 +838,7 @@ class BottleCreate(BaseModel):
     description: str
     description_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
+    background_url: Optional[str] = None
 
 
 class BottleUpdate(BottleCreate):
@@ -1164,6 +1179,7 @@ def build_bottle_response(
         ),
         description_i18n=bottle.description_i18n,
         image_url=bottle.image_url,
+        background_url=bottle.background_url,
         favorites_count=bottle.favorites_count,
         tried_count=bottle.tried_count,
     )
@@ -1499,6 +1515,64 @@ def delete_tasting_tag(
         models.UserReviewTag.tasting_tag_id == tag_id
     ).delete(synchronize_session=False)
     db.delete(tag)
+    db.commit()
+    return
+
+
+@app.get(
+    "/api/admin/bottle-backgrounds",
+    response_model=List[BottleBackgroundResponse],
+)
+def get_bottle_backgrounds(
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    return db.query(models.BottleBackground).order_by(
+        models.BottleBackground.name
+    ).all()
+
+
+@app.post(
+    "/api/admin/bottle-backgrounds",
+    response_model=BottleBackgroundResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_bottle_background(
+    background_data: BottleBackgroundCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    background = models.BottleBackground(**background_data.model_dump())
+    db.add(background)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Bottle background name already exists",
+        ) from None
+    db.refresh(background)
+    return background
+
+
+@app.delete(
+    "/api/admin/bottle-backgrounds/{background_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_bottle_background(
+    background_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    background = (
+        db.query(models.BottleBackground)
+        .filter(models.BottleBackground.id == background_id)
+        .first()
+    )
+    if not background:
+        raise HTTPException(status_code=404, detail="Bottle background not found")
+    db.delete(background)
     db.commit()
     return
 

@@ -23,6 +23,7 @@ type Bottle = {
   description: string;
   description_i18n?: I18nString;
   image_url: string | null;
+  background_url: string | null;
   favorites_count: number;
   tried_count: number;
 };
@@ -187,13 +188,16 @@ export function FavoritesTab() {
           {favoriteBottles.map((bottle) => (
             <li key={bottle.id}>
               <button
-                className="flex w-full items-center gap-3 rounded-2xl border border-amber-400/15 bg-slate-800/70 p-4 text-left transition-colors hover:bg-slate-800"
+                className="w-full overflow-hidden rounded-2xl border border-amber-400/15 text-left transition-colors"
                 onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); setIsReviewOpen(false); }}
+                style={bottle.background_url ? { backgroundImage: `url(${bottle.background_url})`, backgroundPosition: 'center', backgroundRepeat: 'repeat', backgroundSize: '40px 40px' } : undefined}
                 type="button"
               >
-                <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
-                <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distilleryName}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
-                <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
+                <span className={`flex items-center gap-3 p-4 ${bottle.background_url ? 'bg-slate-950/70 backdrop-blur-[1px]' : 'bg-slate-800/70 hover:bg-slate-800'}`}>
+                  <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
+                  <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distilleryName}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
+                  <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
+                </span>
               </button>
             </li>
           ))}

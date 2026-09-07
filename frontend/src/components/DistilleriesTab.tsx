@@ -23,6 +23,7 @@ type Bottle = {
   description: string;
   description_i18n?: I18nString;
   image_url: string | null;
+  background_url: string | null;
   favorites_count: number;
   tried_count: number;
 };
@@ -391,23 +392,26 @@ export function DistilleriesTab({
                         {distillery.bottles.map((bottle) => (
                           <li key={bottle.id}>
                             <button
-                              className="flex w-full items-center gap-3 rounded-xl px-1 py-3 text-left transition-colors hover:bg-white/5"
+                              className="w-full overflow-hidden rounded-xl text-left transition-colors"
                               onClick={() => {
                                 setIsPhotoExpanded(false);
                                 setSelectedBottle(bottle);
                                 setIsReviewOpen(false);
                               }}
+                              style={bottle.background_url ? { backgroundImage: `url(${bottle.background_url})`, backgroundPosition: 'center', backgroundRepeat: 'repeat', backgroundSize: '40px 40px' } : undefined}
                               type="button"
                             >
-                              <CatalogImage
-                                alt=""
-                                className="h-14 w-12 shrink-0 rounded-lg object-cover"
-                                source={bottle.image_url}
-                              />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm font-medium text-slate-100">{bottle.name}</span>
-                                <span className="mt-1 block text-xs text-slate-400">
-                                  {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
+                              <span className={`flex items-center gap-3 px-1 py-3 ${bottle.background_url ? 'bg-slate-950/70 backdrop-blur-[1px]' : 'hover:bg-white/5'}`}>
+                                <CatalogImage
+                                  alt=""
+                                  className="h-14 w-12 shrink-0 rounded-lg object-cover"
+                                  source={bottle.image_url}
+                                />
+                                <span className="min-w-0 flex-1">
+                                  <span className="block truncate text-sm font-medium text-slate-100">{bottle.name}</span>
+                                  <span className="mt-1 block text-xs text-slate-400">
+                                    {[bottle.age, bottle.abv].filter(Boolean).join(' · ') || t('bottle.whisky')}
+                                  </span>
                                 </span>
                               </span>
                             </button>

@@ -29,7 +29,10 @@ type Bottle = {
   id: number; name: string; name_i18n?: I18nResponse; distillery_id: number | null;
   label: Label; age: string | null; abv: string | null; cask: string | null;
   bottles: string | null; price_per_sample: number; description: string;
-  description_i18n?: I18nResponse; image_url: string | null;
+  description_i18n?: I18nResponse; image_url: string | null; background_url: string | null;
+};
+type BottleBackground = {
+  id: number; name: string; image_url: string;
 };
 type EventForm = {
   title: string; title_i18n: I18nString; date: string; description: string;
@@ -47,7 +50,7 @@ type TastingTagForm = {
 type BottleForm = {
   name: string; name_i18n: I18nString; label: Label; age: string; abv: string;
   cask: string; bottles: string; price_per_sample: string; description: string;
-  description_i18n: I18nString; image_url: string;
+  description_i18n: I18nString; image_url: string; background_url: string | null;
 };
 type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'tag'; item: TastingTag } | { kind: 'bottle'; item: Bottle };
 
@@ -78,7 +81,7 @@ const emptyTastingTag = (): TastingTagForm => ({
 const emptyBottle = (): BottleForm => ({
   name: '', name_i18n: emptyI18n(), label: 'bottle', age: '', abv: '', cask: '',
   bottles: '', price_per_sample: '', description: '', description_i18n: emptyI18n(),
-  image_url: '',
+  image_url: '', background_url: null,
 });
 
 function eventFormFromItem(item: EventItem): EventForm {
@@ -118,6 +121,7 @@ function bottleFormFromItem(item: Bottle): BottleForm {
     description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description),
     image_url: item.image_url ?? '',
+    background_url: item.background_url,
   };
 }
 
@@ -178,7 +182,7 @@ function I18nTextEditor({
   );
 }
 
-function BottleFields({ form, setForm, includeLabel }: { form: BottleForm; setForm: (form: BottleForm) => void; includeLabel: boolean }) {
+function BottleFields({ backgrounds, form, setForm, includeLabel }: { backgrounds: BottleBackground[]; form: BottleForm; setForm: (form: BottleForm) => void; includeLabel: boolean }) {
   return <div style={formStyle}>
     <I18nTextEditor
       label="Name"
@@ -187,6 +191,13 @@ function BottleFields({ form, setForm, includeLabel }: { form: BottleForm; setFo
       onChange={(name_i18n) => setForm({ ...form, name: name_i18n.en, name_i18n })}
     />
     <input placeholder="Photo URL" style={inputStyle} value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} />
+    <label style={fieldGroupStyle}>
+      <span style={fieldLabelStyle}>Card Background Pattern</span>
+      <select style={inputStyle} value={form.background_url ?? ''} onChange={(event) => setForm({ ...form, background_url: event.target.value || null })}>
+        <option value="">Default / None</option>
+        {backgrounds.map((background) => <option key={background.id} value={background.image_url}>{background.name}</option>)}
+      </select>
+    </label>
     <input required min="0" placeholder="Price" step="0.1" style={inputStyle} type="number" value={form.price_per_sample} onChange={(event) => setForm({ ...form, price_per_sample: event.target.value })} />
     <input placeholder="Age (optional)" style={inputStyle} value={form.age} onChange={(event) => setForm({ ...form, age: event.target.value })} />
     <input placeholder="ABV (optional)" style={inputStyle} value={form.abv} onChange={(event) => setForm({ ...form, abv: event.target.value })} />
@@ -214,6 +225,7 @@ export function AdminTab() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
   const [tastingTags, setTastingTags] = useState<TastingTag[]>([]);
+  const [backgrounds, setBackgrounds] = useState<BottleBackground[]>([]);
   const [bottles, setBottles] = useState<Bottle[]>([]);
   const [eventForm, setEventForm] = useState<EventForm>(emptyEvent);
   const [distilleryForm, setDistilleryForm] = useState<DistilleryForm>(emptyDistillery);
@@ -230,16 +242,20 @@ export function AdminTab() {
   const [deletion, setDeletion] = useState<Deletion | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [savingTastingTag, setSavingTastingTag] = useState(false);
+  const [backgroundName, setBackgroundName] = useState('');
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
 
   const loadContent = useCallback(async () => {
     try {
-      const [eventsResponse, distilleriesResponse, tastingTagsResponse, bottlesResponse] = await Promise.all([
+      const [eventsResponse, distilleriesResponse, tastingTagsResponse, bottlesResponse, backgroundsResponse] = await Promise.all([
         fetch(`${API_URL}/api/events`), fetch(`${API_URL}/api/distilleries`), fetch(`${API_URL}/api/tasting-tags`), fetch(`${API_URL}/api/bottles`),
+        fetch(`${API_URL}/api/admin/bottle-backgrounds`, { headers: telegramAuthHeaders(initDataRaw) }),
       ]);
       if (!eventsResponse.ok) throw new Error(await getError(eventsResponse));
       if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
       if (!tastingTagsResponse.ok) throw new Error(await getError(tastingTagsResponse));
       if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
+      if (!backgroundsResponse.ok) throw new Error(await getError(backgroundsResponse));
       const eventSummaries = await eventsResponse.json() as Array<Pick<EventItem, 'id'>>;
       const eventDetailResponses = await Promise.all(
         eventSummaries.map((event) => fetch(`${API_URL}/api/events/${event.id}?lang=en`)),
@@ -252,10 +268,11 @@ export function AdminTab() {
       setDistilleries(await distilleriesResponse.json() as Distillery[]);
       setTastingTags(await tastingTagsResponse.json() as TastingTag[]);
       setBottles(await bottlesResponse.json() as Bottle[]);
+      setBackgrounds(await backgroundsResponse.json() as BottleBackground[]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load admin content.');
     }
-  }, []);
+  }, [initDataRaw]);
 
   useEffect(() => { void loadContent(); }, [loadContent]);
   const resetEvent = () => { setEditingEventId(null); setEventForm(emptyEvent()); };
@@ -319,6 +336,41 @@ export function AdminTab() {
       if (!response.ok) throw new Error(await getError(response));
       reset(); await loadContent(); setMessage(editing ? 'Card updated.' : 'Card created.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save card.'); }
+  };
+  const saveBackground = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!backgroundName.trim() || !backgroundImageUrl.trim()) {
+      setMessage('Background name and image URL are required.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/admin/bottle-backgrounds`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
+        body: JSON.stringify({ name: backgroundName, image_url: backgroundImageUrl }),
+      });
+      if (!response.ok) throw new Error(await getError(response));
+      setBackgroundName('');
+      setBackgroundImageUrl('');
+      await loadContent();
+      setMessage('Background added.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not add background.');
+    }
+  };
+  const removeBackground = async (backgroundId: number) => {
+    try {
+      const response = await fetch(`${API_URL}/api/admin/bottle-backgrounds/${backgroundId}`, {
+        method: 'DELETE',
+        headers: telegramAuthHeaders(initDataRaw),
+      });
+      if (!response.ok) throw new Error(await getError(response));
+      await loadContent();
+      setMessage('Background deleted.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not delete background.');
+    }
   };
   const remove = async () => {
     if (!deletion) return;
@@ -407,7 +459,7 @@ export function AdminTab() {
         const editingHere = catalogDistilleryId === distillery.id;
         return <div key={distillery.id} style={cardStyle}><div style={rowStyle}><strong>{distillery.name}</strong><span style={actionRow}><button aria-label="Copy distillery link" title="Copy distillery link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('distillery', distillery.id)}>🔗</button><button aria-label="Edit distillery" title="Edit distillery" style={smallButtonStyle} type="button" onClick={() => { setEditingDistilleryId(distillery.id); setDistilleryForm(distilleryFormFromItem(distillery)); }}>✏️</button><button aria-label="Delete distillery" title="Delete distillery" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'distillery', item: distillery })}>🗑️</button></span></div>
           <button style={spoilerButtonStyle} type="button" onClick={() => setOpenBottleLists((current) => current.includes(distillery.id) ? current.filter((id) => id !== distillery.id) : [...current, distillery.id])}>🥃 {isOpen ? 'Hide Bottles' : 'Show Bottles'}</button>
-          {isOpen && <div style={{ marginTop: 10 }}>{editingHere ? <form onSubmit={(event) => void saveBottle(event, catalogBottleForm, distillery.id, editingCatalogBottleId, resetCatalogBottle)}><BottleFields form={catalogBottleForm} setForm={setCatalogBottleForm} includeLabel={false} /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingCatalogBottleId === null ? 'Add Bottle' : 'Save Changes'}</button><button style={secondaryButtonStyle} type="button" onClick={resetCatalogBottle}>Cancel</button></div></form> : <button style={smallButtonStyle} type="button" onClick={() => { setCatalogDistilleryId(distillery.id); setCatalogBottleForm({ ...emptyBottle(), label: 'bottle' }); }}>Add Bottle</button>}
+          {isOpen && <div style={{ marginTop: 10 }}>{editingHere ? <form onSubmit={(event) => void saveBottle(event, catalogBottleForm, distillery.id, editingCatalogBottleId, resetCatalogBottle)}><BottleFields backgrounds={backgrounds} form={catalogBottleForm} setForm={setCatalogBottleForm} includeLabel={false} /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingCatalogBottleId === null ? 'Add Bottle' : 'Save Changes'}</button><button style={secondaryButtonStyle} type="button" onClick={resetCatalogBottle}>Cancel</button></div></form> : <button style={smallButtonStyle} type="button" onClick={() => { setCatalogDistilleryId(distillery.id); setCatalogBottleForm({ ...emptyBottle(), label: 'bottle' }); }}>Add Bottle</button>}
             <div style={listStyle}>{distilleryBottles.map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name}</span><span style={actionRow}><button aria-label="Copy bottle link" title="Copy bottle link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗</button><button aria-label="Edit bottle" title="Edit bottle" style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️</button><button aria-label="Remove bottle" title="Remove bottle" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️</button></span></div>)}</div>
           </div>}</div>;
       })}</div>
@@ -421,8 +473,16 @@ export function AdminTab() {
       </form>
       <div style={listStyle}>{tastingTags.map((tag) => <div key={tag.id} style={rowStyle}><span style={{ alignItems: 'center', display: 'flex', gap: 8 }}><img alt="" src={tag.icon_url} style={tagIconStyle} onError={(event) => { event.currentTarget.style.visibility = 'hidden'; }} />{tag.name}</span><span style={actionRow}><button style={smallButtonStyle} type="button" onClick={() => { setEditingTastingTagId(tag.id); setTastingTagForm(tastingTagFormFromItem(tag)); }}>✏️ Edit</button><button style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'tag', item: tag })}>🗑️ Delete</button></span></div>)}</div>
     </Accordion>
+    <Accordion title="🖼 Manage Card Backgrounds">
+      <form onSubmit={saveBackground} style={formStyle}>
+        <input placeholder="Background Pattern Name" required style={inputStyle} value={backgroundName} onChange={(event) => setBackgroundName(event.target.value)} />
+        <input placeholder="Background Image URL" required style={inputStyle} type="url" value={backgroundImageUrl} onChange={(event) => setBackgroundImageUrl(event.target.value)} />
+        <div style={buttonRow}><button style={buttonStyle} type="submit">Add Background</button></div>
+      </form>
+      <div style={listStyle}>{backgrounds.map((background) => <div key={background.id} style={rowStyle}><span style={{ alignItems: 'center', display: 'flex', gap: 8 }}><img alt="" src={background.image_url} style={tagIconStyle} />{background.name}</span><button aria-label={`Delete ${background.name}`} title="Delete background" style={dangerButtonStyle} type="button" onClick={() => void removeBackground(background.id)}>🗑️</button></div>)}</div>
+    </Accordion>
     <Accordion title="🥃 Manage Bottles & Samples Tab">
-      <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
+      <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields backgrounds={backgrounds} form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
       <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button aria-label="Copy bottle link" title="Copy bottle link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗</button><button aria-label="Edit bottle" title="Edit bottle" style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️</button><button aria-label="Remove bottle" title="Remove bottle" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️</button></span></div>)}</div>
     </Accordion>
     {deletion && <div style={modalOverlayStyle} role="presentation"><div aria-modal="true" role="dialog" style={modalStyle}><h3>Confirm deletion</h3><p>Delete {deletion.kind === 'event' ? deletion.item.title : deletion.item.name}?</p><div style={buttonRow}><button style={secondaryButtonStyle} type="button" onClick={() => setDeletion(null)}>Cancel</button><button style={dangerButtonStyle} type="button" onClick={() => void remove()}>Delete</button></div></div></div>}

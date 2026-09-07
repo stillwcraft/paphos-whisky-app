@@ -81,6 +81,14 @@ class TastingTag(Base):
     icon_url = Column(String, nullable=False)
 
 
+class BottleBackground(Base):
+    __tablename__ = "bottle_backgrounds"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    image_url = Column(String, nullable=False)
+
+
 class Bottle(Base):
     __tablename__ = "bottles"
 
@@ -102,6 +110,7 @@ class Bottle(Base):
     description = Column(String)
     description_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
+    background_url = Column(String, nullable=True)
     favorites_count = Column(Integer, default=0, nullable=False)
     tried_count = Column(Integer, default=0, nullable=False)
     distillery = relationship("Distillery", back_populates="bottles")
