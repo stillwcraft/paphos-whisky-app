@@ -400,7 +400,7 @@ export function DistilleriesTab({
                               }}
                               type="button"
                             >
-                              {bottle.background_url && <img alt="" className="pointer-events-none absolute -bottom-2 -right-3 z-0 h-[120%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                              {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-2 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
                               <span className="relative z-10 flex items-center gap-3 px-1 py-3">
                                 <CatalogImage
                                   alt=""

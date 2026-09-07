@@ -192,7 +192,7 @@ export function FavoritesTab() {
                 onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); setIsReviewOpen(false); }}
                 type="button"
               >
-                {bottle.background_url && <img alt="" className="pointer-events-none absolute -bottom-2 -right-3 z-0 h-[120%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-6 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
                 <span className="relative z-10 flex items-center gap-3 p-4">
                   <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
                   <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distilleryName}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
