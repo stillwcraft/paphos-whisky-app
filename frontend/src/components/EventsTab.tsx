@@ -152,10 +152,14 @@ function useLogoDateTextColor(logoUrl: string | null): string {
 
 function EventGalleryCard({
   event,
+  isFocused,
   onOpen,
+  resetToCenterRevision,
 }: {
   event: EventSummary;
+  isFocused: boolean;
   onOpen: () => void;
+  resetToCenterRevision: number;
 }) {
   const cardRef = useRef<HTMLElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -187,6 +191,16 @@ function EventGalleryCard({
       window.clearTimeout(revealTimer);
     };
   }, []);
+
+  useEffect(() => {
+    const gallery = galleryRef.current;
+    if (!isFocused || resetToCenterRevision === 0 || !gallery) {
+      return;
+    }
+
+    gallery.scrollTo({ left: gallery.clientWidth, behavior: 'auto' });
+    setActiveImageIndex(1);
+  }, [isFocused, resetToCenterRevision]);
 
   useEffect(() => {
     const card = cardRef.current;
@@ -266,7 +280,11 @@ function EventGalleryCard({
             <div className="pointer-events-none absolute inset-x-0 bottom-[8%] z-10 flex h-[15%] items-center justify-center px-8">
               <span
                 className="text-center text-[clamp(1.5rem,7vw,3.5rem)] font-bold tracking-wide"
-                style={{ animation: 'event-banner-date 400ms 400ms ease-out both', color: dateTextColor }}
+                style={{
+                  animation: 'event-banner-date 400ms 400ms ease-out both',
+                  color: dateTextColor,
+                  fontFamily: 'Montserrat, sans-serif',
+                }}
               >
                 {event.event_date_formatted}
               </span>
@@ -424,6 +442,9 @@ export function EventsTab({
   const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
   const [loadingEventDetailId, setLoadingEventDetailId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineScrollTimerRef = useRef<number | null>(null);
+  const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
+  const [galleryResetRevision, setGalleryResetRevision] = useState(0);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
   const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
   const [isLineupReviewOpen, setIsLineupReviewOpen] = useState(false);
@@ -494,6 +515,49 @@ export function EventsTab({
       behavior: 'auto',
     });
   }, [centeredEventIndex, orderedEvents.length]);
+
+  useEffect(() => () => {
+    if (timelineScrollTimerRef.current !== null) {
+      window.clearTimeout(timelineScrollTimerRef.current);
+    }
+  }, []);
+
+  const resetFocusedGallery = () => {
+    const timeline = timelineRef.current;
+    if (!timeline) {
+      return;
+    }
+
+    const focusedCard = Array.from(
+      timeline.querySelectorAll<HTMLElement>('[data-event-index]'),
+    ).reduce<HTMLElement | null>((closestCard, card) => {
+      if (!closestCard) {
+        return card;
+      }
+
+      const viewportCenter = timeline.scrollTop + timeline.clientHeight / 2;
+      const cardCenter = card.offsetTop + card.clientHeight / 2;
+      const closestCardCenter = closestCard.offsetTop + closestCard.clientHeight / 2;
+      return Math.abs(cardCenter - viewportCenter) < Math.abs(closestCardCenter - viewportCenter)
+        ? card
+        : closestCard;
+    }, null);
+    const focusedIndex = Number(focusedCard?.dataset.eventIndex);
+    const focusedEvent = orderedEvents[focusedIndex];
+    if (!focusedEvent) {
+      return;
+    }
+
+    setFocusedEventId(focusedEvent.id);
+    setGalleryResetRevision((current) => current + 1);
+  };
+
+  const handleTimelineScroll = () => {
+    if (timelineScrollTimerRef.current !== null) {
+      window.clearTimeout(timelineScrollTimerRef.current);
+    }
+    timelineScrollTimerRef.current = window.setTimeout(resetFocusedGallery, 120);
+  };
 
   const expandedEvent = expandedEventId === null ? null : eventDetails[expandedEventId] ?? null;
 
@@ -754,11 +818,17 @@ export function EventsTab({
         <div
           ref={timelineRef}
           className="h-[calc(100dvh-6rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+          onScroll={handleTimelineScroll}
         >
           <ol className="h-full space-y-4">
             {orderedEvents.map((event, index) => (
-              <li key={event.id} data-event-index={index}>
-                <EventGalleryCard event={event} onOpen={() => void openEventDetails(event.id)} />
+              <li key={event.id} data-event-index={index} className="snap-center" style={{ scrollSnapStop: 'always' }}>
+                <EventGalleryCard
+                  event={event}
+                  isFocused={focusedEventId === event.id}
+                  onOpen={() => void openEventDetails(event.id)}
+                  resetToCenterRevision={galleryResetRevision}
+                />
               </li>
             ))}
           </ol>
