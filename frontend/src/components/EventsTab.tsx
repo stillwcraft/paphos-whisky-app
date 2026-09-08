@@ -157,8 +157,11 @@ function EventGalleryCard({
   event: EventSummary;
   onOpen: () => void;
 }) {
+  const cardRef = useRef<HTMLElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(1);
+  const [isCardVisible, setIsCardVisible] = useState(false);
+  const [isCenterImageReady, setIsCenterImageReady] = useState(false);
   const dateTextColor = useLogoDateTextColor(event.distillery_logo_url);
   const imageUrls = [
     event.image_url_left ?? event.image_url,
@@ -172,12 +175,31 @@ function EventGalleryCard({
       return;
     }
 
+    setIsCenterImageReady(false);
     const scrollToCenter = () => gallery.scrollTo({
       left: gallery.clientWidth,
       behavior: 'auto',
     });
     const frame = requestAnimationFrame(scrollToCenter);
-    return () => cancelAnimationFrame(frame);
+    const revealTimer = window.setTimeout(() => setIsCenterImageReady(true), 250);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(revealTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!card) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsCardVisible(entry.isIntersecting),
+      { threshold: 0.8 },
+    );
+    observer.observe(card);
+    return () => observer.disconnect();
   }, []);
 
   const updateActiveImage = () => {
@@ -200,7 +222,7 @@ function EventGalleryCard({
   };
 
   return (
-    <article className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
+    <article ref={cardRef} className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
       <style>{`
         .event-gallery::-webkit-scrollbar { display: none; }
         @keyframes event-banner-logo { from { opacity: 0; transform: translateX(-0.75rem); } to { opacity: 1; transform: translateX(0); } }
@@ -228,13 +250,13 @@ function EventGalleryCard({
           </button>
         ))}
       </div>
-      {activeImageIndex === 1 && (event.distillery_logo_url || event.event_date_formatted) && (
+      {isCardVisible && isCenterImageReady && activeImageIndex === 1 && (event.distillery_logo_url || event.event_date_formatted) && (
         <>
           {event.distillery_logo_url && (
             <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10 flex h-[15%] justify-center">
               <img
                 alt=""
-                className="h-full max-w-[70%] object-contain"
+                className="h-full w-[70%] scale-125 object-contain"
                 src={event.distillery_logo_url}
                 style={{ animation: 'event-banner-logo 400ms ease-out both' }}
               />
