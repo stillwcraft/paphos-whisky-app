@@ -35,14 +35,20 @@ class EventBottleTest(unittest.TestCase):
         self.db.query(models.Registration).delete()
         self.db.query(models.Bottle).delete()
         self.db.query(models.Event).delete()
+        self.db.query(models.Distillery).delete()
         self.db.commit()
 
+        self.distillery = models.Distillery(
+            name="Test Distillery",
+            logo_url="https://example.com/logo.png",
+        )
         self.event = models.Event(
             title="Test Tasting",
             date="2026-07-20T19:00:00Z",
             description="Test event",
             price=30.0,
             has_samples=False,
+            distillery=self.distillery,
         )
         self.bottle1 = models.Bottle(
             name="Glen Scotia",
@@ -60,7 +66,7 @@ class EventBottleTest(unittest.TestCase):
             favorites_count=2,
             tried_count=1,
         )
-        self.db.add_all([self.event, self.bottle1, self.bottle2])
+        self.db.add_all([self.distillery, self.event, self.bottle1, self.bottle2])
         self.db.commit()
 
     def tearDown(self):
@@ -224,6 +230,13 @@ class EventBottleTest(unittest.TestCase):
         self.assertEqual(summary.bottle_count, 3)
         self.assertNotIn("description", summary.model_dump())
         self.assertNotIn("bottles", summary.model_dump())
+
+    def test_event_response_includes_banner_data(self):
+        response = build_event_response(self.event, lang="en")
+
+        self.assertEqual(response.distillery_id, self.distillery.id)
+        self.assertEqual(response.distillery_logo_url, self.distillery.logo_url)
+        self.assertEqual(response.event_date_formatted, "20.07.2026")
 
     def test_event_list_returns_lightweight_summary_with_bottle_count(self):
         self.db.execute(

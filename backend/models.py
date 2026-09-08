@@ -26,6 +26,12 @@ class Event(Base):
     description_i18n = Column(I18N_JSON, nullable=True)
     price = Column(Float)
     samples_price = Column(Float, nullable=True)
+    distillery_id = Column(
+        Integer,
+        ForeignKey("distilleries.id", ondelete="SET NULL"),
+        index=True,
+        nullable=True,
+    )
     image_url_left = Column(String, nullable=True)
     image_url = Column(String, nullable=True)
     image_url_right = Column(String, nullable=True)
@@ -37,6 +43,7 @@ class Event(Base):
         back_populates="events",
         passive_deletes=True,
     )
+    distillery = relationship("Distillery", back_populates="events")
 
 
 class Registration(Base):
@@ -61,6 +68,7 @@ class Distillery(Base):
     name = Column(String, index=True, unique=True, nullable=False)
     name_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
+    logo_url = Column(String, nullable=True)
     description = Column(String, nullable=True)
     description_i18n = Column(I18N_JSON, nullable=True)
     bottles = relationship(
@@ -69,6 +77,7 @@ class Distillery(Base):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
+    events = relationship("Event", back_populates="distillery")
 
 
 class TastingTag(Base):

@@ -47,6 +47,9 @@ type EventSummary = {
   date: string;
   price: number;
   samples_price: number | null;
+  distillery_id: number | null;
+  distillery_logo_url: string | null;
+  event_date_formatted: string;
   image_url_left: string | null;
   image_url: string | null;
   image_url_right: string | null;
@@ -96,6 +99,57 @@ function formatDate(date: string) {
     }).format(parsedDate);
 }
 
+function useLogoDateTextColor(logoUrl: string | null): string {
+  const [textColor, setTextColor] = useState('#FFFFFF');
+
+  useEffect(() => {
+    if (!logoUrl) {
+      setTextColor('#FFFFFF');
+      return;
+    }
+
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) {
+        return;
+      }
+
+      try {
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let totalLuminance = 0;
+        let opaquePixels = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index + 3] === 0) continue;
+          totalLuminance += (
+            0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2]
+          );
+          opaquePixels += 1;
+        }
+        setTextColor(
+          opaquePixels > 0 && totalLuminance / opaquePixels > 160 ? '#0F172A' : '#EAB308',
+        );
+      } catch {
+        setTextColor('#FFFFFF');
+      }
+    };
+    image.onerror = () => setTextColor('#FFFFFF');
+    image.src = logoUrl;
+
+    return () => {
+      image.onload = null;
+      image.onerror = null;
+    };
+  }, [logoUrl]);
+
+  return textColor;
+}
+
 function EventGalleryCard({
   event,
   onOpen,
@@ -105,6 +159,7 @@ function EventGalleryCard({
 }) {
   const galleryRef = useRef<HTMLDivElement>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(1);
+  const dateTextColor = useLogoDateTextColor(event.distillery_logo_url);
   const imageUrls = [
     event.image_url_left ?? event.image_url,
     event.image_url,
@@ -146,7 +201,12 @@ function EventGalleryCard({
 
   return (
     <article className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
-      <style>{'.event-gallery::-webkit-scrollbar { display: none; }'}</style>
+      <style>{`
+        .event-gallery::-webkit-scrollbar { display: none; }
+        @keyframes event-banner-logo { from { opacity: 0; transform: translateX(-0.75rem); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes event-banner-slash { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+        @keyframes event-banner-date { from { opacity: 0; transform: translateX(0.75rem); } to { opacity: 1; transform: translateX(0); } }
+      `}</style>
       <div
         ref={galleryRef}
         className="event-gallery flex h-full snap-x snap-mandatory overflow-x-auto"
@@ -169,6 +229,37 @@ function EventGalleryCard({
           </button>
         ))}
       </div>
+      {activeImageIndex === 1 && (event.distillery_logo_url || event.event_date_formatted) && (
+        <div className="pointer-events-none absolute inset-x-0 top-5 z-10 flex justify-center">
+          <div className="flex items-center rounded-full bg-slate-950/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-sm">
+            {event.distillery_logo_url && (
+              <img
+                alt=""
+                className="h-9 w-9 object-contain"
+                src={event.distillery_logo_url}
+                style={{ animation: 'event-banner-logo 400ms ease-out both' }}
+              />
+            )}
+            {event.distillery_logo_url && event.event_date_formatted && (
+              <span
+                aria-hidden="true"
+                className="mx-2 text-lg font-light text-white/80"
+                style={{ animation: 'event-banner-slash 200ms 300ms ease-out both' }}
+              >
+                /
+              </span>
+            )}
+            {event.event_date_formatted && (
+              <span
+                className="text-sm font-bold tracking-wide"
+                style={{ animation: 'event-banner-date 400ms 400ms ease-out both', color: dateTextColor }}
+              >
+                {event.event_date_formatted}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
         {[0, 1, 2].map((index) => (
           <button

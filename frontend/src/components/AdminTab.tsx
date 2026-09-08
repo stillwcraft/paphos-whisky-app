@@ -14,12 +14,13 @@ type EventItem = {
   date: string; description: string; description_i18n?: I18nResponse; price: number;
   samples_price: number | null; image_url_left: string | null; image_url: string | null;
   image_url_right: string | null; has_samples: boolean;
+  distillery_id: number | null; distillery_logo_url: string | null; event_date_formatted: string;
   show_participants: boolean; registered_count: number; samples_count: number;
   bottles?: Array<Pick<Bottle, 'id'>>;
 };
 type Distillery = {
   id: number; name: string; name_i18n?: I18nResponse; image_url: string | null;
-  description: string | null; description_i18n?: I18nResponse;
+  logo_url: string | null; description: string | null; description_i18n?: I18nResponse;
 };
 type TastingTag = {
   id: number; name: string; name_i18n?: I18nResponse;
@@ -37,11 +38,12 @@ type BottleBackground = {
 type EventForm = {
   title: string; title_i18n: I18nString; date: string; description: string;
   description_i18n: I18nString; price: number; samples_price: number | null;
+  distillery_id: number | null;
   image_url_left: string | null; image_url: string | null; image_url_right: string | null;
   has_samples: boolean; show_participants: boolean; bottle_ids: number[];
 };
 type DistilleryForm = {
-  name: string; name_i18n: I18nString; image_url: string | null;
+  name: string; name_i18n: I18nString; image_url: string | null; logo_url: string | null;
   description: string | null; description_i18n: I18nString;
 };
 type TastingTagForm = {
@@ -68,11 +70,11 @@ function toI18n(translations: I18nResponse | undefined, fallback: string | null 
 const emptyEvent = (): EventForm => ({
   title: '', title_i18n: emptyI18n(), date: '', description: '',
   description_i18n: emptyI18n(), price: 0, samples_price: null, image_url_left: null,
-  image_url: null, image_url_right: null,
+  image_url: null, image_url_right: null, distillery_id: null,
   has_samples: false, show_participants: true, bottle_ids: [],
 });
 const emptyDistillery = (): DistilleryForm => ({
-  name: '', name_i18n: emptyI18n(), image_url: null, description: null,
+  name: '', name_i18n: emptyI18n(), image_url: null, logo_url: null, description: null,
   description_i18n: emptyI18n(),
 });
 const emptyTastingTag = (): TastingTagForm => ({
@@ -90,7 +92,7 @@ function eventFormFromItem(item: EventItem): EventForm {
     date: item.date, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description), price: item.price,
     samples_price: item.samples_price, image_url_left: item.image_url_left,
-    image_url: item.image_url, image_url_right: item.image_url_right,
+    image_url: item.image_url, image_url_right: item.image_url_right, distillery_id: item.distillery_id,
     has_samples: item.has_samples,
     show_participants: item.show_participants,
     bottle_ids: item.bottles?.map((bottle) => bottle.id) ?? [],
@@ -100,7 +102,7 @@ function eventFormFromItem(item: EventItem): EventForm {
 function distilleryFormFromItem(item: Distillery): DistilleryForm {
   return {
     name: item.name, name_i18n: toI18n(item.name_i18n, item.name),
-    image_url: item.image_url, description: item.description,
+    image_url: item.image_url, logo_url: item.logo_url, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description),
   };
 }
@@ -406,6 +408,13 @@ export function AdminTab() {
       <form onSubmit={saveEvent} style={formStyle}>
         <I18nTextEditor label="Title" required translations={eventForm.title_i18n} onChange={(title_i18n) => setEventForm({ ...eventForm, title: title_i18n.en, title_i18n })} />
         <input required style={inputStyle} type="datetime-local" value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} />
+        <label style={fieldGroupStyle}>
+          <span style={fieldLabelStyle}>Main Distillery for Event Banner</span>
+          <select style={inputStyle} value={eventForm.distillery_id ?? ''} onChange={(event) => setEventForm({ ...eventForm, distillery_id: event.target.value ? Number(event.target.value) : null })}>
+            <option value="">None</option>
+            {distilleries.map((distillery) => <option key={distillery.id} value={distillery.id}>{distillery.name}</option>)}
+          </select>
+        </label>
         <I18nTextEditor label="Description" multiline required translations={eventForm.description_i18n} onChange={(description_i18n) => setEventForm({ ...eventForm, description: description_i18n.en, description_i18n })} />
         <fieldset style={{ ...fieldGroupStyle, border: 0, margin: 0, padding: 0 }}>
           <legend style={fieldLabelStyle}>Tasting Bottles</legend>
@@ -450,6 +459,7 @@ export function AdminTab() {
       <form onSubmit={saveDistillery} style={formStyle}>
         <I18nTextEditor label="Name" required translations={distilleryForm.name_i18n} onChange={(name_i18n) => setDistilleryForm({ ...distilleryForm, name: name_i18n.en, name_i18n })} />
         <input placeholder="Image URL" style={inputStyle} value={distilleryForm.image_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value || null })} />
+        <input placeholder="Distillery PNG Logo URL" style={inputStyle} type="url" value={distilleryForm.logo_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, logo_url: event.target.value || null })} />
         <I18nTextEditor label="Description" multiline translations={distilleryForm.description_i18n} onChange={(description_i18n) => setDistilleryForm({ ...distilleryForm, description: description_i18n.en || null, description_i18n })} />
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingDistilleryId === null ? 'Add Distillery' : 'Save Changes'}</button>{editingDistilleryId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetDistillery}>Cancel</button>}</div>
       </form>

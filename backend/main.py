@@ -82,6 +82,10 @@ def rebuild_sqlite_bottles_table(
 def ensure_event_schema() -> None:
     event_columns = get_table_columns(engine, "events")
     with engine.begin() as connection:
+        if "distillery_id" not in event_columns:
+            connection.execute(
+                text("ALTER TABLE events ADD COLUMN distillery_id INTEGER")
+            )
         for column_name in ("image_url_left", "image_url_right"):
             if column_name not in event_columns:
                 connection.execute(
@@ -165,6 +169,10 @@ def ensure_catalog_schema() -> None:
         if "description" not in distillery_columns:
             connection.execute(
                 text("ALTER TABLE distilleries ADD COLUMN description TEXT")
+            )
+        if "logo_url" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN logo_url VARCHAR")
             )
 
         bottle_columns = get_table_columns(connection, "bottles")
@@ -773,6 +781,7 @@ class EventCreate(BaseModel):
     description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None
+    distillery_id: Optional[int] = None
     image_url_left: Optional[str] = None
     image_url: Optional[str] = None
     image_url_right: Optional[str] = None
@@ -788,6 +797,7 @@ class DistilleryCreate(BaseModel):
     name: str
     name_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
+    logo_url: Optional[str] = None
     description: Optional[str] = None
     description_i18n: Optional[I18nString] = None
 
@@ -867,6 +877,9 @@ class EventDetailResponse(BaseModel):
     description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None
+    distillery_id: Optional[int] = None
+    distillery_logo_url: Optional[str] = None
+    event_date_formatted: str
     image_url_left: Optional[str] = None
     image_url: Optional[str] = None
     image_url_right: Optional[str] = None
@@ -891,6 +904,9 @@ class EventSummaryResponse(BaseModel):
     date: str
     price: float
     samples_price: Optional[float] = None
+    distillery_id: Optional[int] = None
+    distillery_logo_url: Optional[str] = None
+    event_date_formatted: str
     image_url_left: Optional[str] = None
     image_url: Optional[str] = None
     image_url_right: Optional[str] = None
@@ -1080,6 +1096,11 @@ def parse_event_date_to_utc(date_value: Optional[str]) -> Optional[datetime]:
     return parsed_date.astimezone(timezone.utc)
 
 
+def format_event_date(date_value: str) -> str:
+    parsed_date = parse_event_date_to_utc(date_value)
+    return parsed_date.strftime("%d.%m.%Y") if parsed_date else date_value
+
+
 def build_event_response(
     event: models.Event,
     *,
@@ -1103,6 +1124,11 @@ def build_event_response(
         description_i18n=event.description_i18n,
         price=event.price,
         samples_price=event.samples_price,
+        distillery_id=event.distillery_id,
+        distillery_logo_url=(
+            event.distillery.logo_url if event.distillery is not None else None
+        ),
+        event_date_formatted=format_event_date(event.date),
         image_url_left=event.image_url_left,
         image_url=event.image_url,
         image_url_right=event.image_url_right,
@@ -1131,6 +1157,11 @@ def build_event_summary_response(
         date=event.date,
         price=event.price,
         samples_price=event.samples_price,
+        distillery_id=event.distillery_id,
+        distillery_logo_url=(
+            event.distillery.logo_url if event.distillery is not None else None
+        ),
+        event_date_formatted=format_event_date(event.date),
         image_url_left=event.image_url_left,
         image_url=event.image_url,
         image_url_right=event.image_url_right,
@@ -1195,6 +1226,7 @@ def build_distillery_response(
         name=get_localized_string(distillery.name_i18n, lang, distillery.name),
         name_i18n=distillery.name_i18n,
         image_url=distillery.image_url,
+        logo_url=distillery.logo_url,
         description=get_localized_string(
             distillery.description_i18n,
             lang,
@@ -1245,6 +1277,20 @@ def validate_bottle_ids(bottle_ids: List[int], db: Session) -> List[int]:
                 detail=f"Unknown bottle IDs: {unknown}",
             )
     return deduped
+
+
+def validate_event_distillery_id(
+    distillery_id: Optional[int],
+    db: Session,
+) -> Optional[int]:
+    if distillery_id is not None and not db.query(models.Distillery.id).filter(
+        models.Distillery.id == distillery_id
+    ).first():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Unknown distillery ID: {distillery_id}",
+        )
+    return distillery_id
 
 
 def load_event_bottles(event_id: int, db: Session) -> List[models.Bottle]:
@@ -1321,6 +1367,7 @@ def get_events(lang: str = "en", db: Session = Depends(get_db)):
             func.coalesce(event_counts.c.samples_count, 0).label("samples_count"),
             func.coalesce(bottle_counts.c.bottle_count, 0).label("bottle_count"),
         )
+        .options(joinedload(models.Event.distillery))
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .outerjoin(bottle_counts, models.Event.id == bottle_counts.c.event_id)
         .all()
@@ -1350,6 +1397,7 @@ def get_event_detail(
             func.coalesce(event_counts.c.registered_count, 0).label("registered_count"),
             func.coalesce(event_counts.c.samples_count, 0).label("samples_count"),
         )
+        .options(joinedload(models.Event.distillery))
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .filter(models.Event.id == event_id)
         .first()
@@ -1374,6 +1422,7 @@ def create_event(
     _: TelegramAuthContext = Depends(require_admin),
 ):
     bottle_ids = validate_bottle_ids(event_data.bottle_ids, db)
+    validate_event_distillery_id(event_data.distillery_id, db)
     new_event = models.Event(**build_event_payload(event_data, exclude_unset=False))
     db.add(new_event)
     db.flush()
@@ -1400,6 +1449,7 @@ def update_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     bottle_ids = validate_bottle_ids(event_data.bottle_ids, db)
+    validate_event_distillery_id(event_data.distillery_id, db)
 
     for field, value in build_event_payload(event_data, exclude_unset=True).items():
         setattr(event, field, value)
@@ -1779,6 +1829,9 @@ def delete_distillery(
     db.query(models.Bottle).filter(
         models.Bottle.distillery_id == distillery_id
     ).delete(synchronize_session=False)
+    db.query(models.Event).filter(
+        models.Event.distillery_id == distillery_id
+    ).update({models.Event.distillery_id: None}, synchronize_session=False)
     db.delete(distillery)
     db.commit()
 
