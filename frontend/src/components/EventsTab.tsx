@@ -204,7 +204,6 @@ function EventGalleryCard({
       <style>{`
         .event-gallery::-webkit-scrollbar { display: none; }
         @keyframes event-banner-logo { from { opacity: 0; transform: translateX(-0.75rem); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes event-banner-slash { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
         @keyframes event-banner-date { from { opacity: 0; transform: translateX(0.75rem); } to { opacity: 1; transform: translateX(0); } }
       `}</style>
       <div
@@ -230,35 +229,28 @@ function EventGalleryCard({
         ))}
       </div>
       {activeImageIndex === 1 && (event.distillery_logo_url || event.event_date_formatted) && (
-        <div className="pointer-events-none absolute inset-x-0 top-5 z-10 flex justify-center">
-          <div className="flex items-center rounded-full bg-slate-950/45 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur-sm">
-            {event.distillery_logo_url && (
+        <>
+          {event.distillery_logo_url && (
+            <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10 flex h-[15%] justify-center">
               <img
                 alt=""
-                className="h-9 w-9 object-contain"
+                className="h-full max-w-[70%] object-contain"
                 src={event.distillery_logo_url}
                 style={{ animation: 'event-banner-logo 400ms ease-out both' }}
               />
-            )}
-            {event.distillery_logo_url && event.event_date_formatted && (
+            </div>
+          )}
+          {event.event_date_formatted && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-[8%] z-10 flex h-[15%] items-center justify-center px-8">
               <span
-                aria-hidden="true"
-                className="mx-2 text-lg font-light text-white/80"
-                style={{ animation: 'event-banner-slash 200ms 300ms ease-out both' }}
-              >
-                /
-              </span>
-            )}
-            {event.event_date_formatted && (
-              <span
-                className="text-sm font-bold tracking-wide"
+                className="text-center text-[clamp(1.5rem,7vw,3.5rem)] font-bold tracking-wide"
                 style={{ animation: 'event-banner-date 400ms 400ms ease-out both', color: dateTextColor }}
               >
                 {event.event_date_formatted}
               </span>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
+        </>
       )}
       <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
         {[0, 1, 2].map((index) => (
