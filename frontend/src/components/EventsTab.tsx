@@ -58,6 +58,7 @@ type EventSummary = {
   registered_count: number;
   samples_count: number;
   bottle_count: number;
+  bottles?: EventLineupBottle[];
 };
 
 type EventDetail = EventSummary & {
@@ -122,15 +123,142 @@ function formatEventBannerDate(
   return { month, dayAndTime: `${day} | ${timePart}` };
 }
 
+function LineupInspectorOverlay({
+  bottles,
+  onClose,
+}: {
+  bottles: EventLineupBottle[];
+  onClose: () => void;
+}) {
+  const [activeBottleIndex, setActiveBottleIndex] = useState(0);
+  const swipeStartX = useRef<number | null>(null);
+  const bottle = bottles[activeBottleIndex];
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onClose]);
+
+  const selectBottle = (index: number) => {
+    setActiveBottleIndex(Math.min(Math.max(index, 0), bottles.length - 1));
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    swipeStartX.current = event.touches[0]?.clientX ?? null;
+  };
+
+  const handleTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+    const startX = swipeStartX.current;
+    const endX = event.changedTouches[0]?.clientX;
+    swipeStartX.current = null;
+
+    if (startX === null || endX === undefined || Math.abs(endX - startX) < 48) {
+      return;
+    }
+
+    selectBottle(activeBottleIndex + (endX < startX ? 1 : -1));
+  };
+
+  const parameterBadges = [
+    bottle.abv && `${bottle.abv}%`,
+    bottle.age && `${bottle.age} y.o.`,
+    bottle.cask,
+    bottle.bottles && `${bottle.bottles} btl.`,
+    bottle.price_per_sample !== null && bottle.price_per_sample !== undefined
+      ? `€${bottle.price_per_sample}`
+      : null,
+  ].filter((value): value is string => Boolean(value?.trim()));
+
+  return (
+    <div
+      aria-label="Lineup Inspector"
+      aria-modal="true"
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xl"
+      role="dialog"
+      onClick={(event) => event.stopPropagation()}
+      onTouchEnd={handleTouchEnd}
+      onTouchStart={handleTouchStart}
+    >
+      <style>{`
+        @keyframes lineup-inspector-badge {
+          from { opacity: 0; transform: translateX(2rem); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+      <div className="relative mx-auto flex h-full w-full max-w-md items-center justify-center px-8 pb-20 pt-8">
+        <div key={bottle.id} className="flex h-full w-full items-center justify-center">
+          {bottle.image_url ? (
+            <img
+              alt={bottle.name}
+              className="max-h-[80vh] w-full object-contain"
+              src={bottle.image_url}
+            />
+          ) : (
+            <div aria-label={bottle.name} className="flex h-64 w-40 items-center justify-center rounded-3xl border border-[#C5A059]/30 bg-[#16161A]/90 text-7xl">
+              🥃
+            </div>
+          )}
+          <div className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2">
+            {parameterBadges.map((value, index) => (
+              <span
+                key={`${bottle.id}-${value}`}
+                className="rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5]"
+                style={{ animation: `lineup-inspector-badge 260ms ${250 + index * 80}ms ease-out both` }}
+              >
+                {value}
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="absolute inset-x-0 bottom-7 flex justify-center gap-2">
+        {bottles.map((lineupBottle, index) => (
+          <button
+            key={lineupBottle.id}
+            aria-label={`Show bottle ${index + 1}`}
+            aria-pressed={activeBottleIndex === index}
+            className={`h-2 w-2 rounded-full transition-colors ${activeBottleIndex === index ? 'bg-[#C5A059]' : 'bg-white/35'}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              selectBottle(index);
+            }}
+            type="button"
+          />
+        ))}
+      </div>
+      <button
+        aria-label="Close lineup inspector"
+        className="absolute bottom-5 right-5 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-[#F4F4F5] backdrop-blur transition-colors hover:bg-black/60"
+        onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+        type="button"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function EventGalleryCard({
   event,
   isFocused,
   onOpen,
+  onOpenLineup,
   resetToCenterRevision,
 }: {
   event: EventSummary;
   isFocused: boolean;
   onOpen: () => void;
+  onOpenLineup: () => void;
   resetToCenterRevision: number;
 }) {
   const { i18n } = useTranslation();
@@ -278,6 +406,22 @@ function EventGalleryCard({
           />
         ))}
       </div>
+      {activeImageIndex === 1 && event.bottles && event.bottles.length > 0 && (
+       <button
+         aria-label="Open tasting lineup"
+         className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-[#C5A059]/30 bg-black/45 text-[#C5A059] backdrop-blur transition-colors hover:bg-black/65"
+         onClick={(clickEvent) => {
+           clickEvent.stopPropagation();
+           onOpenLineup();
+         }}
+         type="button"
+       >
+         <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
+           <path d="M9 3h6v3l-1 1v4.5l2.2 5.2A3 3 0 0 1 13.4 21h-2.8a3 3 0 0 1-2.8-4.3L10 11.5V7L9 6V3Z" />
+           <path d="M10 14h4" />
+         </svg>
+       </button>
+      )}
     </article>
   );
 }
@@ -419,6 +563,7 @@ export function EventsTab({
   const timelineScrollTimerRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
+  const [lineupInspectorEvent, setLineupInspectorEvent] = useState<EventDetail | null>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
   const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
   const [isLineupReviewOpen, setIsLineupReviewOpen] = useState(false);
@@ -798,9 +943,15 @@ export function EventsTab({
             {orderedEvents.map((event, index) => (
               <li key={event.id} data-event-index={index} className="snap-center" style={{ scrollSnapStop: 'always' }}>
                 <EventGalleryCard
-                  event={event}
+                  event={{ ...event, bottles: eventDetails[event.id]?.bottles }}
                   isFocused={focusedEventId === event.id}
                   onOpen={() => void openEventDetails(event.id)}
+                  onOpenLineup={() => {
+                    const eventDetail = eventDetails[event.id];
+                    if (eventDetail?.bottles.length) {
+                      setLineupInspectorEvent(eventDetail);
+                    }
+                  }}
                   resetToCenterRevision={galleryResetRevision}
                 />
               </li>
@@ -1012,6 +1163,13 @@ export function EventsTab({
             </div>
           </article>
         </div>
+      )}
+
+      {lineupInspectorEvent && (
+        <LineupInspectorOverlay
+          bottles={lineupInspectorEvent.bottles}
+          onClose={() => setLineupInspectorEvent(null)}
+        />
       )}
 
       {isLineupReviewOpen && lineupBottle && telegramId !== undefined && (
