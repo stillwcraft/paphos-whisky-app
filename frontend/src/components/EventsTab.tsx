@@ -131,6 +131,7 @@ function LineupInspectorOverlay({
   onClose: () => void;
 }) {
   const [activeBottleIndex, setActiveBottleIndex] = useState(0);
+  const [areParametersVisible, setAreParametersVisible] = useState(false);
   const swipeStartX = useRef<number | null>(null);
   const bottle = bottles[activeBottleIndex];
 
@@ -146,6 +147,7 @@ function LineupInspectorOverlay({
 
   const selectBottle = (index: number) => {
     setActiveBottleIndex(Math.min(Math.max(index, 0), bottles.length - 1));
+    setAreParametersVisible(false);
   };
 
   const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
@@ -167,12 +169,12 @@ function LineupInspectorOverlay({
   };
 
   const parameterBadges = [
-    bottle.abv && `${bottle.abv}%`,
-    bottle.age && `${bottle.age} y.o.`,
+    bottle.abv,
+    bottle.age,
     bottle.cask,
-    bottle.bottles && `${bottle.bottles} btl.`,
+    bottle.bottles,
     bottle.price_per_sample !== null && bottle.price_per_sample !== undefined
-      ? `€${bottle.price_per_sample}`
+      ? String(bottle.price_per_sample)
       : null,
   ].filter((value): value is string => Boolean(value?.trim()));
 
@@ -191,31 +193,49 @@ function LineupInspectorOverlay({
           from { opacity: 0; transform: translateX(2rem); }
           to { opacity: 1; transform: translateX(0); }
         }
+        @keyframes lineup-inspector-bottle-pulse {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(197, 160, 89, 0)); transform: scale(1); }
+          50% { filter: drop-shadow(0 0 1.25rem rgba(197, 160, 89, 0.35)); transform: scale(1.015); }
+        }
       `}</style>
       <div className="relative mx-auto flex h-full w-full max-w-md items-center justify-center px-8 pb-20 pt-8">
         <div key={bottle.id} className="flex h-full w-full items-center justify-center">
-          {bottle.image_url ? (
-            <img
-              alt={bottle.name}
-              className="max-h-[80vh] w-full object-contain"
-              src={bottle.image_url}
-            />
-          ) : (
-            <div aria-label={bottle.name} className="flex h-64 w-40 items-center justify-center rounded-3xl border border-[#C5A059]/30 bg-[#16161A]/90 text-7xl">
-              🥃
+          <button
+            aria-expanded={areParametersVisible}
+            aria-label={`Toggle details for ${bottle.name}`}
+            className="flex h-full w-full items-center justify-center"
+            onClick={(event) => {
+              event.stopPropagation();
+              setAreParametersVisible((current) => !current);
+            }}
+            type="button"
+          >
+            {bottle.image_url ? (
+              <img
+                alt={bottle.name}
+                className="max-h-[80vh] w-full object-contain"
+                src={bottle.image_url}
+                style={{ animation: 'lineup-inspector-bottle-pulse 2s ease-in-out infinite' }}
+              />
+            ) : (
+              <span aria-label={bottle.name} className="flex h-64 w-40 items-center justify-center rounded-3xl border border-[#C5A059]/30 bg-[#16161A]/90 text-7xl" style={{ animation: 'lineup-inspector-bottle-pulse 2s ease-in-out infinite' }}>
+                🥃
+              </span>
+            )}
+          </button>
+          {areParametersVisible && (
+            <div className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2">
+              {parameterBadges.map((value, index) => (
+                <span
+                  key={`${bottle.id}-${value}`}
+                  className="rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5]"
+                  style={{ animation: `lineup-inspector-badge 260ms ${250 + index * 80}ms ease-out both` }}
+                >
+                  {value}
+                </span>
+              ))}
             </div>
           )}
-          <div className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2">
-            {parameterBadges.map((value, index) => (
-              <span
-                key={`${bottle.id}-${value}`}
-                className="rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5]"
-                style={{ animation: `lineup-inspector-badge 260ms ${250 + index * 80}ms ease-out both` }}
-              >
-                {value}
-              </span>
-            ))}
-          </div>
         </div>
       </div>
       <div className="absolute inset-x-0 bottom-7 flex justify-center gap-2">
@@ -417,8 +437,8 @@ function EventGalleryCard({
          type="button"
        >
          <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-           <path d="M9 3h6v3l-1 1v4.5l2.2 5.2A3 3 0 0 1 13.4 21h-2.8a3 3 0 0 1-2.8-4.3L10 11.5V7L9 6V3Z" />
-           <path d="M10 14h4" />
+          <path d="M9 2h6v5l1 1.5V10l3 3v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7l3-3V8.5L9 7V2Z" fill="currentColor" stroke="none" />
+          <path d="M8.5 15h7M8.5 17.5h7" stroke="#16161A" />
          </svg>
        </button>
       )}
