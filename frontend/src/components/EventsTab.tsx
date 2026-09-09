@@ -174,7 +174,7 @@ function LineupInspectorOverlay({
     bottle.cask,
     bottle.bottles,
     bottle.price_per_sample !== null && bottle.price_per_sample !== undefined
-      ? String(bottle.price_per_sample)
+      ? `€${bottle.price_per_sample}`
       : null,
   ].filter((value): value is string => Boolean(value?.trim()));
 
@@ -224,7 +224,7 @@ function LineupInspectorOverlay({
             )}
           </button>
           {areParametersVisible && (
-            <div className="pointer-events-none absolute right-4 top-1/2 flex -translate-y-1/2 flex-col items-end gap-2">
+            <div className="pointer-events-none absolute right-4 top-8 flex flex-col items-end gap-2">
               {parameterBadges.map((value, index) => (
                 <span
                   key={`${bottle.id}-${value}`}
