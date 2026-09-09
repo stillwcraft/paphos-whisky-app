@@ -99,55 +99,27 @@ function formatDate(date: string) {
     }).format(parsedDate);
 }
 
-function useLogoDateTextColor(logoUrl: string | null): string {
-  const [textColor, setTextColor] = useState('#FFFFFF');
+function formatEventBannerDate(
+  date: string,
+  language: string,
+): { month: string; dayAndTime: string } {
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.valueOf())) {
+    return { month: '', dayAndTime: date };
+  }
 
-  useEffect(() => {
-    if (!logoUrl) {
-      setTextColor('#FFFFFF');
-      return;
-    }
-
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) {
-        return;
-      }
-
-      try {
-        context.drawImage(image, 0, 0);
-        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
-        let totalLuminance = 0;
-        let opaquePixels = 0;
-        for (let index = 0; index < pixels.length; index += 4) {
-          if (pixels[index + 3] === 0) continue;
-          totalLuminance += (
-            0.2126 * pixels[index] + 0.7152 * pixels[index + 1] + 0.0722 * pixels[index + 2]
-          );
-          opaquePixels += 1;
-        }
-        setTextColor(
-          opaquePixels > 0 && totalLuminance / opaquePixels > 160 ? '#0F172A' : '#EAB308',
-        );
-      } catch {
-        setTextColor('#FFFFFF');
-      }
-    };
-    image.onerror = () => setTextColor('#FFFFFF');
-    image.src = logoUrl;
-
-    return () => {
-      image.onload = null;
-      image.onerror = null;
-    };
-  }, [logoUrl]);
-
-  return textColor;
+  const month = new Intl.DateTimeFormat(language, {
+    month: 'long',
+  }).format(parsedDate).toLocaleUpperCase(language);
+  const day = new Intl.DateTimeFormat(language, {
+    day: 'numeric',
+  }).format(parsedDate);
+  const timePart = new Intl.DateTimeFormat(language, {
+    hour: '2-digit',
+    hourCycle: 'h23',
+    minute: '2-digit',
+  }).format(parsedDate);
+  return { month, dayAndTime: `${day} | ${timePart}` };
 }
 
 function EventGalleryCard({
@@ -161,17 +133,18 @@ function EventGalleryCard({
   onOpen: () => void;
   resetToCenterRevision: number;
 }) {
+  const { i18n } = useTranslation();
   const cardRef = useRef<HTMLElement>(null);
   const galleryRef = useRef<HTMLDivElement>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(1);
   const [isCardVisible, setIsCardVisible] = useState(false);
   const [isCenterImageReady, setIsCenterImageReady] = useState(false);
-  const dateTextColor = useLogoDateTextColor(event.distillery_logo_url);
   const imageUrls = [
     event.image_url_left ?? event.image_url,
     event.image_url,
     event.image_url_right ?? event.image_url,
   ];
+  const bannerDate = formatEventBannerDate(event.date, i18n.language);
 
   useEffect(() => {
     const gallery = galleryRef.current;
@@ -264,7 +237,7 @@ function EventGalleryCard({
           </button>
         ))}
       </div>
-      {isCardVisible && isCenterImageReady && activeImageIndex === 1 && (event.distillery_logo_url || event.event_date_formatted) && (
+      {isCardVisible && isCenterImageReady && activeImageIndex === 1 && (event.distillery_logo_url || bannerDate.dayAndTime) && (
         <>
           {event.distillery_logo_url && (
             <div className="pointer-events-none absolute inset-x-0 top-[8%] z-10 flex h-[15%] justify-center">
@@ -276,17 +249,18 @@ function EventGalleryCard({
               />
             </div>
           )}
-          {event.event_date_formatted && (
+          {bannerDate && (
             <div className="pointer-events-none absolute inset-x-0 bottom-[8%] z-10 flex h-[15%] items-center justify-center px-8">
               <span
-                className="text-center text-[clamp(1.5rem,7vw,3.5rem)] font-bold tracking-wide"
+                className="flex flex-col text-center font-bold tracking-wide"
                 style={{
                   animation: 'event-banner-date 400ms 400ms ease-out both',
-                  color: dateTextColor,
+                  color: '#C5A059',
                   fontFamily: 'Montserrat, sans-serif',
                 }}
               >
-                {event.event_date_formatted}
+                {bannerDate.month && <span className="text-[clamp(1rem,4vw,1.75rem)]">{bannerDate.month}</span>}
+                <span className="text-[clamp(1.5rem,7vw,3.5rem)]">{bannerDate.dayAndTime}</span>
               </span>
             </div>
           )}

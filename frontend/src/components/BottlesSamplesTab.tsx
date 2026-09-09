@@ -91,7 +91,7 @@ export function BottlesSamplesTab() {
           {items.map((item) => (
             <article
               key={item.id}
-              className="flex h-full min-h-80 cursor-pointer flex-col overflow-hidden rounded-2xl bg-slate-800 shadow-lg shadow-black/20 transition-transform hover:-translate-y-0.5"
+              className="flex h-full min-h-80 cursor-pointer flex-col overflow-hidden rounded-2xl bg-[#16161A] shadow-lg shadow-black/20 transition-transform hover:-translate-y-0.5"
               onClick={() => {
                 setIsPhotoExpanded(false);
                 setExpandedBottleId(item.id);
@@ -99,7 +99,7 @@ export function BottlesSamplesTab() {
             >
               <div className="relative h-40 shrink-0">
                 <BottleImage alt={item.name} className="h-full w-full object-cover" imageUrl={item.image_url} />
-                <span className="absolute left-3 top-3 rounded-full bg-amber-400 px-2.5 py-1 text-[10px] font-semibold text-slate-950">
+                <span className="absolute left-3 top-3 rounded-full border border-[#C5A059]/30 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-[#C5A059]">
                   {t(labelTitleKeys[item.label])}
                 </span>
               </div>
@@ -109,7 +109,7 @@ export function BottlesSamplesTab() {
                   <p className="mt-2 text-xs leading-5 text-slate-400" style={{ whiteSpace: 'pre-wrap' }}>{item.description}</p>
                 </div>
                 <div className="mt-auto pt-4">
-                  <span className="text-xl font-bold text-amber-400">€{item.price_per_sample}</span>
+                  <span className="text-xl font-bold text-[#C5A059]">€{item.price_per_sample}</span>
                 </div>
               </div>
             </article>
@@ -155,14 +155,14 @@ export function BottlesSamplesTab() {
             </div>
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6">
               <div>
-                <span className="inline-flex rounded-full bg-amber-400 px-2.5 py-1 text-xs font-semibold text-slate-950">
+                <span className="inline-flex rounded-full border border-[#C5A059]/30 bg-black/60 px-2.5 py-1 text-xs font-semibold text-[#C5A059]">
                   {t(labelTitleKeys[expandedBottle.label])}
                 </span>
                 <h2 className="mt-4 text-2xl font-semibold text-white">{expandedBottle.name}</h2>
                 <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>
               </div>
               <div className="mt-auto border-t border-white/10 pt-5">
-                <p className="text-xl font-bold text-amber-400">€{expandedBottle.price_per_sample}</p>
+                <p className="text-xl font-bold text-[#C5A059]">€{expandedBottle.price_per_sample}</p>
               </div>
             </div>
           </article>

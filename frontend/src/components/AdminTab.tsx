@@ -419,10 +419,10 @@ export function AdminTab() {
         <fieldset style={{ ...fieldGroupStyle, border: 0, margin: 0, padding: 0 }}>
           <legend style={fieldLabelStyle}>Tasting Bottles</legend>
           <div style={{ ...listStyle, marginTop: 0, maxHeight: 240, overflowY: 'auto' }}>
-            {bottles.length === 0 ? <span style={{ color: '#a0aec0', fontSize: 13 }}>No bottles available.</span> : bottles.map((bottle) => {
+            {bottles.length === 0 ? <span style={{ color: '#9E9D9A', fontSize: 13 }}>No bottles available.</span> : bottles.map((bottle) => {
               const selected = eventForm.bottle_ids.includes(bottle.id);
               const distillery = distilleries.find((item) => item.id === bottle.distillery_id);
-              return <label key={bottle.id} style={{ ...rowStyle, border: selected ? '1px solid #f59e0b' : '1px solid transparent', cursor: 'pointer' }}>
+              return <label key={bottle.id} style={{ ...rowStyle, border: selected ? '1px solid #C5A059' : '1px solid transparent', cursor: 'pointer' }}>
                 <span style={{ alignItems: 'center', display: 'flex', gap: 8, minWidth: 0 }}>
                   <input
                     checked={selected}
@@ -436,7 +436,7 @@ export function AdminTab() {
                   />
                   <span style={{ minWidth: 0 }}>
                     <strong style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{bottle.name}</strong>
-                    <small style={{ color: '#a0aec0' }}>{[distillery?.name, bottle.age, bottle.abv].filter(Boolean).join(' · ')}</small>
+                    <small style={{ color: '#9E9D9A' }}>{[distillery?.name, bottle.age, bottle.abv].filter(Boolean).join(' · ')}</small>
                   </span>
                 </span>
                 {bottle.image_url && <img alt="" src={bottle.image_url} style={{ borderRadius: 4, height: 36, objectFit: 'cover', width: 28 }} />}
@@ -493,34 +493,34 @@ export function AdminTab() {
     </Accordion>
     <Accordion title="🥃 Manage Bottles & Samples Tab">
       <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields backgrounds={backgrounds} form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
-      <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#f59e0b' }}>({bottle.label})</em></span><span style={actionRow}><button aria-label="Copy bottle link" title="Copy bottle link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗</button><button aria-label="Edit bottle" title="Edit bottle" style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️</button><button aria-label="Remove bottle" title="Remove bottle" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️</button></span></div>)}</div>
+      <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#C5A059' }}>({bottle.label})</em></span><span style={actionRow}><button aria-label="Copy bottle link" title="Copy bottle link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗</button><button aria-label="Edit bottle" title="Edit bottle" style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️</button><button aria-label="Remove bottle" title="Remove bottle" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️</button></span></div>)}</div>
     </Accordion>
     {deletion && <div style={modalOverlayStyle} role="presentation"><div aria-modal="true" role="dialog" style={modalStyle}><h3>Confirm deletion</h3><p>Delete {deletion.kind === 'event' ? deletion.item.title : deletion.item.name}?</p><div style={buttonRow}><button style={secondaryButtonStyle} type="button" onClick={() => setDeletion(null)}>Cancel</button><button style={dangerButtonStyle} type="button" onClick={() => void remove()}>Delete</button></div></div></div>}
   </div>;
 }
 
-const pageStyle: CSSProperties = { color: '#fff', padding: 16, paddingBottom: 90 };
-const sectionStyle: CSSProperties = { background: '#1a202c', borderRadius: 12, marginBottom: 14, padding: 14 };
-const summaryStyle: CSSProperties = { color: '#f59e0b', cursor: 'pointer', fontSize: 16, fontWeight: 700 };
+const pageStyle: CSSProperties = { color: '#F4F4F5', padding: 16, paddingBottom: 90 };
+const sectionStyle: CSSProperties = { background: '#16161A', borderRadius: 12, marginBottom: 14, padding: 14 };
+const summaryStyle: CSSProperties = { color: '#C5A059', cursor: 'pointer', fontSize: 16, fontWeight: 700 };
 const formStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 10 };
 const fieldGroupStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 };
-const fieldLabelStyle: CSSProperties = { color: '#cbd5e0', fontSize: 13, fontWeight: 600 };
-const inputStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, boxSizing: 'border-box', color: '#fff', padding: 10, width: '100%' };
-const buttonStyle: CSSProperties = { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#000', cursor: 'pointer', fontWeight: 700, padding: '10px 12px' };
-const secondaryButtonStyle: CSSProperties = { background: '#2d3748', border: '1px solid #4a5568', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: '8px 10px' };
-const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: '#f6c453', fontSize: 12, padding: '6px 8px' };
+const fieldLabelStyle: CSSProperties = { color: '#CBC9C5', fontSize: 13, fontWeight: 600 };
+const inputStyle: CSSProperties = { background: '#0D0D0E', border: '1px solid #4A4847', borderRadius: 8, boxSizing: 'border-box', color: '#F4F4F5', padding: 10, width: '100%' };
+const buttonStyle: CSSProperties = { background: '#C5A059', border: 'none', borderRadius: 8, color: '#000', cursor: 'pointer', fontWeight: 700, padding: '10px 12px' };
+const secondaryButtonStyle: CSSProperties = { background: '#2A292C', border: '1px solid #4A4847', borderRadius: 8, color: '#F4F4F5', cursor: 'pointer', padding: '8px 10px' };
+const smallButtonStyle: CSSProperties = { ...secondaryButtonStyle, color: '#C5A059', fontSize: 12, padding: '6px 8px' };
 const dangerButtonStyle: CSSProperties = { ...smallButtonStyle, color: '#fc8181' };
-const labelStyle: CSSProperties = { color: '#cbd5e0', fontSize: 14 };
+const labelStyle: CSSProperties = { color: '#CBC9C5', fontSize: 14 };
 const buttonRow: CSSProperties = { display: 'flex', gap: 8, justifyContent: 'flex-end' };
 const actionRow: CSSProperties = { display: 'flex', flexShrink: 0, gap: 6 };
 const listStyle: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 };
-const rowStyle: CSSProperties = { alignItems: 'center', background: '#2d3748', borderRadius: 8, display: 'flex', fontSize: 14, gap: 8, justifyContent: 'space-between', padding: 8 };
-const cardStyle: CSSProperties = { background: '#2d3748', borderRadius: 10, padding: 10 };
+const rowStyle: CSSProperties = { alignItems: 'center', background: '#2A292C', borderRadius: 8, display: 'flex', fontSize: 14, gap: 8, justifyContent: 'space-between', padding: 8 };
+const cardStyle: CSSProperties = { background: '#2A292C', borderRadius: 10, padding: 10 };
 const spoilerButtonStyle: CSSProperties = { ...smallButtonStyle, marginTop: 10 };
-const messageStyle: CSSProperties = { background: '#2d3748', borderRadius: 8, padding: 10 };
-const tagIconStyle: CSSProperties = { background: '#1a202c', borderRadius: '50%', flexShrink: 0, height: 24, objectFit: 'cover', width: 24 };
+const messageStyle: CSSProperties = { background: '#2A292C', borderRadius: 8, padding: 10 };
+const tagIconStyle: CSSProperties = { background: '#0D0D0E', borderRadius: '50%', flexShrink: 0, height: 24, objectFit: 'cover', width: 24 };
 const localeRowStyle: CSSProperties = { display: 'inline-flex', gap: 4, marginLeft: 6 };
-const localeButtonStyle: CSSProperties = { background: 'transparent', border: 'none', color: '#a0aec0', cursor: 'pointer', fontSize: 11, padding: 0 };
-const activeLocaleButtonStyle: CSSProperties = { ...localeButtonStyle, color: '#f6c453', fontWeight: 700 };
+const localeButtonStyle: CSSProperties = { background: 'transparent', border: 'none', color: '#9E9D9A', cursor: 'pointer', fontSize: 11, padding: 0 };
+const activeLocaleButtonStyle: CSSProperties = { ...localeButtonStyle, color: '#C5A059', fontWeight: 700 };
 const modalOverlayStyle: CSSProperties = { alignItems: 'center', background: 'rgba(0,0,0,.7)', display: 'flex', inset: 0, justifyContent: 'center', padding: 20, position: 'fixed', zIndex: 50 };
-const modalStyle: CSSProperties = { background: '#1a202c', border: '1px solid #4a5568', borderRadius: 12, maxWidth: 360, padding: 20, width: '100%' };
+const modalStyle: CSSProperties = { background: '#16161A', border: '1px solid #4A4847', borderRadius: 12, maxWidth: 360, padding: 20, width: '100%' };

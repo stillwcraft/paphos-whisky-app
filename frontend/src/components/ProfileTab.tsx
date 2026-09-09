@@ -91,12 +91,12 @@ export function ProfileTab() {
 
   return (
     <section className="mx-auto flex min-h-[calc(100vh-7rem)] w-full max-w-md items-center pb-8 pt-[env(safe-area-inset-top)]">
-      <article className="w-full rounded-3xl border border-amber-200/15 bg-slate-900/70 p-6 text-center shadow-2xl shadow-black/30 backdrop-blur">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-amber-400 text-amber-400 shadow-lg shadow-amber-400/20">
+      <article className="w-full rounded-3xl border border-[#C5A059]/15 bg-[#16161A]/70 p-6 text-center shadow-2xl shadow-black/30 backdrop-blur">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-[#C5A059]/50 bg-gradient-to-br from-[#2A1810] to-[#422513] text-[#C5A059] shadow-lg shadow-black/30">
           {photoUrl ? (
             <img alt={t('profile.avatar')} className="h-full w-full rounded-full object-cover" src={photoUrl} />
           ) : (
-            <div className="flex h-full w-full items-center justify-center rounded-full bg-slate-800">
+            <div className="flex h-full w-full items-center justify-center rounded-full">
               {name ? <span className="text-2xl font-bold">{name[0]?.toUpperCase()}</span> : <UserPlaceholderIcon />}
             </div>
           )}
@@ -126,7 +126,7 @@ export function ProfileTab() {
                 aria-pressed={isSelected}
                 className={`rounded-md border px-2 py-1 text-xs font-semibold transition-colors ${
                   isSelected
-                    ? 'border-amber-400 bg-amber-400 text-slate-950'
+                    ? 'border-[#C5A059] bg-[#C5A059] text-black'
                     : 'border-slate-600 text-slate-400 hover:border-slate-400 hover:text-slate-200'
                 }`}
                 lang={code}

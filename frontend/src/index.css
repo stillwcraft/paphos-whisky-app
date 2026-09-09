@@ -1,8 +1,35 @@
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --color-main: #0D0D0E;
+  --color-card: #16161A;
+  --color-gold: #C5A059;
+  --color-amber: #B86B35;
+  --color-text-light: #F4F4F5;
+  --color-text-muted: #9E9D9A;
+
+  --color-white: #F4F4F5;
+  --color-slate-950: #0A0A0B;
+  --color-slate-900: #0D0D0E;
+  --color-slate-800: #16161A;
+  --color-slate-700: #2A292C;
+  --color-slate-600: #4A4847;
+  --color-slate-500: #6E6D6A;
+  --color-slate-400: #9E9D9A;
+  --color-slate-300: #CBC9C5;
+  --color-slate-200: #E2E0DC;
+  --color-slate-100: #F4F4F5;
+  --color-amber-700: #B86B35;
+  --color-amber-400: #C5A059;
+  --color-amber-300: #D9BD82;
+  --color-amber-200: #E7D3AA;
+  --color-amber-100: #F2E7D2;
+}
+
 body {
-  background: #0f172a;
+  background: #0D0D0E;
+  color: #F4F4F5;
   padding: 0;
   margin: 0;
 }
@@ -19,7 +46,7 @@ body {
 }
 
 .markdown-content h1 {
-  color: #f59e0b;
+  color: #C5A059;
   font-size: 1.8rem !important;
   font-weight: 800 !important;
   line-height: 1.2;
@@ -28,7 +55,7 @@ body {
 }
 
 .markdown-content h2 {
-  color: #f59e0b;
+  color: #C5A059;
   font-size: 1.4rem !important;
   font-weight: 700 !important;
   margin-bottom: 6px;
@@ -36,7 +63,7 @@ body {
 }
 
 .markdown-content h3 {
-  color: #e2e8f0;
+  color: #F4F4F5;
   font-size: 1.2rem !important;
   font-weight: 700 !important;
   margin-bottom: 4px;
@@ -44,7 +71,7 @@ body {
 }
 
 .markdown-content p {
-  color: #cbd5e1;
+  color: #CBC9C5;
   line-height: 1.6;
   margin-bottom: 12px;
 }
@@ -62,7 +89,7 @@ body {
 }
 
 .markdown-content li {
-  color: #cbd5e1;
+  color: #CBC9C5;
   line-height: 1.5;
   margin-bottom: 6px;
 }

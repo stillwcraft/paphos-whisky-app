@@ -87,7 +87,7 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
   const visibleTabs = isAdmin ? [...tabs, adminTab] : tabs;
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-amber-100/10 bg-slate-950/95 px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+    <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
       <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
         {visibleTabs.map(({ id, labelKey, Icon }) => {
           const isActive = activeTab === id;
@@ -99,7 +99,7 @@ function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onTabChange(id)}
               className={`flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 text-[10px] font-medium transition-colors ${
-                isActive ? 'text-amber-400' : 'text-slate-400 hover:text-slate-200'
+                isActive ? 'text-[#C5A059]' : 'text-[#6E6D6A] hover:text-[#F4F4F5]'
               }`}
             >
               <Icon className="h-5 w-5" aria-hidden="true" />
@@ -167,7 +167,7 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white">
+    <div className="min-h-screen bg-[#0D0D0E] text-[#F4F4F5]">
       <main className="min-h-screen px-6 pb-28">
           {activeTab === 'events' ? (
             <EventsTab
@@ -192,7 +192,7 @@ export function App() {
           ) : (
             <div className="flex min-h-screen items-center justify-center text-center">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-400">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#C5A059]">
                   Whisky Club
                 </p>
                 <h1 className="text-2xl font-semibold">{activeScreen}</h1>
