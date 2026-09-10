@@ -2196,11 +2196,20 @@ def render_review_card_or_503(review_id: int, db: Session) -> bytes:
 
 
 @app.get("/api/reviews/{review_id}/card.png", response_class=Response)
-def get_review_card(review_id: int, db: Session = Depends(get_db)):
+def get_review_card(
+    review_id: int,
+    download: bool = False,
+    db: Session = Depends(get_db),
+):
+    headers = {"Cache-Control": "no-store"}
+    if download:
+        headers["Content-Disposition"] = (
+            f'attachment; filename="whisky-review-{review_id}.png"'
+        )
     return Response(
         content=render_review_card_or_503(review_id, db),
         media_type="image/png",
-        headers={"Cache-Control": "no-store"},
+        headers=headers,
     )
 
 

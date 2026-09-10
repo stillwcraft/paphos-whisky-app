@@ -28,6 +28,7 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
   const [error, setError] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const cardUrl = `${API_URL}/api/reviews/${reviewId}/card.png`;
+  const downloadUrl = `${cardUrl}?download=1`;
 
   const publish = async () => {
     setIsPublishing(true);
@@ -61,17 +62,12 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
         return;
       }
 
-      const response = await fetch(cardUrl);
-      if (!response.ok) throw new Error(await extractErrorMessage(response));
-      const blobUrl = URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `whisky-review-${reviewId}.png`;
+      link.href = downloadUrl;
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not download the review card.');
     } finally {
