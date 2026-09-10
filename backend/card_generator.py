@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from html import escape
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 
 class CardGenerationError(RuntimeError):
@@ -113,4 +116,5 @@ def render_review_card(data: ReviewCardData) -> bytes:
             browser.close()
             return image
     except Exception as exc:
+        logger.exception("Failed to render social proof review card")
         raise CardGenerationError("Unable to render review card") from exc
