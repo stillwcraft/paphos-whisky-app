@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
+import { ReviewShareModal } from '@/components/ReviewShareModal.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -77,6 +78,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedReviewId, setSavedReviewId] = useState<number | null>(null);
 
   const averageScore = Math.round((nose + taste + finish) / 3);
   const scoreVerdict = getScoreVerdict(averageScore);
@@ -171,8 +173,10 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
         }),
       });
       if (!response.ok) throw new Error(await extractErrorMessage(response));
+      const savedReview = await response.json() as ReviewResponse;
+      if (savedReview.id === null) throw new Error('Review was saved without an ID.');
       onSaved();
-      onClose();
+      setSavedReviewId(savedReview.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save review.');
     } finally {
@@ -187,6 +191,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   ];
 
   return (
+    <>
     <div className="fixed inset-x-0 bottom-0 top-10 z-50 bg-slate-950/95 p-4 backdrop-blur-sm">
       <style>{`
         .review-slider::-webkit-slider-thumb {
@@ -308,5 +313,13 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
         </div>
       </article>
     </div>
+    {savedReviewId !== null && (
+      <ReviewShareModal
+        initDataRaw={initDataRaw}
+        onClose={onClose}
+        reviewId={savedReviewId}
+      />
+    )}
+    </>
   );
 }

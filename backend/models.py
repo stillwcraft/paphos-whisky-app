@@ -188,6 +188,8 @@ class UserReview(Base):
     nose = Column(Integer, nullable=False, default=80)
     taste = Column(Integer, nullable=False, default=80)
     finish = Column(Integer, nullable=False, default=80)
+    author_name = Column(String, nullable=True)
+    author_username = Column(String, nullable=True)
 
     bottle = relationship("Bottle", back_populates="user_reviews")
     review_tags = relationship(

@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qsl
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+import requests
+from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel, Field
 
 import models
+from card_generator import CardGenerationError, ReviewCardData, render_review_card
 from database import engine, get_db
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
@@ -380,6 +382,11 @@ def ensure_user_review_schema() -> None:
                         f"ALTER TABLE user_reviews "
                         f"ADD COLUMN {col_name} INTEGER NOT NULL DEFAULT 80"
                     )
+                )
+        for col_name in ("author_name", "author_username"):
+            if col_name not in review_columns:
+                connection.execute(
+                    text(f"ALTER TABLE user_reviews ADD COLUMN {col_name} VARCHAR")
                 )
 
         review_inspector = inspect(connection)
@@ -992,6 +999,10 @@ class ReviewResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ReviewShareRequest(BaseModel):
+    thread_id: Optional[int] = Field(default=None, gt=0)
 
 
 class RegistrationBase(BaseModel):
@@ -2123,6 +2134,133 @@ def build_review_response(review: models.UserReview) -> ReviewResponse:
     )
 
 
+def get_score_verdict(score: int) -> str:
+    if score >= 95:
+        return "Истинный шедевр"
+    if score >= 90:
+        return "Жемчужина коллекции"
+    if score >= 80:
+        return "Достойная классика"
+    if score >= 70:
+        return "На любителя"
+    return "Лучше пропустить"
+
+
+def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
+    review = (
+        db.query(models.UserReview)
+        .options(
+            joinedload(models.UserReview.bottle).joinedload(models.Bottle.distillery),
+        )
+        .filter(models.UserReview.id == review_id)
+        .first()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+
+    bottle = review.bottle
+    if bottle is None:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+    distillery = bottle.distillery
+    score = round((review.nose + review.taste + review.finish) / 3)
+    return ReviewCardData(
+        bottle_name=bottle.name or "Whisky",
+        bottle_image_url=bottle.image_url,
+        distillery_name=distillery.name if distillery else "Paphos Whisky Club",
+        distillery_logo_url=distillery.logo_url if distillery else None,
+        abv=bottle.abv,
+        age=bottle.age,
+        cask=bottle.cask,
+        bottles=bottle.bottles,
+        score=score,
+        verdict=get_score_verdict(score),
+        author_name=review.author_name or "Club member",
+        author_username=review.author_username,
+    )
+
+
+def render_review_card_or_503(review_id: int, db: Session) -> bytes:
+    try:
+        return render_review_card(get_review_card_data(review_id, db))
+    except CardGenerationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Review card renderer is unavailable",
+        ) from exc
+
+
+@app.get("/api/reviews/{review_id}/card.png", response_class=Response)
+def get_review_card(review_id: int, db: Session = Depends(get_db)):
+    return Response(
+        content=render_review_card_or_503(review_id, db),
+        media_type="image/png",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.post("/api/reviews/{review_id}/share", status_code=status.HTTP_204_NO_CONTENT)
+def share_review_card(
+    review_id: int,
+    share_request: ReviewShareRequest,
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    review = (
+        db.query(models.UserReview)
+        .filter(models.UserReview.id == review_id)
+        .first()
+    )
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    ensure_telegram_id_matches(authenticated_user, review.telegram_id)
+
+    club_chat_id = os.getenv("CLUB_CHAT_ID")
+    if not club_chat_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Club sharing is not configured: CLUB_CHAT_ID is missing",
+        )
+
+    payload: dict[str, str | int] = {
+        "chat_id": club_chat_id,
+        "caption": "New club review",
+    }
+    if share_request.thread_id is not None:
+        payload["message_thread_id"] = share_request.thread_id
+
+    try:
+        telegram_response = requests.post(
+            f"https://api.telegram.org/bot{get_bot_token()}/sendPhoto",
+            data=payload,
+            files={
+                "photo": (
+                    f"whisky-review-{review_id}.png",
+                    render_review_card_or_503(review_id, db),
+                    "image/png",
+                )
+            },
+            timeout=30,
+        )
+        telegram_response.raise_for_status()
+        telegram_payload = telegram_response.json()
+    except requests.RequestException as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Telegram could not publish the review card",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Telegram returned an invalid response",
+        ) from exc
+
+    if not telegram_payload.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Telegram rejected the review card",
+        )
+
+
 @app.get("/api/reviews", response_model=ReviewResponse)
 def get_review(
     review_query: ReviewQuery = Depends(),
@@ -2199,6 +2337,14 @@ def upsert_review(
         models.UserReview.bottle_id == bottle_id,
     ).first()
 
+    author_name = str(
+        authenticated_user.user.get("first_name")
+        or authenticated_user.user.get("username")
+        or "Club member"
+    ).strip() or "Club member"
+    raw_username = authenticated_user.user.get("username")
+    author_username = str(raw_username).strip() if raw_username else None
+
     if review is None:
         review = models.UserReview(
             telegram_id=telegram_id,
@@ -2206,6 +2352,8 @@ def upsert_review(
             nose=review_data.nose,
             taste=review_data.taste,
             finish=review_data.finish,
+            author_name=author_name,
+            author_username=author_username,
         )
         db.add(review)
         try:
@@ -2233,10 +2381,14 @@ def upsert_review(
             review.nose = review_data.nose
             review.taste = review_data.taste
             review.finish = review_data.finish
+            review.author_name = author_name
+            review.author_username = author_username
     else:
         review.nose = review_data.nose
         review.taste = review_data.taste
         review.finish = review_data.finish
+        review.author_name = author_name
+        review.author_username = author_username
         db.flush()
 
     # Use the current Session transaction so the flushed review ID is visible.
