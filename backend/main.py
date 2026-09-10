@@ -501,6 +501,9 @@ def ensure_user_review_schema() -> None:
                 )
 
             tag_unique = tag_inspector.get_unique_constraints("user_review_tags")
+            tag_primary_key = set(
+                tag_inspector.get_pk_constraint("user_review_tags").get("constrained_columns") or []
+            )
             has_tag_pair_unique = any(
                 set(c.get("column_names") or []) == {"review_id", "tasting_tag_id"}
                 for c in tag_unique
@@ -508,7 +511,7 @@ def ensure_user_review_schema() -> None:
                 idx.get("unique")
                 and set(idx.get("column_names") or []) == {"review_id", "tasting_tag_id"}
                 for idx in tag_indexes
-            )
+            ) or tag_primary_key == {"review_id", "tasting_tag_id"}
             if not has_tag_pair_unique:
                 dup_tags = connection.execute(
                     text(
@@ -543,6 +546,9 @@ def ensure_user_review_schema() -> None:
                         "ON user_review_tags (review_id, tasting_tag_id)"
                     )
                 )
+
+
+ensure_user_review_schema()
 
 
 app = FastAPI(title="Paphos Whisky Club API")
