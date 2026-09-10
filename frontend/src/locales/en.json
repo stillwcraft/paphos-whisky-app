@@ -15,7 +15,14 @@
     "taste": "Taste",
     "finish": "Finish",
     "tasting_notes": "Tasting notes",
-    "close_without_saving": "Close review without saving"
+    "close_without_saving": "Close review without saving",
+    "verdicts": {
+      "masterpiece": { "title": "A True Masterpiece.", "subtitle": "Impeccable balance and an endless finish." },
+      "gem": { "title": "Crown Jewel.", "subtitle": "Vibrant character and top-tier quality." },
+      "classic": { "title": "A Solid Classic.", "subtitle": "An excellent choice for a fine evening." },
+      "acquired": { "title": "An Acquired Taste.", "subtitle": "A bit rough with compromised balance." },
+      "skip": { "title": "Better to Skip.", "subtitle": "Clear flaws and a harsh spirity bite." }
+    }
   },
   "bottle": {
     "age": "Age",

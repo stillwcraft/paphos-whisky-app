@@ -59,12 +59,12 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return `Server error: ${response.status}`;
 }
 
-function getScoreVerdict(score: number): { title: string; subtitle: string } {
-  if (score >= 95) return { title: 'Истинный шедевр.', subtitle: 'Безупречный баланс и бесконечный финиш.' };
-  if (score >= 90) return { title: 'Жемчужина коллекции.', subtitle: 'Яркий характер и высший класс.' };
-  if (score >= 80) return { title: 'Достойная классика.', subtitle: 'Отличный выбор для хорошего вечера.' };
-  if (score >= 70) return { title: 'На любителя.', subtitle: 'Резковатый профиль с хромающим балансом.' };
-  return { title: 'Лучше пропустить.', subtitle: 'Явные дефекты и резкий спирт.' };
+function getScoreVerdictKey(score: number): 'masterpiece' | 'gem' | 'classic' | 'acquired' | 'skip' {
+  if (score >= 95) return 'masterpiece';
+  if (score >= 90) return 'gem';
+  if (score >= 80) return 'classic';
+  if (score >= 70) return 'acquired';
+  return 'skip';
 }
 
 export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
@@ -81,7 +81,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   const [savedReviewId, setSavedReviewId] = useState<number | null>(null);
 
   const averageScore = Math.round((nose + taste + finish) / 3);
-  const scoreVerdict = getScoreVerdict(averageScore);
+  const scoreVerdictKey = getScoreVerdictKey(averageScore);
 
   useEffect(() => {
     let active = true;
@@ -239,8 +239,8 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
             <div className="py-6 text-center">
               <p className="tabular-nums text-7xl font-bold text-amber-400">{averageScore}</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">{t('review.points')}</p>
-              <p className="mt-1 text-base font-bold text-[#C5A059]">{scoreVerdict.title}</p>
-              <p className="mt-0.5 text-xs font-normal text-[#9E9D9A]">{scoreVerdict.subtitle}</p>
+              <p className="mt-1 text-base font-bold text-[#C5A059]">{t(`review.verdicts.${scoreVerdictKey}.title`)}</p>
+              <p className="mt-0.5 text-xs font-normal text-[#9E9D9A]">{t(`review.verdicts.${scoreVerdictKey}.subtitle`)}</p>
             </div>
 
             <div className="space-y-5 px-5">
