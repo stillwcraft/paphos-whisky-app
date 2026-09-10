@@ -1115,6 +1115,11 @@ export function EventsTab({
                   : <div aria-hidden="true" className="flex h-full w-full items-center justify-center text-6xl">🥃</div>
                 }
               </div>
+              <div className={`absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col items-end gap-2.5 transition-opacity duration-300 ${isLineupPhotoExpanded ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+                {[lineupBottle.abv, lineupBottle.age, lineupBottle.cask, lineupBottle.bottles].filter(Boolean).map((value, index) => (
+                  <span key={String(value)} className="whitespace-nowrap rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5] shadow-lg backdrop-blur-sm" style={{ animation: `bottle-detail-chip 260ms ${250 + index * 80}ms ease-out both` }}>{value}</span>
+                ))}
+              </div>
               <button
                 aria-label={t('bottle.close_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
@@ -1126,32 +1131,6 @@ export function EventsTab({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <div className="mb-4 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{lineupBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{lineupBottle.price_per_sample}</span></div>
-              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.age')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{lineupBottle.age || t('bottle.nas')}</dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.abv')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{lineupBottle.abv || t('common.na')}</dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.cask')}</dt>
-                  <dd
-                    className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
-                    style={{ fontSize: lineupBottle.cask && lineupBottle.cask.length > 15 ? '11px' : '14px', lineHeight: 1.2 }}
-                    title={lineupBottle.cask ?? undefined}
-                  >
-                    {lineupBottle.cask || t('common.na')}
-                  </dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.bottles')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={lineupBottle.bottles ?? undefined}>
-                    {lineupBottle.bottles || t('common.na')}
-                  </dd>
-                </div>
-              </dl>
               <BottleTagChart bottleId={lineupBottle.id} refreshRevision={lineupReviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{lineupBottle.description}</p>
             </div>

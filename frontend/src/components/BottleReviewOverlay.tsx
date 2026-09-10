@@ -77,7 +77,6 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSharePromptOpen, setIsSharePromptOpen] = useState(false);
 
   const averageScore = Math.round((nose + taste + finish) / 3);
   const scoreVerdict = getScoreVerdict(averageScore);
@@ -173,7 +172,7 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
       });
       if (!response.ok) throw new Error(await extractErrorMessage(response));
       onSaved();
-      setIsSharePromptOpen(true);
+      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save review.');
     } finally {
@@ -308,29 +307,6 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
           </button>
         </div>
       </article>
-      {isSharePromptOpen && (
-        <div className="fixed inset-x-5 bottom-6 z-[60] mx-auto max-w-sm rounded-2xl border border-[#C5A059]/30 bg-[#16161A] p-4 shadow-2xl shadow-black/50">
-          <p className="text-center text-sm font-medium text-[#F4F4F5]">{t('review.share_prompt')}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <button
-              className="rounded-xl bg-[#C5A059] px-3 py-2.5 text-sm font-semibold text-black"
-              onClick={() => {
-                window.Telegram?.WebApp?.switchInlineQuery(`My whisky review: ${averageScore}/100.`);
-              }}
-              type="button"
-            >
-              {t('review.share')}
-            </button>
-            <button
-              className="rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium text-[#F4F4F5]"
-              onClick={onClose}
-              type="button"
-            >
-              {t('review.close')}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

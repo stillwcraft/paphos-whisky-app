@@ -217,12 +217,16 @@ export function FavoritesTab() {
               style={{ height: isPhotoExpanded ? '55vh' : '200px', maxHeight: '60vh', transition: 'all 0.3s ease-in-out' }}
             >
               <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6"><BottleImage alt={expandedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" imageUrl={expandedBottle.image_url} /></div>
+              <div className={`absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col items-end gap-2.5 transition-opacity duration-300 ${isPhotoExpanded ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+                {[expandedBottle.abv, expandedBottle.age, expandedBottle.cask, expandedBottle.bottles].filter(Boolean).map((value, index) => (
+                  <span key={String(value)} className="whitespace-nowrap rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5] shadow-lg backdrop-blur-sm" style={{ animation: `bottle-detail-chip 260ms ${250 + index * 80}ms ease-out both` }}>{value}</span>
+                ))}
+              </div>
               <button aria-label={t('bottle.close_details')} className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); closeBottle(); }} type="button">✕</button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <p className="text-sm font-semibold text-amber-400">{expandedBottle.distilleryName}</p>
               <div className="mb-4 mt-3 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{expandedBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{expandedBottle.price_per_sample}</span></div>
-              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.age')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.age || t('bottle.nas')}</dd></div><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.abv')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.abv || t('common.na')}</dd></div></dl>
               <BottleTagChart bottleId={expandedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>
             </div>

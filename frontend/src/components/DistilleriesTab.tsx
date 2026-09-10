@@ -480,6 +480,11 @@ export function DistilleriesTab({
               ) : (
                 <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6"><CatalogImage alt={selectedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" source={null} /></div>
               )}
+              <div className={`absolute right-4 top-1/2 z-10 flex -translate-y-1/2 flex-col items-end gap-2.5 transition-opacity duration-300 ${isPhotoExpanded ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+                {[selectedBottle.abv, selectedBottle.age, selectedBottle.cask, selectedBottle.bottles].filter(Boolean).map((value, index) => (
+                  <span key={String(value)} className="whitespace-nowrap rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 px-3 py-1.5 text-xs text-[#F4F4F5] shadow-lg backdrop-blur-sm" style={{ animation: `bottle-detail-chip 260ms ${250 + index * 80}ms ease-out both` }}>{value}</span>
+                ))}
+              </div>
               <button
                 aria-label={t('bottle.close_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
@@ -494,30 +499,6 @@ export function DistilleriesTab({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <div className="mb-4 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{selectedBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{selectedBottle.price_per_sample}</span></div>
-              <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.age')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.age || t('bottle.nas')}</dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.abv')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white">{selectedBottle.abv || t('common.na')}</dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.cask')}</dt>
-                  <dd
-                    className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white"
-                    style={{ fontSize: selectedBottle.cask && selectedBottle.cask.length > 15 ? '11px' : '14px', lineHeight: 1.2 }}
-                    title={selectedBottle.cask ?? undefined}
-                  >
-                    {selectedBottle.cask || t('common.na')}
-                  </dd>
-                </div>
-                <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
-                  <dt className="text-slate-400">{t('bottle.bottles')}</dt>
-                  <dd className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold text-white" title={selectedBottle.bottles ?? undefined}>{selectedBottle.bottles || t('common.na')}</dd>
-                </div>
-              </dl>
               <BottleTagChart bottleId={selectedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{selectedBottle.description}</p>
             </div>
