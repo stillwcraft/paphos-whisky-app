@@ -180,7 +180,11 @@ def _background() -> Image.Image:
 @lru_cache(maxsize=len(CHIP_ICON_PATHS))
 def _chip_icon(label: str) -> Image.Image:
     with Image.open(CHIP_ICON_PATHS[label]) as image:
-        return image.convert("RGBA")
+        rgba = image.convert("RGBA")
+        bounds = rgba.getbbox()
+        if bounds is None:
+            raise CardGenerationError(f"Chip icon {label} is fully transparent")
+        return ImageOps.contain(rgba.crop(bounds), (32, 32), Image.Resampling.LANCZOS)
 
 
 def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) -> Optional[Image.Image]:
@@ -250,11 +254,8 @@ def _draw_card(data: ReviewCardData) -> bytes:
         _centered_text(draw, data.verdict, footer_center_y - 50, _font(25, True, True), "#EAD7AE")
         _centered_text(draw, data.verdict_subtitle, footer_center_y + 2, _font(15), MUTED)
         username = data.author_username.lstrip("@") if data.author_username else data.author_name
-        _text(draw, f"REVIEW BY {username.upper()}", (710, footer_center_y - 57, 1008, footer_center_y - 26), 14, "#D1B276", True, "center", True)
-        _text(draw, "h", (716, footer_center_y - 17, 790, footer_center_y + 57), 71, "#D1B276", align="center", serif=True)
-        _text(draw, "Cyprus", (790, footer_center_y - 15, 1008, footer_center_y + 18), 27, "#D1B276", align="left", serif=True)
-        _text(draw, "Whisky Club", (790, footer_center_y + 19, 1008, footer_center_y + 53), 27, "#D1B276", align="left", serif=True)
-        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, footer_center_y + 64, 1008, footer_center_y + 97), 21, "#D1B276", align="center", serif=True)
+        _text(draw, f"REVIEW BY {username.upper()}", (710, footer_center_y - 28, 1008, footer_center_y + 3), 14, "#D1B276", True, "center", True)
+        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, footer_center_y + 16, 1008, footer_center_y + 49), 21, "#D1B276", align="center", serif=True)
         with BytesIO() as output:
             card.convert("RGB").save(output, format="PNG")
             return output.getvalue()
