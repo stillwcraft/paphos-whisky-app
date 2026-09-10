@@ -7,5 +7,3 @@ if [ ! -f "$requirements_path" ]; then
 fi
 
 pip install -r "$requirements_path"
-PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/.cache/ms-playwright \
-  python -m playwright install chromium
