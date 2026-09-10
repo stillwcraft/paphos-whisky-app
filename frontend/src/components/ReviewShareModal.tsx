@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AccessDeniedError, downloadFile, openLink, useLaunchParams, useSignal } from '@tma.js/sdk-react';
+import { AccessDeniedError, downloadFile, openLink, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -24,10 +24,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: Props) {
-  const { tgWebAppPlatform: platform } = useLaunchParams();
-  const nativeDownloadAvailable = useSignal(downloadFile.isAvailable);
-  const isTelegramWeb = platform.startsWith('web');
-  const useNativeDownload = !isTelegramWeb && nativeDownloadAvailable;
+  const useNativeDownload = useSignal(downloadFile.isAvailable);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadFailed, setDownloadFailed] = useState(false);
@@ -79,9 +76,10 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
       className="block w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-center text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10"
       href={downloadUrl}
       onClick={(event) => {
-        // Native clients need the external browser; Web uses a real user-initiated new tab.
-        if (!isTelegramWeb && openLink.isAvailable()) {
+        // Let the Telegram host open the URL outside the Mini App's iframe.
+        if (openLink.isAvailable()) {
           event.preventDefault();
+          setError(null);
           try {
             openLink(downloadUrl);
           } catch {
