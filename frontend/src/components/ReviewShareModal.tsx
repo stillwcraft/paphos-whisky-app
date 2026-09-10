@@ -52,13 +52,25 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
     setIsDownloading(true);
     setError(null);
     try {
+      const downloadFile = window.Telegram?.WebApp?.downloadFile;
+      if (downloadFile) {
+        await new Promise<void>((resolve) => downloadFile(
+          { url: cardUrl, file_name: `whisky-review-${reviewId}.png` },
+          () => resolve(),
+        ));
+        return;
+      }
+
       const response = await fetch(cardUrl);
       if (!response.ok) throw new Error(await extractErrorMessage(response));
       const blobUrl = URL.createObjectURL(await response.blob());
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = `whisky-review-${reviewId}.png`;
+      link.style.display = 'none';
+      document.body.appendChild(link);
       link.click();
+      link.remove();
       window.setTimeout(() => URL.revokeObjectURL(blobUrl), 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not download the review card.');
