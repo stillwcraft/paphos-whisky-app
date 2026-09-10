@@ -8,4 +8,4 @@ fi
 
 pip install -r "$requirements_path"
 PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/.cache/ms-playwright \
-  python -m playwright install --with-deps chromium
+  python -m playwright install chromium
