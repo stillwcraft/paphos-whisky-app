@@ -214,17 +214,16 @@ class UserReviewTag(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
     review_id = Column(
         Integer,
         ForeignKey("user_reviews.id", ondelete="CASCADE"),
-        index=True,
+        primary_key=True,
         nullable=False,
     )
     tasting_tag_id = Column(
         Integer,
         ForeignKey("tasting_tags.id", ondelete="CASCADE"),
-        index=True,
+        primary_key=True,
         nullable=False,
     )
     intensity = Column(Integer, nullable=False, default=1)
