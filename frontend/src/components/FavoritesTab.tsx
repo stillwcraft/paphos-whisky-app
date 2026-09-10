@@ -216,21 +216,20 @@ export function FavoritesTab() {
               onClick={(event) => { event.stopPropagation(); setIsPhotoExpanded((current) => !current); }}
               style={{ height: isPhotoExpanded ? '55vh' : '200px', maxHeight: '60vh', transition: 'all 0.3s ease-in-out' }}
             >
-              <BottleImage alt={expandedBottle.name} className="h-full w-full object-contain" imageUrl={expandedBottle.image_url} />
+              <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6"><BottleImage alt={expandedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" imageUrl={expandedBottle.image_url} /></div>
               <button aria-label={t('bottle.close_details')} className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); closeBottle(); }} type="button">✕</button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
               <p className="text-sm font-semibold text-amber-400">{expandedBottle.distilleryName}</p>
-              <h2 className="mt-3 text-2xl font-semibold text-white">{expandedBottle.name}</h2>
+              <div className="mb-4 mt-3 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{expandedBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{expandedBottle.price_per_sample}</span></div>
               <dl className="mt-5 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.age')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.age || t('bottle.nas')}</dd></div><div className="rounded-xl bg-slate-800 p-3"><dt className="text-slate-400">{t('bottle.abv')}</dt><dd className="mt-1 font-semibold text-white">{expandedBottle.abv || t('common.na')}</dd></div></dl>
-              <p className="mt-5 text-lg font-semibold text-amber-400">€{expandedBottle.price_per_sample}</p>
               <BottleTagChart bottleId={expandedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
-              <button className="rounded-xl border border-amber-300 bg-amber-400 px-3 py-3 text-sm font-semibold text-slate-950 transition-colors disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'favorite'); }} type="button">⭐ {t('bottle.favorites')} {expandedBottle.favorites_count > 0 && `(${expandedBottle.favorites_count})`}</button>
+            <div className="flex gap-3 border-t border-white/10 bg-slate-900 p-4">
+              <button aria-label={t('bottle.favorites')} className="rounded-xl border border-[#C5A059]/30 bg-[#C5A059]/10 p-3.5 text-[#C5A059] transition-all hover:bg-[#C5A059]/20 disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdatingBottleId === expandedBottle.id} onClick={(event) => { event.stopPropagation(); void toggleAction(expandedBottle, 'favorite'); }} type="button"><svg aria-hidden="true" className="h-5 w-5" fill="currentColor" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M6 3.75A1.75 1.75 0 0 1 7.75 2h8.5A1.75 1.75 0 0 1 18 3.75V22l-6-3.5L6 22V3.75Z" /></svg></button>
               <button
-                className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
+                className="flex-1 rounded-xl bg-[#C5A059] py-3.5 text-sm font-semibold uppercase tracking-wider text-black shadow-[0_0_15px_rgba(197,160,89,0.3)] transition-all hover:bg-[#b59049]"
                 onClick={(event) => {
                   event.stopPropagation();
                   if (!telegramId) {
@@ -241,7 +240,7 @@ export function FavoritesTab() {
                 }}
                 type="button"
               >
-                📝 {t('bottle.review')}
+                {t('bottle.review')}
               </button>
             </div>
           </article>

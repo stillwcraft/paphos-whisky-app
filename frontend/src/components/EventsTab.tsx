@@ -1109,10 +1109,12 @@ export function EventsTab({
               onClick={(e) => { e.stopPropagation(); setIsLineupPhotoExpanded((c) => !c); }}
               style={{ height: isLineupPhotoExpanded ? '55vh' : '200px', maxHeight: '60vh', transition: 'all 0.3s ease-in-out' }}
             >
-              {lineupBottle.image_url
-                ? <img alt={lineupBottle.name} className="h-full w-full object-contain" src={lineupBottle.image_url} />
-                : <div aria-hidden="true" className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/70 via-slate-700 to-slate-950 text-6xl">🥃</div>
-              }
+              <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6">
+                {lineupBottle.image_url
+                  ? <img alt={lineupBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" src={lineupBottle.image_url} />
+                  : <div aria-hidden="true" className="flex h-full w-full items-center justify-center text-6xl">🥃</div>
+                }
+              </div>
               <button
                 aria-label={t('bottle.close_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
@@ -1123,7 +1125,7 @@ export function EventsTab({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
-              <h2 className="text-2xl font-semibold text-white">{lineupBottle.name}</h2>
+              <div className="mb-4 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{lineupBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{lineupBottle.price_per_sample}</span></div>
               <dl className="mt-5 grid grid-cols-2 gap-3 text-sm">
                 <div className="flex h-[78px] min-w-0 flex-col justify-between rounded-xl bg-slate-800 p-3">
                   <dt className="text-slate-400">{t('bottle.age')}</dt>
@@ -1151,24 +1153,24 @@ export function EventsTab({
                 </div>
               </dl>
               <BottleTagChart bottleId={lineupBottle.id} refreshRevision={lineupReviewRevision} />
-              <p className="mt-5 text-lg font-semibold text-amber-400">€{lineupBottle.price_per_sample}</p>
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{lineupBottle.description}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3 border-t border-white/10 bg-slate-900 p-4">
+            <div className="flex gap-3 border-t border-white/10 bg-slate-900 p-4">
               <button
-                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                aria-label={t('bottle.favorites')}
+                className={`rounded-xl border border-[#C5A059]/30 p-3.5 text-[#C5A059] transition-all hover:bg-[#C5A059]/10 disabled:cursor-not-allowed disabled:opacity-60 ${
                   lineupUserStates[lineupBottle.id]?.is_favorite
-                    ? 'border-amber-300 bg-amber-400 text-slate-950'
-                    : 'border-slate-600 text-slate-100 hover:bg-white/5'
+                    ? 'bg-[#C5A059]/10'
+                    : ''
                 }`}
                 disabled={isUpdatingLineupBottle === lineupBottle.id}
                 onClick={() => void toggleLineupBottleAction(lineupBottle, 'favorite')}
                 type="button"
               >
-                ⭐ {t('bottle.favorites')} {lineupBottle.favorites_count > 0 && `(${lineupBottle.favorites_count})`}
+                <svg aria-hidden="true" className="h-5 w-5" fill={lineupUserStates[lineupBottle.id]?.is_favorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M6 3.75A1.75 1.75 0 0 1 7.75 2h8.5A1.75 1.75 0 0 1 18 3.75V22l-6-3.5L6 22V3.75Z" /></svg>
               </button>
               <button
-                className="rounded-xl border border-slate-600 px-3 py-3 text-sm font-semibold text-slate-100 transition-colors hover:bg-white/5"
+                className="flex-1 rounded-xl bg-[#C5A059] py-3.5 text-sm font-semibold uppercase tracking-wider text-black shadow-[0_0_15px_rgba(197,160,89,0.3)] transition-all hover:bg-[#b59049]"
                 onClick={() => {
                   if (!telegramId) {
                     setFeedback({ kind: 'error', message: t('bottle.open_telegram_to_write_review') });
@@ -1178,7 +1180,7 @@ export function EventsTab({
                 }}
                 type="button"
               >
-                📝 {t('bottle.review')}
+                {t('bottle.review')}
               </button>
             </div>
           </article>

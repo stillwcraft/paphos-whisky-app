@@ -2,13 +2,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
   ResponsiveContainer,
   Tooltip,
-  XAxis,
-  YAxis,
 } from 'recharts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -33,14 +32,6 @@ type Props = {
   refreshRevision?: number;
 };
 
-type TagIconTickProps = {
-  x?: number;
-  y?: number;
-  payload?: {
-    value?: unknown;
-  };
-};
-
 type TagTooltipProps = {
   active?: boolean;
   formatVotes: (count: number) => string;
@@ -48,25 +39,6 @@ type TagTooltipProps = {
     payload?: BottleTagStat;
   }>;
 };
-
-function TagIconTick({ x = 0, y = 0, payload }: TagIconTickProps) {
-  const iconUrl = typeof payload?.value === 'string' ? payload.value : '';
-
-  return (
-    <g aria-hidden="true" transform={`translate(${x - 12}, ${y + 8})`}>
-      <circle cx="12" cy="12" fill="#334155" r="12" />
-      {iconUrl && (
-        <image
-          clipPath="circle(12px at 12px 12px)"
-          height="24"
-          href={iconUrl}
-          preserveAspectRatio="xMidYMid slice"
-          width="24"
-        />
-      )}
-    </g>
-  );
-}
 
 function TagTooltip({ active, formatVotes, payload }: TagTooltipProps) {
   const tag = payload?.[0]?.payload;
@@ -145,11 +117,12 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
     <section className="mt-5 rounded-2xl border border-white/10 bg-slate-800/70 p-4">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-white">{t('bottle.flavor_profile')}</h3>
-        <span className="text-sm font-semibold text-amber-400">
-          {t('bottle.club_rating')}: {typeof clubRating === 'number' && Number.isFinite(clubRating)
-            ? clubRating.toFixed(2)
-            : t('common.na')}
-        </span>
+        {typeof clubRating === 'number' && Number.isFinite(clubRating) && (
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[#C5A059]/30 bg-[#C5A059]/10 px-3 py-1 text-xs font-semibold text-[#C5A059]">
+            <span aria-hidden="true">★</span>
+            <span>{Math.round(clubRating)}</span>
+          </div>
+        )}
       </div>
       {isLoading ? (
         <p className="mt-4 text-sm text-slate-400">{t('common.loading')}</p>
@@ -160,38 +133,12 @@ export function BottleTagChart({ bottleId, refreshRevision }: Props) {
       ) : (
         <div className="mt-3 h-[180px]">
           <ResponsiveContainer height={180} width="100%">
-            <AreaChart data={tagStats} margin={{ top: 10, right: 12, bottom: 0, left: -12 }}>
-              <defs>
-                <linearGradient id="colorTag" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="5%" stopColor="#eab308" stopOpacity={0.45} />
-                  <stop offset="95%" stopColor="#eab308" stopOpacity={0.04} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#475569" strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                axisLine={false}
-                dataKey="icon_url"
-                height={40}
-                interval={0}
-                tick={<TagIconTick />}
-                tickLine={false}
-              />
-              <YAxis
-                allowDecimals={false}
-                axisLine={false}
-                tick={{ fill: '#94a3b8', fontSize: 11 }}
-                tickLine={false}
-                width={28}
-              />
-              <Tooltip content={<TagTooltip formatVotes={(count) => t('bottle.votes', { count })} />} cursor={{ stroke: '#eab308', strokeWidth: 1 }} />
-              <Area
-                dataKey="count"
-                fill="url(#colorTag)"
-                stroke="#eab308"
-                strokeWidth={2}
-                type="monotone"
-              />
-            </AreaChart>
+            <RadarChart data={tagStats} margin={{ top: 12, right: 22, bottom: 12, left: 22 }}>
+              <PolarGrid stroke="rgba(197, 160, 89, 0.15)" />
+              <PolarAngleAxis dataKey="name" tick={{ fill: '#9E9D9A', fontSize: 10 }} />
+              <Tooltip content={<TagTooltip formatVotes={(count) => t('bottle.votes', { count })} />} />
+              <Radar dataKey="count" fill="#C5A059" fillOpacity={0.35} stroke="#C5A059" strokeWidth={2} />
+            </RadarChart>
           </ResponsiveContainer>
         </div>
       )}
