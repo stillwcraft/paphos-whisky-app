@@ -161,22 +161,32 @@ def _background() -> Image.Image:
 def _draw_chip_icon(draw: ImageDraw.ImageDraw, label: str, x: int, y: int) -> None:
     color, width = "#D2AF6B", 2
     if label == "ABV":
-        draw.rounded_rectangle((x + 7, y, x + 19, y + 29), radius=6, outline=color, width=width)
-        draw.line((x + 13, y + 7, x + 13, y + 21), fill=color, width=width)
-        draw.ellipse((x + 9, y + 17, x + 17, y + 25), outline=color, width=width)
+        draw.rounded_rectangle((x + 8, y, x + 19, y + 25), radius=6, outline=color, width=width)
+        draw.line((x + 13, y + 7, x + 13, y + 22), fill=color, width=width)
+        draw.ellipse((x + 8, y + 19, x + 19, y + 30), outline=color, width=width)
+        for offset in (6, 12, 18):
+            draw.line((x + 24, y + offset, x + 29, y + offset), fill=color, width=width)
     elif label == "AGE":
-        draw.ellipse((x + 2, y + 3, x + 25, y + 12), outline=color, width=width)
-        draw.ellipse((x + 2, y + 19, x + 25, y + 28), outline=color, width=width)
-        draw.line((x + 2, y + 8, x + 2, y + 23), fill=color, width=width)
-        draw.line((x + 25, y + 8, x + 25, y + 23), fill=color, width=width)
-        draw.line((x + 13, y + 4, x + 13, y + 28), fill=color, width=width)
+        draw.rounded_rectangle((x + 2, y + 3, x + 28, y + 28), radius=5, outline=color, width=width)
+        draw.line((x + 2, y + 10, x + 28, y + 10), fill=color, width=width)
+        draw.line((x + 2, y + 21, x + 28, y + 21), fill=color, width=width)
+        for offset in (8, 15, 22):
+            draw.line((x + offset, y + 3, x + offset, y + 28), fill=color, width=width)
+        _text(draw, "VOS", (x + 8, y + 12, x + 24, y + 20), 6, color, True, "center")
     elif label == "CASK":
-        draw.arc((x + 2, y + 2, x + 27, y + 30), 35, 325, fill=color, width=width)
-        draw.arc((x + 6, y + 5, x + 23, y + 27), 35, 325, fill=color, width=width)
-        draw.line((x + 3, y + 16, x + 26, y + 16), fill=color, width=width)
+        draw.rounded_rectangle((x + 2, y + 2, x + 29, y + 30), radius=11, outline=color, width=width)
+        draw.line((x + 2, y + 9, x + 29, y + 9), fill=color, width=width)
+        draw.line((x + 2, y + 22, x + 29, y + 22), fill=color, width=width)
+        for offset in (8, 15, 22):
+            draw.line((x + offset, y + 3, x + offset, y + 29), fill=color, width=width)
     else:
-        draw.polygon(((x + 4, y + 3), (x + 25, y + 3), (x + 29, y + 8), (x + 14, y + 29), (x + 4, y + 29)), outline=color, width=width)
-        draw.ellipse((x + 9, y + 10, x + 14, y + 15), outline=color, width=width)
+        draw.rounded_rectangle((x + 13, y + 2, x + 22, y + 11), radius=2, outline=color, width=width)
+        draw.rounded_rectangle((x + 9, y + 10, x + 26, y + 28), radius=3, outline=color, width=width)
+        draw.line((x + 12, y + 17, x + 23, y + 17), fill=color, width=width)
+        draw.line((x + 1, y + 26, x + 9, y + 26), fill=color, width=width)
+        draw.line((x + 1, y + 26, x + 1, y + 32), fill=color, width=width)
+        draw.line((x + 1, y + 32, x + 13, y + 32), fill=color, width=width)
+        draw.arc((x + 10, y + 23, x + 30, y + 38), 5, 170, fill=color, width=width)
 
 
 def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) -> Optional[Image.Image]:
@@ -238,10 +248,11 @@ def _draw_card(data: ReviewCardData) -> bytes:
         draw.rounded_rectangle((338, 1000, 576, 1004), radius=2, fill="#3E3529")
         draw.rounded_rectangle((338, 1000, 445, 1004), radius=2, fill=GOLD)
         username = data.author_username.lstrip("@") if data.author_username else data.author_name
-        _text(draw, f"REVIEW BY {username.upper()}", (710, 873, 1008, 902), 11, MUTED, True, "right")
-        _text(draw, "CWC", (710, 913, 794, 972), 31, GOLD, True, "left", True)
-        _text(draw, "CYPRUS WHISKY CLUB", (806, 928, 1008, 952), 12, "#EAD7AE", True, "right")
-        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, 987, 1008, 1019), 15, GOLD, align="right")
+        _text(draw, f"REVIEW BY {username.upper()}", (710, 868, 1008, 900), 14, "#D1B276", True, "center", True)
+        _text(draw, "h", (716, 908, 790, 982), 71, "#D1B276", align="center", serif=True)
+        _text(draw, "Cyprus", (790, 910, 1008, 943), 27, "#D1B276", align="left", serif=True)
+        _text(draw, "Whisky Club", (790, 944, 1008, 978), 27, "#D1B276", align="left", serif=True)
+        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, 993, 1008, 1028), 21, "#D1B276", align="center", serif=True)
         with BytesIO() as output:
             card.save(output, format="PNG")
             return output.getvalue()
