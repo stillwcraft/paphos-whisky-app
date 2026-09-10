@@ -7,6 +7,7 @@ import socket
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from threading import BoundedSemaphore
@@ -24,6 +25,13 @@ LIGHT = "#F4F4F5"
 MUTED = "#9E9D9A"
 FONT_PATH = Path(__file__).with_name("fonts") / "NotoSans.ttf"
 SERIF_FONT_PATH = Path(__file__).with_name("fonts") / "NotoSerif.ttf"
+ASSET_DIR = Path(__file__).with_name("assets")
+CHIP_ICON_PATHS = {
+    "ABV": ASSET_DIR / "icon_abv.png",
+    "AGE": ASSET_DIR / "icon_age.png",
+    "CASK": ASSET_DIR / "icon_cask.png",
+    "BOTTLES": ASSET_DIR / "icon_bottles.png",
+}
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MAX_IMAGE_PIXELS = 12_000_000
 CACHE_BYTES = 12 * 1024 * 1024
@@ -146,6 +154,17 @@ def _text(
         top += line_height
 
 
+def _centered_text(
+    draw: ImageDraw.ImageDraw,
+    value: str,
+    y: int,
+    font: ImageFont.FreeTypeFont,
+    color: str,
+) -> None:
+    left, _, right, _ = draw.textbbox((0, 0), value, font=font)
+    draw.text(((SIZE - (right - left)) / 2 - left, y), value, font=font, fill=color)
+
+
 def _background() -> Image.Image:
     # Compute the soft spotlight on a small image, not a million Python objects.
     with Image.new("RGB", (135, 135)) as small:
@@ -158,35 +177,10 @@ def _background() -> Image.Image:
         return small.resize((SIZE, SIZE), Image.Resampling.BICUBIC)
 
 
-def _draw_chip_icon(draw: ImageDraw.ImageDraw, label: str, x: int, y: int) -> None:
-    color, width = "#D2AF6B", 2
-    if label == "ABV":
-        draw.rounded_rectangle((x + 8, y, x + 19, y + 25), radius=6, outline=color, width=width)
-        draw.line((x + 13, y + 7, x + 13, y + 22), fill=color, width=width)
-        draw.ellipse((x + 8, y + 19, x + 19, y + 30), outline=color, width=width)
-        for offset in (6, 12, 18):
-            draw.line((x + 24, y + offset, x + 29, y + offset), fill=color, width=width)
-    elif label == "AGE":
-        draw.rounded_rectangle((x + 2, y + 3, x + 28, y + 28), radius=5, outline=color, width=width)
-        draw.line((x + 2, y + 10, x + 28, y + 10), fill=color, width=width)
-        draw.line((x + 2, y + 21, x + 28, y + 21), fill=color, width=width)
-        for offset in (8, 15, 22):
-            draw.line((x + offset, y + 3, x + offset, y + 28), fill=color, width=width)
-        _text(draw, "VOS", (x + 8, y + 12, x + 24, y + 20), 6, color, True, "center")
-    elif label == "CASK":
-        draw.rounded_rectangle((x + 2, y + 2, x + 29, y + 30), radius=11, outline=color, width=width)
-        draw.line((x + 2, y + 9, x + 29, y + 9), fill=color, width=width)
-        draw.line((x + 2, y + 22, x + 29, y + 22), fill=color, width=width)
-        for offset in (8, 15, 22):
-            draw.line((x + offset, y + 3, x + offset, y + 29), fill=color, width=width)
-    else:
-        draw.rounded_rectangle((x + 13, y + 2, x + 22, y + 11), radius=2, outline=color, width=width)
-        draw.rounded_rectangle((x + 9, y + 10, x + 26, y + 28), radius=3, outline=color, width=width)
-        draw.line((x + 12, y + 17, x + 23, y + 17), fill=color, width=width)
-        draw.line((x + 1, y + 26, x + 9, y + 26), fill=color, width=width)
-        draw.line((x + 1, y + 26, x + 1, y + 32), fill=color, width=width)
-        draw.line((x + 1, y + 32, x + 13, y + 32), fill=color, width=width)
-        draw.arc((x + 10, y + 23, x + 30, y + 38), 5, 170, fill=color, width=width)
+@lru_cache(maxsize=len(CHIP_ICON_PATHS))
+def _chip_icon(label: str) -> Image.Image:
+    with Image.open(CHIP_ICON_PATHS[label]) as image:
+        return image.convert("RGBA")
 
 
 def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) -> Optional[Image.Image]:
@@ -200,7 +194,7 @@ def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) ->
 
 
 def _draw_card(data: ReviewCardData) -> bytes:
-    with _background() as card:
+    with _background().convert("RGBA") as card:
         draw = ImageDraw.Draw(card)
         logo = _load_card_image(data.distillery_logo_url, (380, 120), "distillery logo")
         if logo:
@@ -234,27 +228,35 @@ def _draw_card(data: ReviewCardData) -> bytes:
         chip_height = 100
         y = 560 - (len(values) * (chip_height + 14) - 14) // 2
         for label, value in values:
-            draw.rounded_rectangle((748, y, 1008, y + chip_height), radius=12, fill="#16161A", outline="#7D6133", width=1)
-            _draw_chip_icon(draw, label, 766, y + 31)
-            _text(draw, label, (808, y + 14, 992, y + 38), 12, GOLD, True)
-            _text(draw, value, (808, y + 42, 992, y + 90), 19)
+            chip_x, icon_x, icon_y = 748, 763, y + 34
+            icon = _chip_icon(label)
+            draw.rounded_rectangle(
+                (chip_x, y, 1008, y + chip_height),
+                radius=8,
+                fill="#16161A",
+                outline=(197, 160, 89, 100),
+                width=1,
+            )
+            card.paste(icon, (icon_x, icon_y), mask=icon)
+            text_x = chip_x + 15 + icon.width + 12
+            draw.text((text_x, y + 10), label, font=_font(12, True), fill=GOLD)
+            draw.text((text_x, y + 34), value, font=_font(19), fill=LIGHT)
             y += chip_height + 14
 
         draw.line((72, 842, 1008, 842), fill="#604A28", width=1)
-        _text(draw, str(data.score), (72, 865, 204, 954), 72, GOLD, True, "center", True)
-        _text(draw, "POINTS", (72, 951, 204, 978), 12, GOLD, True, "center")
-        _text(draw, data.verdict, (244, 876, 670, 925), 25, "#EAD7AE", True, "center", True)
-        _text(draw, data.verdict_subtitle, (244, 932, 670, 978), 15, MUTED, align="center")
-        draw.rounded_rectangle((338, 1000, 576, 1004), radius=2, fill="#3E3529")
-        draw.rounded_rectangle((338, 1000, 445, 1004), radius=2, fill=GOLD)
+        footer_center_y = 925
+        _text(draw, str(data.score), (72, footer_center_y - 61, 204, footer_center_y + 11), 72, GOLD, True, "center", True)
+        _text(draw, "POINTS", (72, footer_center_y + 25, 204, footer_center_y + 46), 12, GOLD, True, "center")
+        _centered_text(draw, data.verdict, footer_center_y - 50, _font(25, True, True), "#EAD7AE")
+        _centered_text(draw, data.verdict_subtitle, footer_center_y + 2, _font(15), MUTED)
         username = data.author_username.lstrip("@") if data.author_username else data.author_name
-        _text(draw, f"REVIEW BY {username.upper()}", (710, 868, 1008, 900), 14, "#D1B276", True, "center", True)
-        _text(draw, "h", (716, 908, 790, 982), 71, "#D1B276", align="center", serif=True)
-        _text(draw, "Cyprus", (790, 910, 1008, 943), 27, "#D1B276", align="left", serif=True)
-        _text(draw, "Whisky Club", (790, 944, 1008, 978), 27, "#D1B276", align="left", serif=True)
-        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, 993, 1008, 1028), 21, "#D1B276", align="center", serif=True)
+        _text(draw, f"REVIEW BY {username.upper()}", (710, footer_center_y - 57, 1008, footer_center_y - 26), 14, "#D1B276", True, "center", True)
+        _text(draw, "h", (716, footer_center_y - 17, 790, footer_center_y + 57), 71, "#D1B276", align="center", serif=True)
+        _text(draw, "Cyprus", (790, footer_center_y - 15, 1008, footer_center_y + 18), 27, "#D1B276", align="left", serif=True)
+        _text(draw, "Whisky Club", (790, footer_center_y + 19, 1008, footer_center_y + 53), 27, "#D1B276", align="left", serif=True)
+        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, footer_center_y + 64, 1008, footer_center_y + 97), 21, "#D1B276", align="center", serif=True)
         with BytesIO() as output:
-            card.save(output, format="PNG")
+            card.convert("RGB").save(output, format="PNG")
             return output.getvalue()
 
 
