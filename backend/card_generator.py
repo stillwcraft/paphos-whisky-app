@@ -23,6 +23,7 @@ GOLD = "#C5A059"
 LIGHT = "#F4F4F5"
 MUTED = "#9E9D9A"
 FONT_PATH = Path(__file__).with_name("fonts") / "NotoSans.ttf"
+SERIF_FONT_PATH = Path(__file__).with_name("fonts") / "NotoSerif.ttf"
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
 MAX_IMAGE_PIXELS = 12_000_000
 CACHE_BYTES = 12 * 1024 * 1024
@@ -46,8 +47,10 @@ class ReviewCardData:
     bottles: Optional[str]
     score: int
     verdict: str
+    verdict_subtitle: str
     author_name: str
     author_username: Optional[str]
+    channel_handle: str
 
 
 _cache: OrderedDict[ReviewCardData, tuple[float, bytes]] = OrderedDict()
@@ -102,8 +105,8 @@ def _load_image(url: str, bounds: tuple[int, int]) -> Image.Image:
         raise CardGenerationError("Too many card image redirects")
 
 
-def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    font = ImageFont.truetype(str(FONT_PATH), size)
+def _font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont:
+    font = ImageFont.truetype(str(SERIF_FONT_PATH if serif else FONT_PATH), size)
     font.set_variation_by_axes([700 if bold else 400, 100])
     return font
 
@@ -116,8 +119,9 @@ def _text(
     color: str = LIGHT,
     bold: bool = False,
     align: str = "left",
+    serif: bool = False,
 ) -> None:
-    font = _font(size, bold)
+    font = _font(size, bold, serif)
     left, top, right, bottom = box
     line_height = size + 9
     max_lines = max(1, (bottom - top) // line_height)
@@ -148,29 +152,66 @@ def _background() -> Image.Image:
         pixels = []
         for y in range(135):
             for x in range(135):
-                glow = .15 * math.exp(-(((x - 62) / 38) ** 2 + ((y - 65) / 43) ** 2))
+                glow = .31 * math.exp(-(((x - 62) / 35) ** 2 + ((y - 63) / 38) ** 2))
                 pixels.append(tuple(round(base + (gold - base) * glow) for base, gold in zip((13, 13, 14), (197, 160, 89))))
         small.putdata(pixels)
         return small.resize((SIZE, SIZE), Image.Resampling.BICUBIC)
 
 
+def _draw_chip_icon(draw: ImageDraw.ImageDraw, label: str, x: int, y: int) -> None:
+    color, width = "#D2AF6B", 2
+    if label == "ABV":
+        draw.rounded_rectangle((x + 7, y, x + 19, y + 29), radius=6, outline=color, width=width)
+        draw.line((x + 13, y + 7, x + 13, y + 21), fill=color, width=width)
+        draw.ellipse((x + 9, y + 17, x + 17, y + 25), outline=color, width=width)
+    elif label == "AGE":
+        draw.ellipse((x + 2, y + 3, x + 25, y + 12), outline=color, width=width)
+        draw.ellipse((x + 2, y + 19, x + 25, y + 28), outline=color, width=width)
+        draw.line((x + 2, y + 8, x + 2, y + 23), fill=color, width=width)
+        draw.line((x + 25, y + 8, x + 25, y + 23), fill=color, width=width)
+        draw.line((x + 13, y + 4, x + 13, y + 28), fill=color, width=width)
+    elif label == "CASK":
+        draw.arc((x + 2, y + 2, x + 27, y + 30), 35, 325, fill=color, width=width)
+        draw.arc((x + 6, y + 5, x + 23, y + 27), 35, 325, fill=color, width=width)
+        draw.line((x + 3, y + 16, x + 26, y + 16), fill=color, width=width)
+    else:
+        draw.polygon(((x + 4, y + 3), (x + 25, y + 3), (x + 29, y + 8), (x + 14, y + 29), (x + 4, y + 29)), outline=color, width=width)
+        draw.ellipse((x + 9, y + 10, x + 14, y + 15), outline=color, width=width)
+
+
+def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) -> Optional[Image.Image]:
+    if not url:
+        return None
+    try:
+        return _load_image(url, bounds)
+    except CardGenerationError:
+        logger.warning("Unable to load %s image for review card", label, exc_info=True)
+        return None
+
+
 def _draw_card(data: ReviewCardData) -> bytes:
     with _background() as card:
         draw = ImageDraw.Draw(card)
-        if data.distillery_logo_url:
-            with _load_image(data.distillery_logo_url, (380, 120)) as logo:
+        logo = _load_card_image(data.distillery_logo_url, (380, 120), "distillery logo")
+        if logo:
+            try:
                 card.paste(logo, ((SIZE - logo.width) // 2, 65 + (120 - logo.height) // 2), logo)
+            finally:
+                logo.close()
         else:
-            _text(draw, data.distillery_name, (72, 80, 1008, 185), 36, GOLD, True, "center")
-        _text(draw, data.bottle_name, (72, 207, 1008, 313), 40, bold=True, align="center")
+            _text(draw, data.distillery_name, (72, 80, 1008, 185), 36, GOLD, True, "center", True)
+        _text(draw, data.bottle_name, (72, 207, 1008, 313), 44, "#EAD7AE", True, "center", True)
 
-        with Image.new("RGBA", (540, 80)) as shadow:
-            ImageDraw.Draw(shadow).ellipse((65, 30, 475, 47), fill=(0, 0, 0, 160))
-            with shadow.filter(ImageFilter.GaussianBlur(12)) as blurred:
-                card.paste(blurred, (270, 760), blurred)
-        if data.bottle_image_url:
-            with _load_image(data.bottle_image_url, (540, 490)) as bottle:
+        with Image.new("RGBA", (610, 100)) as shadow:
+            ImageDraw.Draw(shadow).ellipse((65, 40, 545, 61), fill=(0, 0, 0, 185))
+            with shadow.filter(ImageFilter.GaussianBlur(18)) as blurred:
+                card.paste(blurred, (235, 730), blurred)
+        bottle = _load_card_image(data.bottle_image_url, (540, 490), "bottle")
+        if bottle:
+            try:
                 card.paste(bottle, ((SIZE - bottle.width) // 2, 315 + (490 - bottle.height) // 2), bottle)
+            finally:
+                bottle.close()
         else:
             _text(draw, "No bottle image", (260, 525, 740, 585), 24, MUTED, align="center")
 
@@ -183,18 +224,24 @@ def _draw_card(data: ReviewCardData) -> bytes:
         chip_height = 100
         y = 560 - (len(values) * (chip_height + 14) - 14) // 2
         for label, value in values:
-            draw.rounded_rectangle((756, y, 1008, y + chip_height), radius=12, fill="#16161A", outline="#51402D", width=1)
-            _text(draw, label, (772, y + 12, 992, y + 36), 12, GOLD, True)
-            _text(draw, value, (772, y + 35, 992, y + 96), 19)
+            draw.rounded_rectangle((748, y, 1008, y + chip_height), radius=12, fill="#16161A", outline="#7D6133", width=1)
+            _draw_chip_icon(draw, label, 766, y + 31)
+            _text(draw, label, (808, y + 14, 992, y + 38), 12, GOLD, True)
+            _text(draw, value, (808, y + 42, 992, y + 90), 19)
             y += chip_height + 14
 
-        draw.line((72, 842, 1008, 842), fill="#393024", width=1)
-        draw.rounded_rectangle((72, 875, 220, 995), radius=18, outline=GOLD, width=3)
-        _text(draw, str(data.score), (78, 894, 214, 986), 66, GOLD, True, "center")
-        _text(draw, data.verdict, (72, 1010, 552, 1068), 19, MUTED)
-        _text(draw, data.author_name, (586, 900, 1008, 979), 26, bold=True, align="right")
-        if data.author_username:
-            _text(draw, f"@{data.author_username.lstrip('@')}", (586, 992, 1008, 1058), 20, GOLD, align="right")
+        draw.line((72, 842, 1008, 842), fill="#604A28", width=1)
+        _text(draw, str(data.score), (72, 865, 204, 954), 72, GOLD, True, "center", True)
+        _text(draw, "POINTS", (72, 951, 204, 978), 12, GOLD, True, "center")
+        _text(draw, data.verdict, (244, 876, 670, 925), 25, "#EAD7AE", True, "center", True)
+        _text(draw, data.verdict_subtitle, (244, 932, 670, 978), 15, MUTED, align="center")
+        draw.rounded_rectangle((338, 1000, 576, 1004), radius=2, fill="#3E3529")
+        draw.rounded_rectangle((338, 1000, 445, 1004), radius=2, fill=GOLD)
+        username = data.author_username.lstrip("@") if data.author_username else data.author_name
+        _text(draw, f"REVIEW BY {username.upper()}", (710, 873, 1008, 902), 11, MUTED, True, "right")
+        _text(draw, "CWC", (710, 913, 794, 972), 31, GOLD, True, "left", True)
+        _text(draw, "CYPRUS WHISKY CLUB", (806, 928, 1008, 952), 12, "#EAD7AE", True, "right")
+        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, 987, 1008, 1019), 15, GOLD, align="right")
         with BytesIO() as output:
             card.save(output, format="PNG")
             return output.getvalue()

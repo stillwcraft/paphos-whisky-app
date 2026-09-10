@@ -19,7 +19,9 @@ def sample_card(**changes):
         distillery_logo_url=None,
         abv="46", age="10", cask="Bourbon / Sherry", bottles="1200",
         score=87, verdict="\u0414\u043e\u0441\u0442\u043e\u0439\u043d\u0430\u044f \u043a\u043b\u0430\u0441\u0441\u0438\u043a\u0430",
+        verdict_subtitle="\u041e\u0442\u043b\u0438\u0447\u043d\u044b\u0439 \u0432\u044b\u0431\u043e\u0440 \u0434\u043b\u044f \u0445\u043e\u0440\u043e\u0448\u0435\u0433\u043e \u0432\u0435\u0447\u0435\u0440\u0430.",
         author_name="\u0410\u043d\u0442\u043e\u043d", author_username="anton",
+        channel_handle="CyprusWhiskyClub",
     ), **changes)
 
 
@@ -36,8 +38,9 @@ class CardGeneratorTest(unittest.TestCase):
             self.assertEqual(image.format, "PNG")
             self.assertEqual(image.size, (1080, 1080))
             self.assertEqual(image.mode, "RGB")
-            self.assertEqual(image.getpixel((72, 930)), (197, 160, 89))
-            colors = image.crop((72, 1010, 552, 1068)).getcolors(10000)
+            score_colors = image.crop((72, 865, 204, 978)).getcolors(100000)
+            self.assertTrue(any(color == (197, 160, 89) for _, color in score_colors))
+            colors = image.crop((244, 932, 670, 978)).getcolors(100000)
             self.assertTrue(any(color == (158, 157, 154) for _, color in colors))
 
     def test_logo_and_bottle_are_composited(self):
@@ -54,6 +57,14 @@ class CardGeneratorTest(unittest.TestCase):
         with Image.open(BytesIO(png)) as image:
             self.assertEqual(image.getpixel((540, 120)), (255, 0, 0))
             self.assertEqual(image.getpixel((540, 560)), (0, 255, 0))
+
+    def test_unavailable_logo_falls_back_to_distillery_name(self):
+        with patch.object(cards, "_load_image", side_effect=cards.CardGenerationError("403")), self.assertLogs(cards.logger):
+            png = cards.render_review_card(sample_card(
+                distillery_logo_url="https://example.com/blocked-logo.png",
+            ))
+        with Image.open(BytesIO(png)) as image:
+            self.assertEqual(image.size, (1080, 1080))
 
     def test_long_text_and_missing_chips(self):
         png = cards.render_review_card(sample_card(

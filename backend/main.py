@@ -2140,16 +2140,16 @@ def build_review_response(review: models.UserReview) -> ReviewResponse:
     )
 
 
-def get_score_verdict(score: int) -> str:
+def get_score_verdict(score: int) -> tuple[str, str]:
     if score >= 95:
-        return "Истинный шедевр"
+        return ("Истинный шедевр.", "Безупречный баланс и бесконечный финиш.")
     if score >= 90:
-        return "Жемчужина коллекции"
+        return ("Жемчужина коллекции.", "Яркий характер и высший класс.")
     if score >= 80:
-        return "Достойная классика"
+        return ("Достойная классика.", "Отличный выбор для хорошего вечера.")
     if score >= 70:
-        return "На любителя"
-    return "Лучше пропустить"
+        return ("На любителя.", "Резковатый профиль с хромающим балансом.")
+    return ("Лучше пропустить.", "Явные дефекты и резкий спирт.")
 
 
 def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
@@ -2169,6 +2169,7 @@ def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
         raise HTTPException(status_code=404, detail="Bottle not found")
     distillery = bottle.distillery
     score = round((review.nose + review.taste + review.finish) / 3)
+    verdict, verdict_subtitle = get_score_verdict(score)
     return ReviewCardData(
         bottle_name=bottle.name or "Whisky",
         bottle_image_url=bottle.image_url,
@@ -2179,9 +2180,11 @@ def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
         cask=bottle.cask,
         bottles=bottle.bottles,
         score=score,
-        verdict=get_score_verdict(score),
+        verdict=verdict,
+        verdict_subtitle=verdict_subtitle,
         author_name=review.author_name or "Club member",
         author_username=review.author_username,
+        channel_handle=os.getenv("CLUB_CHANNEL_HANDLE", "CyprusWhiskyClub"),
     )
 
 
