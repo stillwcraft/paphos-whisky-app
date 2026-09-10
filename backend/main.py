@@ -2204,7 +2204,11 @@ def get_review_card(
     download: bool = False,
     db: Session = Depends(get_db),
 ):
-    headers = {"Cache-Control": "no-store"}
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
     if download:
         headers["Content-Disposition"] = (
             f'attachment; filename="whisky-review-{review_id}.png"'

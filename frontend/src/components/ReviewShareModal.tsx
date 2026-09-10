@@ -30,8 +30,10 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
   const [downloadFailed, setDownloadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
-  const cardUrl = `${API_URL}/api/reviews/${reviewId}/card.png`;
-  const downloadUrl = `${cardUrl}?download=1`;
+  const [previewTimestamp] = useState(() => Date.now());
+  const cardEndpoint = `${API_URL}/api/reviews/${reviewId}/card.png`;
+  const cardUrl = `${cardEndpoint}?t=${previewTimestamp}`;
+  const createDownloadUrl = () => `${cardEndpoint}?download=1&t=${Date.now()}`;
 
   const publish = async () => {
     setIsPublishing(true);
@@ -58,7 +60,7 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
     setDownloadFailed(false);
     setError(null);
     try {
-      await downloadFile(downloadUrl, `whisky-review-${reviewId}.png`, { timeout: 60_000 });
+      await downloadFile(createDownloadUrl(), `whisky-review-${reviewId}.png`, { timeout: 60_000 });
     } catch (err) {
       if (err instanceof AccessDeniedError) {
         setError('Скачивание отменено в Telegram.');
@@ -74,8 +76,9 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
   const browserDownload = (
     <a
       className="block w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-center text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10"
-      href={downloadUrl}
+      href={`${cardEndpoint}?download=1&t=${previewTimestamp}`}
       onClick={(event) => {
+        const downloadUrl = createDownloadUrl();
         // Let the Telegram host open the URL outside the Mini App's iframe.
         if (openLink.isAvailable()) {
           event.preventDefault();
@@ -85,6 +88,8 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
           } catch {
             setError('Не удалось открыть браузер для скачивания.');
           }
+        } else {
+          event.currentTarget.href = downloadUrl;
         }
       }}
       rel="noopener noreferrer"

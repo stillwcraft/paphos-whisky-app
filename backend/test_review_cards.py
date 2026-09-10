@@ -38,6 +38,12 @@ class ReviewCardEndpointTest(unittest.TestCase):
             download = main.get_review_card(self.review.id, download=True, db=self.db)
             self.assertEqual(preview.media_type, "image/png")
             self.assertNotIn("content-disposition", preview.headers)
+            self.assertEqual(
+                preview.headers["cache-control"],
+                "no-cache, no-store, must-revalidate",
+            )
+            self.assertEqual(preview.headers["pragma"], "no-cache")
+            self.assertEqual(preview.headers["expires"], "0")
             self.assertIn('attachment;', download.headers["content-disposition"])
             self.assertEqual(preview.body, download.body)
             self.assertTrue(preview.body.startswith(b"\x89PNG\r\n\x1a\n"))
