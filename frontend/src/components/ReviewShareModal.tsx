@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AccessDeniedError, downloadFile, openLink, useLaunchParams, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -23,8 +24,13 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: Props) {
+  const { tgWebAppPlatform: platform } = useLaunchParams();
+  const nativeDownloadAvailable = useSignal(downloadFile.isAvailable);
+  const isTelegramWeb = platform.startsWith('web');
+  const useNativeDownload = !isTelegramWeb && nativeDownloadAvailable;
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
   const cardUrl = `${API_URL}/api/reviews/${reviewId}/card.png`;
@@ -50,30 +56,45 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
   };
 
   const download = async () => {
+    if (isDownloading) return;
     setIsDownloading(true);
+    setDownloadFailed(false);
     setError(null);
     try {
-      const downloadFile = window.Telegram?.WebApp?.downloadFile;
-      if (downloadFile) {
-        await new Promise<void>((resolve) => downloadFile(
-          { url: cardUrl, file_name: `whisky-review-${reviewId}.png` },
-          () => resolve(),
-        ));
-        return;
-      }
-
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      await downloadFile(downloadUrl, `whisky-review-${reviewId}.png`, { timeout: 60_000 });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not download the review card.');
+      if (err instanceof AccessDeniedError) {
+        setError('Скачивание отменено в Telegram.');
+      } else {
+        setDownloadFailed(true);
+        setError('Telegram не начал скачивание. Попробуйте ещё раз или откройте файл в браузере.');
+      }
     } finally {
       setIsDownloading(false);
     }
   };
+
+  const browserDownload = (
+    <a
+      className="block w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-center text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10"
+      href={downloadUrl}
+      onClick={(event) => {
+        // Native clients need the external browser; Web uses a real user-initiated new tab.
+        if (!isTelegramWeb && openLink.isAvailable()) {
+          event.preventDefault();
+          try {
+            openLink(downloadUrl);
+          } catch {
+            setError('Не удалось открыть браузер для скачивания.');
+          }
+        }
+      }}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      {useNativeDownload ? 'Открыть файл в браузере' : 'Сохранить на устройство'}
+    </a>
+  );
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl">
@@ -101,14 +122,17 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
           >
             {isPublished ? 'Опубликовано' : isPublishing ? 'Публикация...' : 'Опубликовать в чате клуба'}
           </button>
-          <button
-            className="w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10 disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={isDownloading}
-            onClick={() => void download()}
-            type="button"
-          >
-            {isDownloading ? 'Подготовка...' : 'Сохранить на устройство'}
-          </button>
+          {useNativeDownload ? (
+            <button
+              className="w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isDownloading}
+              onClick={() => void download()}
+              type="button"
+            >
+              {isDownloading ? 'Подготовка...' : 'Сохранить на устройство'}
+            </button>
+          ) : browserDownload}
+          {useNativeDownload && downloadFailed && browserDownload}
         </div>
       </article>
     </div>
