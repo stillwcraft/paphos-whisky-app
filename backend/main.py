@@ -23,6 +23,7 @@ models.Base.metadata.create_all(bind=engine)
 
 
 BottleLabel = Literal["bottle", "samples", "event"]
+CardLanguage = Literal["en", "ru", "uk"]
 I18nString = Dict[str, str]
 TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
 TELEGRAM_INIT_DATA_FUTURE_SKEW = timedelta(minutes=5)
@@ -1009,6 +1010,7 @@ class ReviewResponse(BaseModel):
 
 class ReviewShareRequest(BaseModel):
     thread_id: Optional[int] = Field(default=None, gt=0)
+    language: CardLanguage = "en"
 
 
 class RegistrationBase(BaseModel):
@@ -2140,19 +2142,39 @@ def build_review_response(review: models.UserReview) -> ReviewResponse:
     )
 
 
-def get_score_verdict(score: int) -> tuple[str, str]:
-    if score >= 95:
-        return ("Истинный шедевр.", "Безупречный баланс и бесконечный финиш.")
-    if score >= 90:
-        return ("Жемчужина коллекции.", "Яркий характер и высший класс.")
-    if score >= 80:
-        return ("Достойная классика.", "Отличный выбор для хорошего вечера.")
-    if score >= 70:
-        return ("На любителя.", "Резковатый профиль с хромающим балансом.")
-    return ("Лучше пропустить.", "Явные дефекты и резкий спирт.")
+def get_score_verdict(score: int, language: CardLanguage) -> tuple[str, str]:
+    verdicts = {
+        "en": (
+            ("A True Masterpiece.", "Impeccable balance and an endless finish."),
+            ("Crown Jewel.", "Vibrant character and top-tier quality."),
+            ("A Solid Classic.", "An excellent choice for a fine evening."),
+            ("An Acquired Taste.", "A bit rough with compromised balance."),
+            ("Better to Skip.", "Clear flaws and a harsh spirity bite."),
+        ),
+        "ru": (
+            ("Истинный шедевр.", "Безупречный баланс и бесконечный финиш."),
+            ("Жемчужина коллекции.", "Яркий характер и высший класс."),
+            ("Достойная классика.", "Отличный выбор для хорошего вечера."),
+            ("На любителя.", "Резковатый профиль с хромающим балансом."),
+            ("Лучше пропустить.", "Явные дефекты и резкий спирт."),
+        ),
+        "uk": (
+            ("Справжній шедевр.", "Бездоганний баланс і нескінченний фініш."),
+            ("Перлина колекції.", "Яскравий характер і вищий клас."),
+            ("Гідна класика.", "Чудовий вибір для гарного вечора."),
+            ("На любителя.", "Різкуватий профіль із хитким балансом."),
+            ("Краще пропустити.", "Явні дефекти та різкий спирт."),
+        ),
+    }
+    index = 0 if score >= 95 else 1 if score >= 90 else 2 if score >= 80 else 3 if score >= 70 else 4
+    return verdicts[language][index]
 
 
-def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
+def get_review_card_data(
+    review_id: int,
+    db: Session,
+    language: CardLanguage = "en",
+) -> ReviewCardData:
     review = (
         db.query(models.UserReview)
         .options(
@@ -2169,7 +2191,7 @@ def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
         raise HTTPException(status_code=404, detail="Bottle not found")
     distillery = bottle.distillery
     score = round((review.nose + review.taste + review.finish) / 3)
-    verdict, verdict_subtitle = get_score_verdict(score)
+    verdict, verdict_subtitle = get_score_verdict(score, language)
     return ReviewCardData(
         bottle_name=bottle.name or "Whisky",
         bottle_image_url=bottle.image_url,
@@ -2188,9 +2210,13 @@ def get_review_card_data(review_id: int, db: Session) -> ReviewCardData:
     )
 
 
-def render_review_card_or_503(review_id: int, db: Session) -> bytes:
+def render_review_card_or_503(
+    review_id: int,
+    db: Session,
+    language: CardLanguage = "en",
+) -> bytes:
     try:
-        return render_review_card(get_review_card_data(review_id, db))
+        return render_review_card(get_review_card_data(review_id, db, language))
     except CardGenerationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -2202,6 +2228,7 @@ def render_review_card_or_503(review_id: int, db: Session) -> bytes:
 def get_review_card(
     review_id: int,
     download: bool = False,
+    lang: CardLanguage = "en",
     db: Session = Depends(get_db),
 ):
     headers = {
@@ -2214,7 +2241,7 @@ def get_review_card(
             f'attachment; filename="whisky-review-{review_id}.png"'
         )
     return Response(
-        content=render_review_card_or_503(review_id, db),
+        content=render_review_card_or_503(review_id, db, lang),
         media_type="image/png",
         headers=headers,
     )
@@ -2257,7 +2284,7 @@ def share_review_card(
             files={
                 "photo": (
                     f"whisky-review-{review_id}.png",
-                    render_review_card_or_503(review_id, db),
+                    render_review_card_or_503(review_id, db, share_request.language),
                     "image/png",
                 )
             },

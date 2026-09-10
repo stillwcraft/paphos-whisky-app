@@ -64,6 +64,16 @@ class ReviewCardEndpointTest(unittest.TestCase):
                 main.get_review_card(self.review.id, db=self.db)
         self.assertEqual(error.exception.status_code, 503)
 
+    def test_card_verdict_uses_requested_language(self):
+        expected_verdicts = {
+            "en": ("A Solid Classic.", "An excellent choice for a fine evening."),
+            "ru": ("Достойная классика.", "Отличный выбор для хорошего вечера."),
+            "uk": ("Гідна класика.", "Чудовий вибір для гарного вечора."),
+        }
+        for language, expected in expected_verdicts.items():
+            card = main.get_review_card_data(self.review.id, self.db, language)
+            self.assertEqual((card.verdict, card.verdict_subtitle), expected)
+
     def test_cannot_share_another_users_card(self):
         with patch.object(main.requests, "post") as send:
             with self.assertRaises(HTTPException) as error:

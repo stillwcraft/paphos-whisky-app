@@ -24,6 +24,21 @@
       "skip": { "title": "Better to Skip.", "subtitle": "Clear flaws and a harsh spirity bite." }
     }
   },
+  "review_share": {
+    "title": "Your review",
+    "close": "Close",
+    "preview_alt": "Review card preview",
+    "published": "Published!",
+    "publish": "Publish in the club chat",
+    "publishing": "Publishing...",
+    "download": "Save to device",
+    "preparing": "Preparing...",
+    "open_in_browser": "Open file in browser",
+    "publish_error": "Could not publish the review card.",
+    "download_cancelled": "Download was cancelled in Telegram.",
+    "download_error": "Telegram did not start the download. Try again or open the file in a browser.",
+    "browser_error": "Could not open the browser for downloading."
+  },
   "bottle": {
     "age": "Age",
     "abv": "ABV",
