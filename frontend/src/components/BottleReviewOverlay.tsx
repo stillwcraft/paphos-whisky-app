@@ -22,7 +22,15 @@ type ReviewResponse = {
   taste: number;
   finish: number;
   tag_ids: number[];
+  tag_intensities: ReviewTagIntensity[];
 };
+
+type ReviewTagIntensity = {
+  tasting_tag_id: number;
+  intensity: 1 | 2 | 3;
+};
+
+type TagIntensity = 0 | 1 | 2 | 3;
 
 type SliderConfig = {
   label: string;
@@ -50,19 +58,29 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return `Server error: ${response.status}`;
 }
 
+function getScoreVerdict(score: number): { title: string; subtitle: string } {
+  if (score >= 95) return { title: 'Истинный шедевр.', subtitle: 'Безупречный баланс и бесконечный финиш.' };
+  if (score >= 90) return { title: 'Жемчужина коллекции.', subtitle: 'Яркий характер и высший класс.' };
+  if (score >= 80) return { title: 'Достойная классика.', subtitle: 'Отличный выбор для хорошего вечера.' };
+  if (score >= 70) return { title: 'На любителя.', subtitle: 'Резковатый профиль с хромающим балансом.' };
+  return { title: 'Лучше пропустить.', subtitle: 'Явные дефекты и резкий спирт.' };
+}
+
 export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
   const { i18n, t } = useTranslation();
   const languageCode = i18n.language;
   const [nose, setNose] = useState(80);
   const [taste, setTaste] = useState(80);
   const [finish, setFinish] = useState(80);
-  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [tagIntensities, setTagIntensities] = useState<Record<number, TagIntensity>>({});
   const [tags, setTags] = useState<TastingTag[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSharePromptOpen, setIsSharePromptOpen] = useState(false);
 
   const averageScore = Math.round((nose + taste + finish) / 3);
+  const scoreVerdict = getScoreVerdict(averageScore);
 
   useEffect(() => {
     let active = true;
@@ -96,7 +114,12 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
         setNose(review.nose);
         setTaste(review.taste);
         setFinish(review.finish);
-        setSelectedTagIds(review.tag_ids);
+        setTagIntensities(Object.fromEntries(
+          (review.tag_intensities.length > 0
+            ? review.tag_intensities
+            : review.tag_ids.map((tagId) => ({ tasting_tag_id: tagId, intensity: 1 as const })))
+            .map((tag) => [tag.tasting_tag_id, tag.intensity]),
+        ));
         setTags(fetchedTags);
       } catch (err) {
         if (!active) return;
@@ -116,9 +139,17 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
   }, [bottleId, telegramId, initDataRaw, languageCode]);
 
   const toggleTag = (tagId: number) => {
-    setSelectedTagIds((current) =>
-      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId],
-    );
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    setTagIntensities((current) => {
+      const nextIntensity = (((current[tagId] ?? 0) + 1) % 4) as TagIntensity;
+      const next = { ...current };
+      if (nextIntensity === 0) {
+        delete next[tagId];
+      } else {
+        next[tagId] = nextIntensity;
+      }
+      return next;
+    });
   };
 
   const handleSave = async () => {
@@ -134,12 +165,15 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
           nose,
           taste,
           finish,
-          tag_ids: selectedTagIds,
+          tag_intensities: Object.entries(tagIntensities).map(([tagId, intensity]) => ({
+            tasting_tag_id: Number(tagId),
+            intensity,
+          })),
         }),
       });
       if (!response.ok) throw new Error(await extractErrorMessage(response));
       onSaved();
-      onClose();
+      setIsSharePromptOpen(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save review.');
     } finally {
@@ -155,6 +189,24 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
 
   return (
     <div className="fixed inset-x-0 bottom-0 top-10 z-50 bg-slate-950/95 p-4 backdrop-blur-sm">
+      <style>{`
+        .review-slider::-webkit-slider-thumb {
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 9999px;
+          background: #C5A059;
+          box-shadow: 0 0 12px rgba(197, 160, 89, 0.5);
+        }
+        .review-slider::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border: 0;
+          border-radius: 9999px;
+          background: #C5A059;
+          box-shadow: 0 0 12px rgba(197, 160, 89, 0.5);
+        }
+      `}</style>
       <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-amber-100/10 bg-slate-900 shadow-2xl shadow-black/50">
         <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-4">
           <button
@@ -183,6 +235,8 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
             <div className="py-6 text-center">
               <p className="tabular-nums text-7xl font-bold text-amber-400">{averageScore}</p>
               <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-slate-400">{t('review.points')}</p>
+              <p className="mt-1 text-base font-bold text-[#C5A059]">{scoreVerdict.title}</p>
+              <p className="mt-0.5 text-xs font-normal text-[#9E9D9A]">{scoreVerdict.subtitle}</p>
             </div>
 
             <div className="space-y-5 px-5">
@@ -193,10 +247,16 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
                     <span className="text-sm font-semibold text-amber-400">{value}/100</span>
                   </div>
                   <input
-                    className="h-2 w-full cursor-pointer appearance-none rounded-full bg-slate-700 accent-amber-400"
+                    className="review-slider h-2 w-full cursor-pointer appearance-none rounded-full"
                     max={100}
                     min={0}
-                    onChange={(e) => onChange(Number(e.target.value))}
+                    onChange={(e) => {
+                      onChange(Number(e.target.value));
+                      window.Telegram?.WebApp?.HapticFeedback?.selectionChanged();
+                    }}
+                    style={{
+                      background: `linear-gradient(to right, #7A5C28, #C5A059 ${value}%, #3A3A3E ${value}%)`,
+                    }}
                     type="range"
                     value={value}
                   />
@@ -209,21 +269,25 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t('review.tasting_notes')}</h3>
                 <div className="grid grid-cols-2 gap-2">
                   {tags.map((tag) => {
-                    const isSelected = selectedTagIds.includes(tag.id);
+                    const intensity = tagIntensities[tag.id] ?? 0;
                     return (
                       <button
                         key={tag.id}
-                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                          isSelected
-                            ? 'border-amber-400 bg-amber-400/20 text-amber-300'
-                            : 'border-slate-600 text-slate-300 hover:border-slate-400 hover:bg-white/5'
+                        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                          intensity === 3
+                            ? 'border-[#C5A059] bg-[#C5A059] font-bold text-black shadow-[0_0_15px_rgba(197,160,89,0.6)]'
+                            : intensity === 2
+                              ? 'border-[#C5A059] bg-[#C5A059] font-semibold text-black'
+                              : intensity === 1
+                                ? 'border-[#C5A059]/50 bg-transparent font-medium text-[#F4F4F5]'
+                                : 'border-white/10 font-medium text-[#9E9D9A] hover:border-white/25'
                         }`}
                         onClick={() => toggleTag(tag.id)}
                         type="button"
                       >
                         <img alt="" aria-hidden="true" className="h-4 w-4 object-contain" src={tag.icon_url} />
                         <span>{tag.name}</span>
-                        {isSelected && <span aria-hidden="true" className="text-amber-400">✓</span>}
+                        {intensity === 3 && <span aria-hidden="true">★</span>}
                       </button>
                     );
                   })}
@@ -235,15 +299,38 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
 
         <div className="shrink-0 border-t border-white/10 bg-slate-900 p-4">
           <button
-            className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold uppercase tracking-wider text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isLoading || isSaving}
             onClick={() => void handleSave()}
             type="button"
           >
-            💾 {t('review.save')}
+            {t('review.save')}
           </button>
         </div>
       </article>
+      {isSharePromptOpen && (
+        <div className="fixed inset-x-5 bottom-6 z-[60] mx-auto max-w-sm rounded-2xl border border-[#C5A059]/30 bg-[#16161A] p-4 shadow-2xl shadow-black/50">
+          <p className="text-center text-sm font-medium text-[#F4F4F5]">{t('review.share_prompt')}</p>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <button
+              className="rounded-xl bg-[#C5A059] px-3 py-2.5 text-sm font-semibold text-black"
+              onClick={() => {
+                window.Telegram?.WebApp?.switchInlineQuery(`My whisky review: ${averageScore}/100.`);
+              }}
+              type="button"
+            >
+              {t('review.share')}
+            </button>
+            <button
+              className="rounded-xl border border-white/15 px-3 py-2.5 text-sm font-medium text-[#F4F4F5]"
+              onClick={onClose}
+              type="button"
+            >
+              {t('review.close')}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

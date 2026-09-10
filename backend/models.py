@@ -227,6 +227,7 @@ class UserReviewTag(Base):
         index=True,
         nullable=False,
     )
+    intensity = Column(Integer, nullable=False, default=1)
 
     review = relationship(
         "UserReview",

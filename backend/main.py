@@ -467,6 +467,14 @@ def ensure_user_review_schema() -> None:
         if "user_review_tags" not in all_tables:
             models.UserReviewTag.__table__.create(bind=connection)
         else:
+            tag_columns = get_table_columns(connection, "user_review_tags")
+            if "intensity" not in tag_columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE user_review_tags "
+                        "ADD COLUMN intensity INTEGER NOT NULL DEFAULT 1"
+                    )
+                )
             tag_inspector = inspect(connection)
             tag_indexes = tag_inspector.get_indexes("user_review_tags")
             tag_index_names = {idx["name"] for idx in tag_indexes}
@@ -959,6 +967,12 @@ class ReviewCreate(BaseModel):
     taste: int = Field(default=80, ge=0, le=100)
     finish: int = Field(default=80, ge=0, le=100)
     tag_ids: List[int] = Field(default_factory=list)
+    tag_intensities: List["ReviewTagIntensity"] = Field(default_factory=list)
+
+
+class ReviewTagIntensity(BaseModel):
+    tasting_tag_id: int
+    intensity: int = Field(ge=1, le=3)
 
 
 class ReviewQuery(BaseModel):
@@ -974,6 +988,7 @@ class ReviewResponse(BaseModel):
     taste: int
     finish: int
     tag_ids: List[int]
+    tag_intensities: List[ReviewTagIntensity]
 
     class Config:
         from_attributes = True
@@ -2097,7 +2112,14 @@ def build_review_response(review: models.UserReview) -> ReviewResponse:
         nose=review.nose,
         taste=review.taste,
         finish=review.finish,
-        tag_ids=[tag.id for tag in review.tags],
+        tag_ids=[review_tag.tasting_tag_id for review_tag in review.review_tags],
+        tag_intensities=[
+            ReviewTagIntensity(
+                tasting_tag_id=review_tag.tasting_tag_id,
+                intensity=review_tag.intensity,
+            )
+            for review_tag in review.review_tags
+        ],
     )
 
 
@@ -2129,6 +2151,7 @@ def get_review(
             taste=80,
             finish=80,
             tag_ids=[],
+            tag_intensities=[],
         )
     return build_review_response(review)
 
@@ -2151,8 +2174,12 @@ def upsert_review(
     if not bottle:
         raise HTTPException(status_code=404, detail="Bottle not found")
 
-    # Deduplicate tag IDs (preserve first occurrence order).
-    unique_tag_ids = list(dict.fromkeys(review_data.tag_ids))
+    tag_intensity_by_id = {
+        tag.tasting_tag_id: tag.intensity for tag in review_data.tag_intensities
+    }
+    if not tag_intensity_by_id:
+        tag_intensity_by_id = {tag_id: 1 for tag_id in review_data.tag_ids}
+    unique_tag_ids = list(tag_intensity_by_id)
     if unique_tag_ids:
         found_ids = {
             tag_id
@@ -2221,15 +2248,20 @@ def upsert_review(
         db.execute(
             text(
                 """
-                INSERT INTO user_review_tags (review_id, tasting_tag_id)
-                VALUES (:review_id, :tasting_tag_id)
+                INSERT INTO user_review_tags (review_id, tasting_tag_id, intensity)
+                VALUES (:review_id, :tasting_tag_id, :intensity)
                 """
             ),
             [
-                {"review_id": review.id, "tasting_tag_id": tag_id}
+                {
+                    "review_id": review.id,
+                    "tasting_tag_id": tag_id,
+                    "intensity": tag_intensity_by_id[tag_id],
+                }
                 for tag_id in unique_tag_ids
             ],
         )
+
 
     try:
         db.commit()
@@ -2248,4 +2280,11 @@ def upsert_review(
         taste=review.taste,
         finish=review.finish,
         tag_ids=unique_tag_ids,
+        tag_intensities=[
+            ReviewTagIntensity(
+                tasting_tag_id=tag_id,
+                intensity=tag_intensity_by_id[tag_id],
+            )
+            for tag_id in unique_tag_ids
+        ],
     )

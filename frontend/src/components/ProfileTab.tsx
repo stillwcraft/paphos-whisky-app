@@ -33,6 +33,11 @@ declare global {
           start_param?: string;
           user?: TelegramUser;
         };
+        HapticFeedback?: {
+          selectionChanged: () => void;
+          impactOccurred: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => void;
+        };
+        switchInlineQuery: (query: string, chooseChatTypes?: string[]) => void;
       };
     };
   }
