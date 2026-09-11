@@ -427,7 +427,7 @@ function EventGalleryCard({
           />
         ))}
       </div>
-      {activeImageIndex === 1 && event.bottles && event.bottles.length > 0 && (
+      {activeImageIndex === 1 && event.bottle_count > 0 && (
        <button
          aria-label="Open tasting lineup"
          className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-[#C5A059]/30 bg-black/45 text-[#C5A059] backdrop-blur transition-colors hover:bg-black/65"
@@ -761,6 +761,20 @@ export function EventsTab({
     }
   }, [eventDetails, fetchEventDetail]);
 
+  const openLineup = useCallback(async (eventId: number) => {
+    try {
+      const detail = eventDetails[eventId] ?? await fetchEventDetail(eventId);
+      if (detail.bottles.length > 0) {
+        setLineupInspectorEvent(detail);
+      }
+    } catch (error) {
+      setFeedback({
+        kind: 'error',
+        message: error instanceof Error ? error.message : 'Не удалось загрузить lineup события.',
+      });
+    }
+  }, [eventDetails, fetchEventDetail]);
+
   useEffect(() => {
     if (selectedEventId === null) {
       return;
@@ -1005,12 +1019,7 @@ export function EventsTab({
                   event={{ ...event, bottles: eventDetails[event.id]?.bottles }}
                   isFocused={focusedEventId === event.id}
                   onOpen={() => void openEventDetails(event.id)}
-                  onOpenLineup={() => {
-                    const eventDetail = eventDetails[event.id];
-                    if (eventDetail?.bottles.length) {
-                      setLineupInspectorEvent(eventDetail);
-                    }
-                  }}
+                  onOpenLineup={() => void openLineup(event.id)}
                   resetToCenterRevision={galleryResetRevision}
                 />
               </li>
