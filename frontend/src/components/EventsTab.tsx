@@ -6,6 +6,7 @@ import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -455,6 +456,10 @@ function BottomSheet({
   onCancel,
   onSelectTab,
   upcomingEvent,
+  hasMoreMembers,
+  isLoadingMoreMembers,
+  memberScrollRef,
+  memberSentinelRef,
 }: {
   activeTab: SheetTab;
   event: EventSummary;
@@ -464,6 +469,10 @@ function BottomSheet({
   onCancel: () => void;
   onSelectTab: (tab: SheetTab) => void;
   upcomingEvent: EventSummary | undefined;
+  hasMoreMembers: boolean;
+  isLoadingMoreMembers: boolean;
+  memberScrollRef: React.RefObject<HTMLDivElement>;
+  memberSentinelRef: (node: Element | null) => void;
 }) {
   const visibleMembers = members.filter((member) => (
     mode === 'registration' ? member.registered : member.samples
@@ -535,13 +544,17 @@ function BottomSheet({
             {visibleMembers.length === 0 ? (
               <p className="mt-4 text-sm text-slate-400">Пока никого нет.</p>
             ) : (
-              <ul className="mt-4 space-y-2">
+              <div ref={memberScrollRef} className="mt-4 max-h-64 overflow-y-auto">
+              <ul className="space-y-2">
                 {visibleMembers.map((member, index) => (
                   <li key={member.id} className="rounded-xl border border-white/10 bg-slate-800 px-4 py-3 text-sm text-slate-200">
                     Member {index + 1}
                   </li>
                 ))}
+                {hasMoreMembers && <li ref={memberSentinelRef} className="h-px" aria-hidden="true" />}
+                {isLoadingMoreMembers && <li className="py-2 text-center text-sm text-slate-400">Loading…</li>}
               </ul>
+              </div>
             )}
           </div>
         )}
@@ -572,14 +585,19 @@ export function EventsTab({
   const [eventDetails, setEventDetails] = useState<Record<number, EventDetail>>({});
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
   const [sheetEvent, setSheetEvent] = useState<EventSummary | null>(null);
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
   const [activeTab, setActiveTab] = useState<SheetTab>('main');
   const [members, setMembers] = useState<Member[]>([]);
+  const [hasMoreMembers, setHasMoreMembers] = useState(false);
+  const [isLoadingMoreMembers, setIsLoadingMoreMembers] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
   const [loadingEventDetailId, setLoadingEventDetailId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const memberScrollRef = useRef<HTMLDivElement>(null);
   const timelineScrollTimerRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
@@ -591,14 +609,20 @@ export function EventsTab({
   const [lineupUserStates, setLineupUserStates] = useState<Record<number, LineupBottleActionState>>({});
   const [isUpdatingLineupBottle, setIsUpdatingLineupBottle] = useState<number | null>(null);
 
-  const loadEvents = useCallback(async () => {
-    setIsLoading(true);
+  const loadEvents = useCallback(async (offset: number, replace = false) => {
+    if (replace) setIsLoading(true);
+    else setIsLoadingMore(true);
     try {
-      const response = await fetch(localizedApiUrl(`${API_BASE_URL}/api/events`, languageCode));
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_BASE_URL}/api/events`, 24, offset),
+        languageCode,
+      ));
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
       }
-      setEvents(await response.json() as EventSummary[]);
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<EventSummary> | EventSummary[]);
+      setEvents((current) => replace ? page.items : [...current, ...page.items]);
+      setHasMore(page.has_more);
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -606,11 +630,13 @@ export function EventsTab({
       });
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   }, [languageCode]);
 
   useEffect(() => {
-    void loadEvents();
+    setEventDetails({});
+    void loadEvents(0, true);
   }, [loadEvents]);
 
   useEffect(() => {
@@ -716,18 +742,6 @@ export function EventsTab({
     return detail;
   }, [languageCode]);
 
-  useEffect(() => {
-    if (events.length === 0) {
-      return;
-    }
-
-    const controller = new AbortController();
-    void Promise.allSettled(
-      events.map((event) => fetchEventDetail(event.id, controller.signal)),
-    );
-    return () => controller.abort();
-  }, [events, fetchEventDetail]);
-
   const openEventDetails = useCallback(async (eventId: number) => {
     setExpandedEventId(eventId);
     if (eventDetails[eventId]) {
@@ -785,7 +799,8 @@ export function EventsTab({
           { headers: telegramAuthHeaders(initDataRaw), signal: controller.signal },
         );
         if (!response.ok) return;
-        const states = await response.json() as Array<LineupBottleActionState & { bottle_id: number }>;
+        const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<LineupBottleActionState & { bottle_id: number }> | Array<LineupBottleActionState & { bottle_id: number }>);
+        const states = page.items;
         setLineupUserStates(Object.fromEntries(
           states.map((s) => [s.bottle_id, { is_favorite: s.is_favorite, is_tried: s.is_tried }]),
         ));
@@ -851,31 +866,54 @@ export function EventsTab({
     }
   };
 
-  const loadMembers = useCallback(async () => {
+  const loadMembers = useCallback(async (offset = 0) => {
     if (!sheetEvent) {
       return;
     }
-
+    setIsLoadingMoreMembers(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/events/${sheetEvent.id}/members`, {
+      const response = await fetch(paginatedUrl(`${API_BASE_URL}/api/events/${sheetEvent.id}/members`, 24, offset), {
         headers: telegramAuthHeaders(initDataRaw),
       });
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
       }
-      setMembers(await response.json() as Member[]);
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<Member> | Member[]);
+      setMembers((current) => offset === 0 ? page.items : [...current, ...page.items]);
+      setHasMoreMembers(page.has_more);
     } catch (error) {
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'Не удалось загрузить участников.',
       });
+    } finally {
+      setIsLoadingMoreMembers(false);
     }
   }, [initDataRaw, sheetEvent]);
+
+  const loadMoreMembers = useCallback(() => {
+    if (hasMoreMembers && !isLoadingMoreMembers) void loadMembers(members.length);
+  }, [hasMoreMembers, isLoadingMoreMembers, loadMembers, members.length]);
+  const memberSentinelRef = useInfiniteScroll(
+    loadMoreMembers,
+    hasMoreMembers && !isLoadingMoreMembers,
+    memberScrollRef,
+  );
+  const loadMoreEvents = useCallback(() => {
+    if (hasMore && !isLoadingMore) void loadEvents(events.length);
+  }, [events.length, hasMore, isLoadingMore, loadEvents]);
+  const eventSentinelRef = useInfiniteScroll(
+    loadMoreEvents,
+    hasMore && !isLoading && !isLoadingMore,
+    timelineRef,
+  );
 
   const selectSheetTab = (tab: SheetTab) => {
     setActiveTab(tab);
     if (tab === 'members') {
-      void loadMembers();
+      setMembers([]);
+      setHasMoreMembers(false);
+      void loadMembers(0);
     }
   };
 
@@ -886,6 +924,7 @@ export function EventsTab({
     setSheetEvent(null);
     setActiveTab('main');
     setMembers([]);
+    setHasMoreMembers(false);
   };
 
   const closeLineupBottle = () => {
@@ -976,6 +1015,8 @@ export function EventsTab({
                 />
               </li>
             ))}
+            {hasMore && <li ref={eventSentinelRef} className="h-px" aria-hidden="true" />}
+            {isLoadingMore && <li className="py-3 text-center text-sm text-slate-400">Loading…</li>}
           </ol>
         </div>
       )}
@@ -1187,6 +1228,10 @@ export function EventsTab({
         <BottomSheet
           activeTab={activeTab}
           event={sheetEvent}
+          hasMoreMembers={hasMoreMembers}
+          isLoadingMoreMembers={isLoadingMoreMembers}
+          memberScrollRef={memberScrollRef}
+          memberSentinelRef={memberSentinelRef}
           members={members}
           mode={sheetMode}
           onClose={closeSheet}

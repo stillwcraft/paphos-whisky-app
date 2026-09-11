@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const DEEP_LINK_BASE_URL = 'https://t.me/CyprusWhiskyClubBot/NoMoreDram';
@@ -244,13 +245,16 @@ export function AdminTab() {
   const [deletion, setDeletion] = useState<Deletion | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [savingTastingTag, setSavingTastingTag] = useState(false);
+  const [hasMoreContent, setHasMoreContent] = useState(false);
+  const [isLoadingMoreContent, setIsLoadingMoreContent] = useState(false);
   const [backgroundName, setBackgroundName] = useState('');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState('');
 
-  const loadContent = useCallback(async () => {
+  const loadContent = useCallback(async (offset = 0, replace = true) => {
+    if (!replace) setIsLoadingMoreContent(true);
     try {
       const [eventsResponse, distilleriesResponse, tastingTagsResponse, bottlesResponse, backgroundsResponse] = await Promise.all([
-        fetch(`${API_URL}/api/events`), fetch(`${API_URL}/api/distilleries`), fetch(`${API_URL}/api/tasting-tags`), fetch(`${API_URL}/api/bottles`),
+        fetch(paginatedUrl(`${API_URL}/api/events`, 100, offset)), fetch(paginatedUrl(`${API_URL}/api/distilleries`, 100, offset)), fetch(`${API_URL}/api/tasting-tags`), fetch(paginatedUrl(`${API_URL}/api/bottles`, 100, offset)),
         fetch(`${API_URL}/api/admin/bottle-backgrounds`, { headers: telegramAuthHeaders(initDataRaw) }),
       ]);
       if (!eventsResponse.ok) throw new Error(await getError(eventsResponse));
@@ -258,25 +262,38 @@ export function AdminTab() {
       if (!tastingTagsResponse.ok) throw new Error(await getError(tastingTagsResponse));
       if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
       if (!backgroundsResponse.ok) throw new Error(await getError(backgroundsResponse));
-      const eventSummaries = await eventsResponse.json() as Array<Pick<EventItem, 'id'>>;
+      const eventPage = normalizePaginatedResponse(await eventsResponse.json() as PaginatedResponse<Pick<EventItem, 'id'>> | Array<Pick<EventItem, 'id'>>);
+      const distilleryPage = normalizePaginatedResponse(await distilleriesResponse.json() as PaginatedResponse<Distillery> | Distillery[]);
+      const bottlePage = normalizePaginatedResponse(await bottlesResponse.json() as PaginatedResponse<Bottle> | Bottle[]);
+      const eventSummaries = eventPage.items;
       const eventDetailResponses = await Promise.all(
         eventSummaries.map((event) => fetch(`${API_URL}/api/events/${event.id}?lang=en`)),
       );
       const failedEventDetail = eventDetailResponses.find((response) => !response.ok);
       if (failedEventDetail) throw new Error(await getError(failedEventDetail));
-      setEvents(await Promise.all(
+      const loadedEvents = await Promise.all(
         eventDetailResponses.map((response) => response.json() as Promise<EventItem>),
-      ));
-      setDistilleries(await distilleriesResponse.json() as Distillery[]);
+      );
+      setEvents((current) => replace ? loadedEvents : [...current, ...loadedEvents]);
+      setDistilleries((current) => replace ? distilleryPage.items : [...current, ...distilleryPage.items]);
       setTastingTags(await tastingTagsResponse.json() as TastingTag[]);
-      setBottles(await bottlesResponse.json() as Bottle[]);
+      setBottles((current) => replace ? bottlePage.items : [...current, ...bottlePage.items]);
       setBackgrounds(await backgroundsResponse.json() as BottleBackground[]);
+      setHasMoreContent(eventPage.has_more || distilleryPage.has_more || bottlePage.has_more);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load admin content.');
+    } finally {
+      setIsLoadingMoreContent(false);
     }
   }, [initDataRaw]);
 
   useEffect(() => { void loadContent(); }, [loadContent]);
+  const loadMoreContent = useCallback(() => {
+    if (hasMoreContent && !isLoadingMoreContent) {
+      void loadContent(Math.max(events.length, distilleries.length, bottles.length), false);
+    }
+  }, [bottles.length, distilleries.length, events.length, hasMoreContent, isLoadingMoreContent, loadContent]);
+  const contentSentinelRef = useInfiniteScroll(loadMoreContent, hasMoreContent && !isLoadingMoreContent);
   const resetEvent = () => { setEditingEventId(null); setEventForm(emptyEvent()); };
   const resetDistillery = () => { setEditingDistilleryId(null); setDistilleryForm(emptyDistillery()); };
   const resetTastingTag = () => { setEditingTastingTagId(null); setTastingTagForm(emptyTastingTag()); };
@@ -495,6 +512,8 @@ export function AdminTab() {
       <form onSubmit={(event) => void saveBottle(event, tabBottleForm, null, editingTabBottleId, resetTabBottle)}><BottleFields backgrounds={backgrounds} form={tabBottleForm} setForm={setTabBottleForm} includeLabel /><div style={{ ...buttonRow, marginTop: 10 }}><button style={buttonStyle} type="submit">{editingTabBottleId === null ? 'Add Card' : 'Save Changes'}</button>{editingTabBottleId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetTabBottle}>Cancel</button>}</div></form>
       <div style={listStyle}>{bottles.filter((bottle) => bottle.distillery_id === null).map((bottle) => <div key={bottle.id} style={rowStyle}><span>{bottle.name} <em style={{ color: '#C5A059' }}>({bottle.label})</em></span><span style={actionRow}><button aria-label="Copy bottle link" title="Copy bottle link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('bottle', bottle.id)}>🔗</button><button aria-label="Edit bottle" title="Edit bottle" style={smallButtonStyle} type="button" onClick={() => editBottle(bottle)}>✏️</button><button aria-label="Remove bottle" title="Remove bottle" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'bottle', item: bottle })}>🗑️</button></span></div>)}</div>
     </Accordion>
+    {hasMoreContent && <div ref={contentSentinelRef} style={{ height: 1 }} aria-hidden="true" />}
+    {isLoadingMoreContent && <p style={messageStyle}>Loading…</p>}
     {deletion && <div style={modalOverlayStyle} role="presentation"><div aria-modal="true" role="dialog" style={modalStyle}><h3>Confirm deletion</h3><p>Delete {deletion.kind === 'event' ? deletion.item.title : deletion.item.name}?</p><div style={buttonRow}><button style={secondaryButtonStyle} type="button" onClick={() => setDeletion(null)}>Cancel</button><button style={dangerButtonStyle} type="button" onClick={() => void remove()}>Delete</button></div></div></div>}
   </div>;
 }

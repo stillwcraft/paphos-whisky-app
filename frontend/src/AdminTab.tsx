@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { normalizePaginatedResponse, type PaginatedResponse } from '@/pagination.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -114,7 +115,7 @@ export function AdminTab() {
         throw new Error(await getErrorMessage(response));
       }
 
-      setEvents(await response.json() as AdminEvent[]);
+      setEvents(normalizePaginatedResponse(await response.json() as PaginatedResponse<AdminEvent> | AdminEvent[]).items);
     } catch (error) {
       setFeedback({
         kind: 'error',
@@ -138,8 +139,8 @@ export function AdminTab() {
         throw new Error(await getErrorMessage(bottlesResponse));
       }
 
-      setDistilleries(await distilleriesResponse.json() as Distillery[]);
-      setBottles(await bottlesResponse.json() as Bottle[]);
+      setDistilleries(normalizePaginatedResponse(await distilleriesResponse.json() as PaginatedResponse<Distillery> | Distillery[]).items);
+      setBottles(normalizePaginatedResponse(await bottlesResponse.json() as PaginatedResponse<Bottle> | Bottle[]).items);
     } catch (error) {
       setFeedback({
         kind: 'error',

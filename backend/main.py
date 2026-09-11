@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qsl
 
 import requests
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.exc import IntegrityError
@@ -939,6 +939,17 @@ class EventSummaryResponse(BaseModel):
     bottle_count: int
 
 
+class PaginationMetadata(BaseModel):
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class EventPageResponse(PaginationMetadata):
+    items: List[EventSummaryResponse]
+
+
 class BottleTagStatResponse(BaseModel):
     id: int
     name: str
@@ -951,8 +962,24 @@ class BottleTagStatsResponse(BaseModel):
     tags: List[BottleTagStatResponse]
 
 
-class DistilleryWithBottlesResponse(DistilleryResponse):
-    bottles: List[BottleResponse] = Field(default_factory=list)
+class DistillerySummaryResponse(DistilleryResponse):
+    bottle_count: int
+
+
+class DistilleryPageResponse(PaginationMetadata):
+    items: List[DistillerySummaryResponse]
+
+
+class BottlePageResponse(PaginationMetadata):
+    items: List[BottleResponse]
+
+
+class FavoriteBottleResponse(BottleResponse):
+    distillery_name: Optional[str] = None
+
+
+class FavoriteBottlePageResponse(PaginationMetadata):
+    items: List[FavoriteBottleResponse]
 
 
 class BottleActionToggleRequest(BaseModel):
@@ -1044,6 +1071,14 @@ class MemberResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MemberPageResponse(PaginationMetadata):
+    items: List[MemberResponse]
+
+
+class UserBottleStatePageResponse(PaginationMetadata):
+    items: List[UserBottleStateResponse]
 
 
 class UserStatsResponse(BaseModel):
@@ -1250,6 +1285,25 @@ def build_bottle_response(
     )
 
 
+def build_favorite_bottle_response(
+    bottle: models.Bottle,
+    *,
+    lang: str = "en",
+) -> FavoriteBottleResponse:
+    return FavoriteBottleResponse(
+        **build_bottle_response(bottle, lang=lang).model_dump(),
+        distillery_name=(
+            get_localized_string(
+                bottle.distillery.name_i18n,
+                lang,
+                bottle.distillery.name,
+            )
+            if bottle.distillery is not None
+            else None
+        ),
+    )
+
+
 def build_distillery_response(
     distillery: models.Distillery,
     *,
@@ -1270,18 +1324,19 @@ def build_distillery_response(
     )
 
 
-def build_distillery_with_bottles_response(
-    distillery: models.Distillery,
-    *,
-    lang: str = "en",
-) -> DistilleryWithBottlesResponse:
-    return DistilleryWithBottlesResponse(
-        **build_distillery_response(distillery, lang=lang).model_dump(),
-        bottles=[
-            build_bottle_response(bottle, lang=lang)
-            for bottle in distillery.bottles
-        ],
-    )
+def build_paginated_response(
+    items: list[Any],
+    total: int,
+    limit: int,
+    offset: int,
+) -> dict[str, Any]:
+    return {
+        "items": items,
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
+        "has_more": offset + len(items) < total,
+    }
 
 
 def build_event_payload(event_data: EventCreate, *, exclude_unset: bool) -> dict:
@@ -1390,10 +1445,16 @@ def get_event_bottle_counts_subquery(db: Session):
 
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
 
-@app.get("/api/events", response_model=List[EventSummaryResponse])
-def get_events(lang: str = "en", db: Session = Depends(get_db)):
+@app.get("/api/events", response_model=EventPageResponse)
+def get_events(
+    lang: str = "en",
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
     event_counts = get_event_counts_subquery(db)
     bottle_counts = get_event_bottle_counts_subquery(db)
+    total = db.query(func.count(models.Event.id)).scalar() or 0
     events = (
         db.query(
             models.Event,
@@ -1404,18 +1465,26 @@ def get_events(lang: str = "en", db: Session = Depends(get_db)):
         .options(joinedload(models.Event.distillery))
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .outerjoin(bottle_counts, models.Event.id == bottle_counts.c.event_id)
+        .order_by(models.Event.date.asc(), models.Event.id.asc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    return [
-        build_event_summary_response(
-            event,
-            lang=lang,
-            registered_count=registered_count,
-            samples_count=samples_count,
-            bottle_count=bottle_count,
-        )
-        for event, registered_count, samples_count, bottle_count in events
-    ]
+    return build_paginated_response(
+        [
+            build_event_summary_response(
+                event,
+                lang=lang,
+                registered_count=registered_count,
+                samples_count=samples_count,
+                bottle_count=bottle_count,
+            )
+            for event, registered_count, samples_count, bottle_count in events
+        ],
+        total,
+        limit,
+        offset,
+    )
 
 
 @app.get("/api/events/{event_id}", response_model=EventDetailResponse)
@@ -1705,19 +1774,21 @@ def reserve_samples(
     return registration
 
 
-@app.get(
-    "/api/events/{event_id}/members",
-    response_model=List[MemberResponse],
-)
+@app.get("/api/events/{event_id}/members", response_model=MemberPageResponse)
 def get_event_members(
     event_id: int,
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     _: TelegramAuthContext = Depends(get_authenticated_telegram_user),
 ):
     get_event_or_404(event_id, db)
-    return db.query(models.Registration).filter(
+    query = db.query(models.Registration).filter(
         models.Registration.event_id == event_id
-    ).order_by(models.Registration.id).all()
+    )
+    total = query.count()
+    members = query.order_by(models.Registration.id).offset(offset).limit(limit).all()
+    return build_paginated_response(members, total, limit, offset)
 
 
 @app.get("/api/users/{telegram_id}/stats", response_model=UserStatsResponse)
@@ -1763,15 +1834,99 @@ def get_user_stats(
 
 # --- ЭНДПОИНТЫ ДЛЯ БУТЫЛОК (BOTTLES) ---
 
-@app.get("/api/distilleries", response_model=List[DistilleryWithBottlesResponse])
-def get_distilleries(lang: str = "en", db: Session = Depends(get_db)):
-    distilleries = db.query(models.Distillery).options(
-        joinedload(models.Distillery.bottles)
-    ).order_by(models.Distillery.name).all()
-    return [
-        build_distillery_with_bottles_response(distillery, lang=lang)
-        for distillery in distilleries
-    ]
+def get_distillery_bottle_counts_subquery(db: Session):
+    return (
+        db.query(
+            models.Bottle.distillery_id.label("distillery_id"),
+            func.count(models.Bottle.id).label("bottle_count"),
+        )
+        .filter(models.Bottle.distillery_id.is_not(None))
+        .group_by(models.Bottle.distillery_id)
+        .subquery()
+    )
+
+
+@app.get("/api/distilleries", response_model=DistilleryPageResponse)
+def get_distilleries(
+    lang: str = "en",
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    bottle_counts = get_distillery_bottle_counts_subquery(db)
+    total = db.query(func.count(models.Distillery.id)).scalar() or 0
+    rows = (
+        db.query(
+            models.Distillery,
+            func.coalesce(bottle_counts.c.bottle_count, 0).label("bottle_count"),
+        )
+        .outerjoin(bottle_counts, models.Distillery.id == bottle_counts.c.distillery_id)
+        .order_by(models.Distillery.name.asc(), models.Distillery.id.asc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return build_paginated_response(
+        [
+            DistillerySummaryResponse(
+                **build_distillery_response(distillery, lang=lang).model_dump(),
+                bottle_count=int(bottle_count),
+            )
+            for distillery, bottle_count in rows
+        ],
+        total,
+        limit,
+        offset,
+    )
+
+
+@app.get("/api/distilleries/{distillery_id}", response_model=DistillerySummaryResponse)
+def get_distillery(
+    distillery_id: int,
+    lang: str = "en",
+    db: Session = Depends(get_db),
+):
+    bottle_counts = get_distillery_bottle_counts_subquery(db)
+    row = (
+        db.query(
+            models.Distillery,
+            func.coalesce(bottle_counts.c.bottle_count, 0).label("bottle_count"),
+        )
+        .outerjoin(bottle_counts, models.Distillery.id == bottle_counts.c.distillery_id)
+        .filter(models.Distillery.id == distillery_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+    distillery, bottle_count = row
+    return DistillerySummaryResponse(
+        **build_distillery_response(distillery, lang=lang).model_dump(),
+        bottle_count=int(bottle_count),
+    )
+
+
+@app.get("/api/distilleries/{distillery_id}/bottles", response_model=BottlePageResponse)
+def get_distillery_bottles(
+    distillery_id: int,
+    lang: str = "en",
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    get_distillery_or_404 = db.query(models.Distillery.id).filter(
+        models.Distillery.id == distillery_id
+    ).first()
+    if not get_distillery_or_404:
+        raise HTTPException(status_code=404, detail="Distillery not found")
+    query = db.query(models.Bottle).filter(models.Bottle.distillery_id == distillery_id)
+    total = query.count()
+    bottles = query.order_by(models.Bottle.name.asc(), models.Bottle.id.asc()).offset(offset).limit(limit).all()
+    return build_paginated_response(
+        [build_bottle_response(bottle, lang=lang) for bottle in bottles],
+        total,
+        limit,
+        offset,
+    )
 
 
 @app.post(
@@ -1870,10 +2025,57 @@ def delete_distillery(
     db.commit()
 
 
-@app.get("/api/bottles", response_model=List[BottleResponse])
-def get_bottles(lang: str = "en", db: Session = Depends(get_db)):
-    bottles = db.query(models.Bottle).all()
-    return [build_bottle_response(bottle, lang=lang) for bottle in bottles]
+@app.get("/api/bottles", response_model=BottlePageResponse)
+def get_bottles(
+    lang: str = "en",
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    distillery_id: Optional[int] = None,
+    independent_only: bool = False,
+    db: Session = Depends(get_db),
+):
+    query = db.query(models.Bottle)
+    if distillery_id is not None:
+        query = query.filter(models.Bottle.distillery_id == distillery_id)
+    if independent_only:
+        query = query.filter(models.Bottle.distillery_id.is_(None))
+    total = query.count()
+    bottles = query.order_by(models.Bottle.name.asc(), models.Bottle.id.asc()).offset(offset).limit(limit).all()
+    return build_paginated_response(
+        [build_bottle_response(bottle, lang=lang) for bottle in bottles],
+        total,
+        limit,
+        offset,
+    )
+
+
+@app.get("/api/bottles/favorites", response_model=FavoriteBottlePageResponse)
+def get_favorite_bottles(
+    telegram_id: Optional[int] = None,
+    lang: str = "en",
+    limit: int = Query(default=24, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    telegram_id = ensure_telegram_id_matches(authenticated_user, telegram_id)
+    query = (
+        db.query(models.Bottle)
+        .options(joinedload(models.Bottle.distillery))
+        .join(models.UserBottleAction)
+        .filter(
+            models.UserBottleAction.telegram_id == telegram_id,
+            models.UserBottleAction.is_favorite.is_(True),
+        )
+    )
+    total = query.count()
+    bottles = query.order_by(models.Bottle.name.asc(), models.Bottle.id.asc()).offset(offset).limit(limit).all()
+    return build_paginated_response(
+        [build_favorite_bottle_response(bottle, lang=lang) for bottle in bottles],
+        total,
+        limit,
+        offset,
+    )
 
 
 @app.get(
@@ -2108,19 +2310,36 @@ def toggle_bottle_action(
 
 @app.get(
     "/api/bottles/user-states",
-    response_model=List[UserBottleStateResponse],
+    response_model=UserBottleStatePageResponse,
 )
 def get_user_bottle_states(
     telegram_id: Optional[int] = None,
+    limit: int = Query(default=100, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
 ):
     telegram_id = ensure_telegram_id_matches(authenticated_user, telegram_id)
-    return db.query(models.UserBottleAction).filter(
+    query = db.query(models.UserBottleAction).filter(
         models.UserBottleAction.telegram_id == telegram_id,
         (models.UserBottleAction.is_favorite.is_(True))
         | (models.UserBottleAction.is_tried.is_(True)),
-    ).order_by(models.UserBottleAction.bottle_id).all()
+    )
+    total = query.count()
+    states = query.order_by(models.UserBottleAction.bottle_id).offset(offset).limit(limit).all()
+    return build_paginated_response(states, total, limit, offset)
+
+
+@app.get("/api/bottles/{bottle_id}", response_model=BottleResponse)
+def get_bottle(
+    bottle_id: int,
+    lang: str = "en",
+    db: Session = Depends(get_db),
+):
+    bottle = db.query(models.Bottle).filter(models.Bottle.id == bottle_id).first()
+    if not bottle:
+        raise HTTPException(status_code=404, detail="Bottle not found")
+    return build_bottle_response(bottle, lang=lang)
 
 
 def build_review_response(review: models.UserReview) -> ReviewResponse:

@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const PERSONAL_DATA_UNAVAILABLE = 'Favorites are temporarily unavailable. Please try again later.';
@@ -28,9 +29,8 @@ type Bottle = {
   tried_count: number;
 };
 
-type Distillery = { id: number; name: string; name_i18n?: I18nString; description_i18n?: I18nString };
 type UserBottleState = { bottle_id: number; is_favorite: boolean; is_tried: boolean };
-type FavoriteBottle = Bottle & { distilleryName: string };
+type FavoriteBottle = Bottle & { distillery_name: string | null };
 type ToggleActionResponse = UserBottleState & { favorites_count: number; tried_count: number };
 
 function BottleImage({
@@ -74,6 +74,8 @@ export function FavoritesTab() {
   const languageCode = i18n.language;
   const [favoriteBottles, setFavoriteBottles] = useState<FavoriteBottle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [isUpdatingBottleId, setIsUpdatingBottleId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedBottleId, setExpandedBottleId] = useState<number | null>(null);
@@ -81,52 +83,40 @@ export function FavoritesTab() {
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewRevision, setReviewRevision] = useState(0);
 
+  const loadFavorites = useCallback(async (offset: number, replace = false) => {
+    if (!telegramId) {
+      setFavoriteBottles([]);
+      setIsLoading(false);
+      return;
+    }
+    if (replace) setIsLoading(true);
+    else setIsLoadingMore(true);
+    setError(null);
+    try {
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_URL}/api/bottles/favorites?telegram_id=${encodeURIComponent(telegramId)}`, 24, offset),
+        languageCode,
+      ), { headers: telegramAuthHeaders(initDataRaw) });
+      if (!response.ok) throw new Error(await getError(response));
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<FavoriteBottle> | FavoriteBottle[]);
+      setFavoriteBottles((current) => replace ? page.items : [...current, ...page.items]);
+      setHasMore(page.has_more);
+    } catch (loadError) {
+      setError(displayError(loadError, 'Could not load favorites.'));
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [initDataRaw, languageCode, telegramId]);
+
   useEffect(() => {
-    const loadFavorites = async () => {
-      if (!telegramId) {
-        setFavoriteBottles([]);
-        setIsLoading(false);
-        return;
-      }
+    void loadFavorites(0, true);
+  }, [loadFavorites]);
 
-      setIsLoading(true);
-      setError(null);
-      try {
-        const [bottlesResponse, distilleriesResponse, statesResponse] = await Promise.all([
-          fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode)),
-          fetch(localizedApiUrl(`${API_URL}/api/distilleries`, languageCode)),
-          fetch(`${API_URL}/api/bottles/user-states?telegram_id=${encodeURIComponent(telegramId)}`, {
-            headers: telegramAuthHeaders(initDataRaw),
-          }),
-        ]);
-        if (!bottlesResponse.ok) throw new Error(await getError(bottlesResponse));
-        if (!distilleriesResponse.ok) throw new Error(await getError(distilleriesResponse));
-        if (!statesResponse.ok) throw new Error(await getError(statesResponse));
-
-        const [bottles, distilleries, states] = await Promise.all([
-          bottlesResponse.json() as Promise<Bottle[]>,
-          distilleriesResponse.json() as Promise<Distillery[]>,
-          statesResponse.json() as Promise<UserBottleState[]>,
-        ]);
-        const statesByBottle = Object.fromEntries(states.map((state) => [state.bottle_id, state])) as Record<number, UserBottleState>;
-        const distilleryNames = new Map(distilleries.map((distillery) => [distillery.id, distillery.name]));
-        setFavoriteBottles(bottles
-          .filter((bottle) => statesByBottle[bottle.id]?.is_favorite)
-          .map((bottle) => ({
-            ...bottle,
-            distilleryName: bottle.distillery_id
-              ? distilleryNames.get(bottle.distillery_id) ?? t('bottle.independent')
-              : t('bottle.independent'),
-          })));
-      } catch (loadError) {
-        setError(displayError(loadError, 'Could not load favorites.'));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadFavorites();
-  }, [initDataRaw, languageCode, t, telegramId]);
+  const loadMore = useCallback(() => {
+    if (hasMore && !isLoadingMore) void loadFavorites(favoriteBottles.length);
+  }, [favoriteBottles.length, hasMore, isLoadingMore, loadFavorites]);
+  const sentinelRef = useInfiniteScroll(loadMore, hasMore && !isLoading && !isLoadingMore);
 
   const closeBottle = () => {
     setIsPhotoExpanded(false);
@@ -195,12 +185,14 @@ export function FavoritesTab() {
                 {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-6 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
                 <span className="relative z-10 flex items-center gap-3 p-4">
                   <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distilleryName}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distillery_name ?? t('bottle.independent')}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
                   <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
                 </span>
               </button>
             </li>
           ))}
+          {hasMore && <li ref={sentinelRef} className="h-px" aria-hidden="true" />}
+          {isLoadingMore && <li className="text-center text-sm text-slate-400">{t('common.loading')}</li>}
         </ul>
       )}
 
@@ -225,7 +217,7 @@ export function FavoritesTab() {
               <button aria-label={t('bottle.close_details')} className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700" onClick={(event) => { event.stopPropagation(); closeBottle(); }} type="button">✕</button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-4">
-              <p className="text-sm font-semibold text-amber-400">{expandedBottle.distilleryName}</p>
+              <p className="text-sm font-semibold text-amber-400">{expandedBottle.distillery_name ?? t('bottle.independent')}</p>
               <div className="mb-4 mt-3 flex items-baseline justify-between gap-4"><h2 className="min-w-0 font-serif text-2xl font-bold text-[#F4F4F5]">{expandedBottle.name}</h2><span className="shrink-0 text-xl font-semibold text-[#C5A059]">€{expandedBottle.price_per_sample}</span></div>
               <BottleTagChart bottleId={expandedBottle.id} refreshRevision={reviewRevision} />
               <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>{expandedBottle.description}</p>

@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -35,7 +35,7 @@ type Distillery = {
   image_url: string | null;
   description: string | null;
   description_i18n?: I18nString;
-  bottles: Bottle[];
+  bottle_count: number;
 };
 
 type BottleActionState = {
@@ -101,38 +101,6 @@ async function errorMessage(response: Response) {
   return `Server error: ${response.status}`;
 }
 
-async function loadCatalog(languageCode: string | undefined): Promise<Distillery[]> {
-  const distilleriesResponse = await fetch(localizedApiUrl(`${API_URL}/api/distilleries`, languageCode));
-  if (!distilleriesResponse.ok) {
-    throw new Error(await errorMessage(distilleriesResponse));
-  }
-
-  const loadedDistilleries = await distilleriesResponse.json() as Array<
-    Omit<Distillery, 'bottles'> & { bottles?: Bottle[] }
-  >;
-  const needsBottleFallback = loadedDistilleries.some(
-    (distillery) => !Array.isArray(distillery.bottles),
-  );
-  let fallbackBottles: Bottle[] = [];
-
-  // Keep the storefront usable while an older deployed API still returns
-  // distilleries without the new nested bottles field.
-  if (needsBottleFallback) {
-    const bottlesResponse = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
-    if (!bottlesResponse.ok) {
-      throw new Error(await errorMessage(bottlesResponse));
-    }
-    fallbackBottles = await bottlesResponse.json() as Bottle[];
-  }
-
-  return loadedDistilleries.map((distillery) => ({
-    ...distillery,
-    bottles: Array.isArray(distillery.bottles)
-      ? distillery.bottles
-      : fallbackBottles.filter((bottle) => bottle.distillery_id === distillery.id),
-  }));
-}
-
 export function DistilleriesTab({
   selectedBottleId = null,
   onSelectedBottleHandled,
@@ -149,7 +117,13 @@ export function DistilleriesTab({
   const initDataRaw = useSignal(initData.raw);
   const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
-  const queryClient = useQueryClient();
+  const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [distilleryBottles, setDistilleryBottles] = useState<Record<number, Bottle[]>>({});
+  const [bottlePages, setBottlePages] = useState<Record<number, { hasMore: boolean; loading: boolean }>>({});
   const [openDistilleryId, setOpenDistilleryId] = useState<number | null>(null);
   const [selectedDistillery, setSelectedDistillery] = useState<Distillery | null>(null);
   const [selectedBottle, setSelectedBottle] = useState<Bottle | null>(null);
@@ -160,43 +134,98 @@ export function DistilleriesTab({
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewRevision, setReviewRevision] = useState(0);
 
-  const catalogQuery = useQuery({
-    queryKey: ['catalog', languageCode],
-    queryFn: () => loadCatalog(languageCode),
-    staleTime: 5 * 60 * 1000,
-    refetchOnMount: 'always',
-  });
-  const distilleries = catalogQuery.data ?? [];
-  const catalogError = catalogQuery.error instanceof Error
-    ? catalogQuery.error.message
-    : catalogQuery.error
-      ? 'Could not load the catalogue.'
-      : null;
+  const loadDistilleries = useCallback(async (offset: number, replace = false) => {
+    if (replace) setIsLoading(true);
+    else setIsLoadingMore(true);
+    try {
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_URL}/api/distilleries`, 24, offset),
+        languageCode,
+      ));
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<Distillery> | Distillery[]);
+      setDistilleries((current) => replace ? page.items : [...current, ...page.items]);
+      setHasMore(page.has_more);
+      setCatalogError(null);
+    } catch (error) {
+      setCatalogError(error instanceof Error ? error.message : 'Could not load the catalogue.');
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [languageCode]);
 
   useEffect(() => {
-    if (selectedDistilleryId === null || catalogQuery.isLoading) {
+    setDistilleryBottles({});
+    setBottlePages({});
+    void loadDistilleries(0, true);
+  }, [loadDistilleries]);
+
+  const loadMoreDistilleries = useCallback(() => {
+    if (hasMore && !isLoadingMore) void loadDistilleries(distilleries.length);
+  }, [distilleries.length, hasMore, isLoadingMore, loadDistilleries]);
+  const distillerySentinelRef = useInfiniteScroll(
+    loadMoreDistilleries,
+    hasMore && !isLoading && !isLoadingMore,
+  );
+
+  const loadDistilleryBottles = useCallback(async (distilleryId: number, offset = 0) => {
+    if (bottlePages[distilleryId]?.loading) return;
+    setBottlePages((current) => ({
+      ...current,
+      [distilleryId]: { hasMore: current[distilleryId]?.hasMore ?? true, loading: true },
+    }));
+    try {
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_URL}/api/distilleries/${distilleryId}/bottles`, 24, offset),
+        languageCode,
+      ));
+      if (!response.ok) throw new Error(await errorMessage(response));
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<Bottle> | Bottle[]);
+      setDistilleryBottles((current) => ({
+        ...current,
+        [distilleryId]: offset === 0 ? page.items : [...(current[distilleryId] ?? []), ...page.items],
+      }));
+      setBottlePages((current) => ({ ...current, [distilleryId]: { hasMore: page.has_more, loading: false } }));
+    } catch (error) {
+      setBottlePages((current) => ({ ...current, [distilleryId]: { hasMore: false, loading: false } }));
+      setFeedback(error instanceof Error ? error.message : 'Could not load bottles.');
+    }
+  }, [bottlePages, languageCode]);
+
+  useEffect(() => {
+    if (selectedDistilleryId === null || isLoading) {
       return;
     }
 
     const distillery = distilleries.find((item) => item.id === selectedDistilleryId);
     if (distillery) {
       setSelectedDistillery(distillery);
+      onSelectedDistilleryHandled?.();
+      return;
     }
-    onSelectedDistilleryHandled?.();
+    void fetch(localizedApiUrl(`${API_URL}/api/distilleries/${selectedDistilleryId}`, languageCode))
+      .then(async (response) => {
+        if (!response.ok) throw new Error(await errorMessage(response));
+        return response.json() as Promise<Distillery>;
+      })
+      .then((selected) => setSelectedDistillery(selected))
+      .catch((error: unknown) => setFeedback(error instanceof Error ? error.message : 'Could not load distillery.'))
+      .finally(() => onSelectedDistilleryHandled?.());
   }, [
-    catalogQuery.isLoading,
+    isLoading,
     distilleries,
     onSelectedDistilleryHandled,
     selectedDistilleryId,
   ]);
 
   useEffect(() => {
-    if (selectedBottleId === null || catalogQuery.isLoading) {
+    if (selectedBottleId === null || isLoading) {
       return;
     }
 
-    const bottle = distilleries
-      .flatMap((distillery) => distillery.bottles)
+    const bottle = Object.values(distilleryBottles)
+      .flat()
       .find((item) => item.id === selectedBottleId);
     if (bottle) {
       setIsPhotoExpanded(false);
@@ -209,16 +238,11 @@ export function DistilleriesTab({
     let isCancelled = false;
     const loadBottle = async () => {
       try {
-        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
+        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles/${selectedBottleId}`, languageCode));
         if (!response.ok) {
           throw new Error(await errorMessage(response));
         }
-        const loadedBottle = (await response.json() as Bottle[]).find(
-          (item) => item.id === selectedBottleId,
-        );
-        if (!loadedBottle) {
-          throw new Error('Bottle not found.');
-        }
+        const loadedBottle = await response.json() as Bottle;
         if (!isCancelled) {
           setIsPhotoExpanded(false);
           setSelectedBottle(loadedBottle);
@@ -240,8 +264,8 @@ export function DistilleriesTab({
       isCancelled = true;
     };
   }, [
-    catalogQuery.isLoading,
-    distilleries,
+    isLoading,
+    distilleryBottles,
     languageCode,
     onSelectedBottleHandled,
     selectedBottleId,
@@ -263,7 +287,8 @@ export function DistilleriesTab({
           throw new Error(await errorMessage(statesResponse));
         }
 
-        const states = await statesResponse.json() as Array<BottleActionState & { bottle_id: number }>;
+        const page = normalizePaginatedResponse(await statesResponse.json() as PaginatedResponse<BottleActionState & { bottle_id: number }> | Array<BottleActionState & { bottle_id: number }>);
+        const states = page.items;
         setUserStates(Object.fromEntries(states.map((state) => [
           state.bottle_id,
           { is_favorite: state.is_favorite, is_tried: state.is_tried },
@@ -304,16 +329,15 @@ export function DistilleriesTab({
           is_tried: result.is_tried,
         },
       }));
-      queryClient.setQueryData<Distillery[]>(['catalog', languageCode], (current) => current?.map((distillery) => ({
-        ...distillery,
-        bottles: distillery.bottles.map((currentBottle) => currentBottle.id === bottle.id
+      setDistilleryBottles((current) => Object.fromEntries(
+        Object.entries(current).map(([distilleryId, bottles]) => [distilleryId, bottles.map((currentBottle) => currentBottle.id === bottle.id
           ? {
             ...currentBottle,
             favorites_count: result.favorites_count,
             tried_count: result.tried_count,
           }
-          : currentBottle),
-      })));
+          : currentBottle)]),
+      ));
       setSelectedBottle((current) => current?.id === bottle.id
         ? {
           ...current,
@@ -329,6 +353,17 @@ export function DistilleriesTab({
   };
 
   const selectedBottleState = selectedBottle ? userStates[selectedBottle.id] : undefined;
+  const openBottles = openDistilleryId === null ? [] : distilleryBottles[openDistilleryId] ?? [];
+  const openBottlePage = openDistilleryId === null ? undefined : bottlePages[openDistilleryId];
+  const loadMoreOpenBottles = useCallback(() => {
+    if (openDistilleryId !== null && openBottlePage?.hasMore && !openBottlePage.loading) {
+      void loadDistilleryBottles(openDistilleryId, openBottles.length);
+    }
+  }, [loadDistilleryBottles, openBottlePage?.hasMore, openBottlePage?.loading, openBottles.length, openDistilleryId]);
+  const bottleSentinelRef = useInfiniteScroll(
+    loadMoreOpenBottles,
+    Boolean(openBottlePage?.hasMore && !openBottlePage.loading),
+  );
   const closeBottleDetails = () => {
     setIsPhotoExpanded(false);
     setSelectedBottle(null);
@@ -343,7 +378,7 @@ export function DistilleriesTab({
         </p>
       )}
 
-      {catalogQuery.isLoading ? (
+      {isLoading ? (
         <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>
       ) : distilleries.length === 0 ? (
         <p className="text-center text-sm text-slate-400">{t('bottle.catalog_empty')}</p>
@@ -374,7 +409,15 @@ export function DistilleriesTab({
                     aria-expanded={isOpen}
                     aria-label={t(isOpen ? 'bottle.hide_bottles' : 'bottle.show_bottles', { name: distillery.name })}
                     className="rounded-lg p-2 text-amber-400 transition-colors hover:bg-white/5"
-                    onClick={() => setOpenDistilleryId((current) => current === distillery.id ? null : distillery.id)}
+                    onClick={() => {
+                      setOpenDistilleryId((current) => {
+                        const next = current === distillery.id ? null : distillery.id;
+                        if (next !== null && !distilleryBottles[next] && !bottlePages[next]?.loading) {
+                          void loadDistilleryBottles(next);
+                        }
+                        return next;
+                      });
+                    }}
                     type="button"
                   >
                     <ChevronIcon isOpen={isOpen} />
@@ -385,11 +428,13 @@ export function DistilleriesTab({
                   id={panelId}
                 >
                   <div className="overflow-hidden">
-                    {distillery.bottles.length === 0 ? (
+                    {openBottlePage?.loading && !distilleryBottles[distillery.id] ? (
+                      <p className="border-t border-white/10 px-5 py-4 text-sm text-slate-400">{t('common.loading')}</p>
+                    ) : (distilleryBottles[distillery.id] ?? []).length === 0 ? (
                       <p className="border-t border-white/10 px-5 py-4 text-sm text-slate-400">{t('bottle.no_bottles')}</p>
                     ) : (
                       <ul className="border-t border-white/10 px-4 py-2">
-                        {distillery.bottles.map((bottle) => (
+                        {(distilleryBottles[distillery.id] ?? []).map((bottle) => (
                           <li key={bottle.id}>
                             <button
                               className="relative w-full overflow-hidden rounded-xl text-left transition-colors hover:bg-white/5"
@@ -417,6 +462,8 @@ export function DistilleriesTab({
                             </button>
                           </li>
                         ))}
+                        {isOpen && openBottlePage?.hasMore && <li ref={bottleSentinelRef} className="h-px" aria-hidden="true" />}
+                        {isOpen && openBottlePage?.loading && <li className="py-3 text-center text-sm text-slate-400">{t('common.loading')}</li>}
                       </ul>
                     )}
                   </div>
@@ -424,6 +471,8 @@ export function DistilleriesTab({
               </article>
             );
           })}
+          {hasMore && <div ref={distillerySentinelRef} className="h-px" aria-hidden="true" />}
+          {isLoadingMore && <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>}
         </div>
       )}
 

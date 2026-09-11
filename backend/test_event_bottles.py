@@ -245,7 +245,8 @@ class EventBottleTest(unittest.TestCase):
         )
         self.db.commit()
 
-        summary = next(event for event in get_events("en", self.db) if event.id == self.event.id)
+        summaries = get_events("en", limit=24, offset=0, db=self.db)["items"]
+        summary = next(event for event in summaries if event.id == self.event.id)
 
         self.assertEqual(summary.bottle_count, 1)
         self.assertNotIn("description", summary.model_dump())

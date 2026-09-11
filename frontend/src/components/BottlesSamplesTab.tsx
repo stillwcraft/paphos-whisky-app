@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -46,28 +47,48 @@ export function BottlesSamplesTab() {
   const languageCode = i18n.language;
   const [items, setItems] = useState<ShopItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedBottleId, setExpandedBottleId] = useState<number | null>(null);
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
 
-  useEffect(() => {
-    const loadItems = async () => {
-      try {
-        const response = await fetch(localizedApiUrl(`${API_URL}/api/bottles`, languageCode));
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-        const bottles = await response.json() as ShopItem[];
-        setItems(bottles.filter((bottle) => bottle.distillery_id === null));
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : 'Could not load bottles.');
-      } finally {
-        setIsLoading(false);
+  const loadItems = useCallback(async (offset: number, replace = false) => {
+    if (replace) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+    try {
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_URL}/api/bottles?independent_only=true`, 24, offset),
+        languageCode,
+      ));
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
       }
-    };
-
-    void loadItems();
+      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<ShopItem> | ShopItem[]);
+      const independentBottles = page.items.filter((bottle) => bottle.distillery_id === null);
+      setItems((current) => replace ? independentBottles : [...current, ...independentBottles]);
+      setHasMore(page.has_more);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load bottles.');
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
   }, [languageCode]);
+
+  useEffect(() => {
+    void loadItems(0, true);
+  }, [loadItems]);
+
+  const loadMore = useCallback(() => {
+    if (hasMore && !isLoadingMore) {
+      void loadItems(items.length);
+    }
+  }, [hasMore, isLoadingMore, items.length, loadItems]);
+  const sentinelRef = useInfiniteScroll(loadMore, hasMore && !isLoading && !isLoadingMore);
 
   const expandedBottle = useMemo(
     () => items.find((item) => item.id === expandedBottleId),
@@ -114,6 +135,8 @@ export function BottlesSamplesTab() {
               </div>
             </article>
           ))}
+          {hasMore && <div ref={sentinelRef} className="col-span-full h-px" aria-hidden="true" />}
+          {isLoadingMore && <p className="col-span-full text-center text-sm text-slate-400">{t('common.loading')}</p>}
         </div>
       )}
 
