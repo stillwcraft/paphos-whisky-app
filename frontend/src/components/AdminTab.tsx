@@ -21,7 +21,7 @@ type EventItem = {
 };
 type Distillery = {
   id: number; name: string; name_i18n?: I18nResponse; image_url: string | null;
-  logo_url: string | null; description: string | null; description_i18n?: I18nResponse;
+  logo_url: string | null; card_logo_url: string | null; description: string | null; description_i18n?: I18nResponse;
 };
 type TastingTag = {
   id: number; name: string; name_i18n?: I18nResponse;
@@ -45,7 +45,7 @@ type EventForm = {
 };
 type DistilleryForm = {
   name: string; name_i18n: I18nString; image_url: string | null; logo_url: string | null;
-  description: string | null; description_i18n: I18nString;
+  card_logo_url: string | null; description: string | null; description_i18n: I18nString;
 };
 type TastingTagForm = {
   name: string; name_i18n: I18nString; description_i18n: I18nString; icon_url: string;
@@ -76,7 +76,7 @@ const emptyEvent = (): EventForm => ({
 });
 const emptyDistillery = (): DistilleryForm => ({
   name: '', name_i18n: emptyI18n(), image_url: null, logo_url: null, description: null,
-  description_i18n: emptyI18n(),
+  card_logo_url: null, description_i18n: emptyI18n(),
 });
 const emptyTastingTag = (): TastingTagForm => ({
   name: '', name_i18n: emptyI18n(), description_i18n: emptyI18n(), icon_url: '',
@@ -103,7 +103,7 @@ function eventFormFromItem(item: EventItem): EventForm {
 function distilleryFormFromItem(item: Distillery): DistilleryForm {
   return {
     name: item.name, name_i18n: toI18n(item.name_i18n, item.name),
-    image_url: item.image_url, logo_url: item.logo_url, description: item.description,
+    image_url: item.image_url, logo_url: item.logo_url, card_logo_url: item.card_logo_url, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description),
   };
 }
@@ -477,6 +477,7 @@ export function AdminTab() {
         <I18nTextEditor label="Name" required translations={distilleryForm.name_i18n} onChange={(name_i18n) => setDistilleryForm({ ...distilleryForm, name: name_i18n.en, name_i18n })} />
         <input placeholder="Image URL" style={inputStyle} value={distilleryForm.image_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value || null })} />
         <input placeholder="Distillery PNG Logo URL" style={inputStyle} type="url" value={distilleryForm.logo_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, logo_url: event.target.value || null })} />
+        <input placeholder="Optimized Review Card Logo URL (760×240)" style={inputStyle} type="url" value={distilleryForm.card_logo_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, card_logo_url: event.target.value || null })} />
         <I18nTextEditor label="Description" multiline translations={distilleryForm.description_i18n} onChange={(description_i18n) => setDistilleryForm({ ...distilleryForm, description: description_i18n.en || null, description_i18n })} />
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingDistilleryId === null ? 'Add Distillery' : 'Save Changes'}</button>{editingDistilleryId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetDistillery}>Cancel</button>}</div>
       </form>

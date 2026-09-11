@@ -15,7 +15,16 @@ class ReviewCardEndpointTest(unittest.TestCase):
     def setUp(self):
         cards._cache.clear()
         self.db = SessionLocal()
-        bottle = models.Bottle(name="Card endpoint bottle", price_per_sample=10)
+        self.distillery = models.Distillery(
+            name="Card endpoint distillery",
+            logo_url="https://example.com/original-logo.png",
+            card_logo_url="https://example.com/card-logo.webp",
+        )
+        bottle = models.Bottle(
+            name="Card endpoint bottle",
+            price_per_sample=10,
+            distillery=self.distillery,
+        )
         self.db.add(bottle)
         self.db.flush()
         self.review = models.UserReview(
@@ -73,6 +82,10 @@ class ReviewCardEndpointTest(unittest.TestCase):
         for language, expected in expected_verdicts.items():
             card = main.get_review_card_data(self.review.id, self.db, language)
             self.assertEqual((card.verdict, card.verdict_subtitle), expected)
+
+    def test_card_uses_optimized_distillery_logo(self):
+        card = main.get_review_card_data(self.review.id, self.db)
+        self.assertEqual(card.distillery_logo_url, self.distillery.card_logo_url)
 
     def test_cannot_share_another_users_card(self):
         with patch.object(main.requests, "post") as send:

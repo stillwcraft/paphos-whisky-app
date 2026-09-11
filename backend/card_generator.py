@@ -33,7 +33,7 @@ CHIP_ICON_PATHS = {
     "BOTTLES": ASSET_DIR / "icon_bottles.png",
 }
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
-MAX_IMAGE_PIXELS = 8_000_000
+MAX_IMAGE_PIXELS = 6_000_000
 CACHE_BYTES = 12 * 1024 * 1024
 CACHE_TTL = 300
 _render_slot = BoundedSemaphore(1)
@@ -102,7 +102,7 @@ def _load_image(url: str, bounds: tuple[int, int]) -> Image.Image:
                     source.seek(0)
                     with Image.open(source) as image:
                         if image.width * image.height > MAX_IMAGE_PIXELS:
-                            raise CardGenerationError("Card image exceeds the 8 megapixel limit")
+                            raise CardGenerationError("Card image exceeds the 6 megapixel limit")
                         image.thumbnail(bounds, Image.Resampling.LANCZOS)
                         oriented = ImageOps.exif_transpose(image)
                         try:
@@ -208,7 +208,7 @@ def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) ->
         return None
     try:
         return _load_image(url, bounds)
-    except CardGenerationError:
+    except (CardGenerationError, requests.RequestException):
         logger.warning("Unable to load %s image for review card", label, exc_info=True)
         return None
 

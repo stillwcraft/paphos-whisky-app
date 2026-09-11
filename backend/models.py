@@ -69,6 +69,7 @@ class Distillery(Base):
     name_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
+    card_logo_url = Column(String, nullable=True)
     description = Column(String, nullable=True)
     description_i18n = Column(I18N_JSON, nullable=True)
     bottles = relationship(

@@ -177,6 +177,10 @@ def ensure_catalog_schema() -> None:
             connection.execute(
                 text("ALTER TABLE distilleries ADD COLUMN logo_url VARCHAR")
             )
+        if "card_logo_url" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN card_logo_url VARCHAR")
+            )
 
         bottle_columns = get_table_columns(connection, "bottles")
         if "abv" not in bottle_columns:
@@ -820,6 +824,7 @@ class DistilleryCreate(BaseModel):
     name_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
     logo_url: Optional[str] = None
+    card_logo_url: Optional[str] = None
     description: Optional[str] = None
     description_i18n: Optional[I18nString] = None
 
@@ -1315,6 +1320,7 @@ def build_distillery_response(
         name_i18n=distillery.name_i18n,
         image_url=distillery.image_url,
         logo_url=distillery.logo_url,
+        card_logo_url=distillery.card_logo_url,
         description=get_localized_string(
             distillery.description_i18n,
             lang,
@@ -2415,7 +2421,11 @@ def get_review_card_data(
         bottle_name=bottle.name or "Whisky",
         bottle_image_url=bottle.image_url,
         distillery_name=distillery.name if distillery else "Paphos Whisky Club",
-        distillery_logo_url=distillery.logo_url if distillery else None,
+        distillery_logo_url=(
+            distillery.card_logo_url or distillery.logo_url
+            if distillery
+            else None
+        ),
         abv=bottle.abv,
         age=bottle.age,
         cask=bottle.cask,
