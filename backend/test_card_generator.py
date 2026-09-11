@@ -6,7 +6,7 @@ from dataclasses import replace
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import card_generator as cards
 
@@ -40,7 +40,7 @@ class CardGeneratorTest(unittest.TestCase):
             self.assertEqual(image.mode, "RGB")
             score_colors = image.crop((72, 865, 204, 978)).getcolors(100000)
             self.assertTrue(any(color == (197, 160, 89) for _, color in score_colors))
-            colors = image.crop((244, 932, 670, 978)).getcolors(100000)
+            colors = image.crop((244, 1002, 670, 1050)).getcolors(100000)
             self.assertTrue(any(color == (158, 157, 154) for _, color in colors))
 
     def test_logo_and_bottle_are_composited(self):
@@ -73,6 +73,20 @@ class CardGeneratorTest(unittest.TestCase):
         ))
         with Image.open(BytesIO(png)) as image:
             self.assertEqual(image.size, (1080, 1080))
+
+    def test_chips_are_horizontal_and_fit_long_values(self):
+        with Image.new("RGB", (1, 1)) as canvas:
+            draw = ImageDraw.Draw(canvas)
+            value, font = cards._fitted_chip_value(draw, "An exceptionally long cask description", 100)
+            self.assertLessEqual(draw.textlength(value, font=font), 100)
+            self.assertTrue(value.endswith("..."))
+
+        png = cards.render_review_card(sample_card(
+            abv="46%", age="10 y.o.", cask="An exceptionally long cask description", bottles="Regular Release",
+        ))
+        with Image.open(BytesIO(png)) as image:
+            self.assertEqual(image.getpixel((100, 900)), (22, 22, 26))
+            self.assertNotEqual(image.getpixel((800, 600)), (22, 22, 26))
 
     def test_repeated_requests_use_same_png_and_updates_invalidate(self):
         with patch.object(cards, "_draw_card", return_value=b"png") as render:

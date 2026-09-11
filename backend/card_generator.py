@@ -165,6 +165,22 @@ def _centered_baseline_text(
     draw.text((x, y), value, font=font, fill=color, anchor="ms")
 
 
+def _fitted_chip_value(
+    draw: ImageDraw.ImageDraw,
+    value: str,
+    max_width: int,
+) -> tuple[str, ImageFont.FreeTypeFont]:
+    for size in range(19, 9, -1):
+        font = _font(size, serif=True)
+        if draw.textlength(value, font=font) <= max_width:
+            return value, font
+    font = _font(10, serif=True)
+    truncated = value
+    while truncated and draw.textlength(truncated + "...", font=font) > max_width:
+        truncated = truncated[:-1]
+    return truncated + "...", font
+
+
 def _background() -> Image.Image:
     # Compute the soft spotlight on a small image, not a million Python objects.
     with Image.new("RGB", (135, 135)) as small:
@@ -229,27 +245,36 @@ def _draw_card(data: ReviewCardData) -> bytes:
                 ("CASK", data.cask), ("BOTTLES", data.bottles),
             ) if value and value.strip()
         ]
-        chip_height = 100
-        y = 560 - (len(values) * (chip_height + 14) - 14) // 2
-        for label, value in values:
-            chip_x, icon_x, icon_y = 748, 763, y + 34
-            icon = _chip_icon(label)
-            draw.rounded_rectangle(
-                (chip_x, y, 1008, y + chip_height),
-                radius=8,
-                fill="#16161A",
-                outline=(197, 160, 89, 100),
-                width=1,
-            )
-            card.paste(icon, (icon_x, icon_y), mask=icon)
-            text_x = chip_x + 15 + icon.width + 12
-            draw.text((text_x, y + 10), label, font=_font(12, True), fill=GOLD)
-            draw.text((text_x, y + 34), value, font=_font(19), fill=LIGHT)
-            y += chip_height + 14
-
         draw.line((72, 842, 1008, 842), fill="#604A28", width=1)
-        footer_primary_baseline = 925
-        footer_secondary_baseline = 970
+        if values:
+            chip_gap = 12
+            chip_y, chip_height = 866, 62
+            chip_width = (936 - chip_gap * (len(values) - 1)) // len(values)
+            for index, (label, value) in enumerate(values):
+                chip_x = 72 + index * (chip_width + chip_gap)
+                icon = _chip_icon(label)
+                content_width = icon.width + 10
+                value, font = _fitted_chip_value(draw, value, chip_width - content_width - 24)
+                value_width = draw.textlength(value, font=font)
+                content_x = chip_x + (chip_width - content_width - value_width) / 2
+                draw.rounded_rectangle(
+                    (chip_x, chip_y, chip_x + chip_width, chip_y + chip_height),
+                    radius=8,
+                    fill="#16161A",
+                    outline=(197, 160, 89, 100),
+                    width=1,
+                )
+                card.paste(icon, (round(content_x), chip_y + (chip_height - icon.height) // 2), mask=icon)
+                draw.text(
+                    (content_x + content_width, chip_y + chip_height // 2),
+                    value,
+                    font=font,
+                    fill=LIGHT,
+                    anchor="lm",
+                )
+
+        footer_primary_baseline = 995
+        footer_secondary_baseline = 1040
         _centered_baseline_text(draw, str(data.score), 138, footer_primary_baseline, _font(72, True, True), GOLD)
         _centered_baseline_text(draw, "POINTS", 138, footer_secondary_baseline, _font(12, True), GOLD)
         _centered_baseline_text(draw, data.verdict, 540, footer_primary_baseline, _font(25, True, True), "#EAD7AE")
