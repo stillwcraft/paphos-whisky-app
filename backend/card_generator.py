@@ -154,15 +154,15 @@ def _text(
         top += line_height
 
 
-def _centered_text(
+def _centered_baseline_text(
     draw: ImageDraw.ImageDraw,
     value: str,
+    x: int,
     y: int,
     font: ImageFont.FreeTypeFont,
     color: str,
 ) -> None:
-    left, _, right, _ = draw.textbbox((0, 0), value, font=font)
-    draw.text(((SIZE - (right - left)) / 2 - left, y), value, font=font, fill=color)
+    draw.text((x, y), value, font=font, fill=color, anchor="ms")
 
 
 def _background() -> Image.Image:
@@ -248,14 +248,15 @@ def _draw_card(data: ReviewCardData) -> bytes:
             y += chip_height + 14
 
         draw.line((72, 842, 1008, 842), fill="#604A28", width=1)
-        footer_center_y = 925
-        _text(draw, str(data.score), (72, footer_center_y - 61, 204, footer_center_y + 11), 72, GOLD, True, "center", True)
-        _text(draw, "POINTS", (72, footer_center_y + 25, 204, footer_center_y + 46), 12, GOLD, True, "center")
-        _centered_text(draw, data.verdict, footer_center_y - 50, _font(25, True, True), "#EAD7AE")
-        _centered_text(draw, data.verdict_subtitle, footer_center_y + 2, _font(15), MUTED)
+        footer_primary_baseline = 925
+        footer_secondary_baseline = 970
+        _centered_baseline_text(draw, str(data.score), 138, footer_primary_baseline, _font(72, True, True), GOLD)
+        _centered_baseline_text(draw, "POINTS", 138, footer_secondary_baseline, _font(12, True), GOLD)
+        _centered_baseline_text(draw, data.verdict, 540, footer_primary_baseline, _font(25, True, True), "#EAD7AE")
+        _centered_baseline_text(draw, data.verdict_subtitle, 540, footer_secondary_baseline, _font(15), MUTED)
         username = data.author_username.lstrip("@") if data.author_username else data.author_name
-        _text(draw, f"REVIEW BY {username.upper()}", (710, footer_center_y - 28, 1008, footer_center_y + 3), 14, "#D1B276", True, "center", True)
-        _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, footer_center_y + 16, 1008, footer_center_y + 49), 21, "#D1B276", align="center", serif=True)
+        _centered_baseline_text(draw, f"REVIEW BY {username.upper()}", 859, footer_primary_baseline, _font(14, True, True), "#D1B276")
+        _centered_baseline_text(draw, f"@{data.channel_handle.lstrip('@')}", 859, footer_secondary_baseline, _font(21, serif=True), "#D1B276")
         with BytesIO() as output:
             with card.convert("RGB") as rgb_card:
                 rgb_card.save(output, format="PNG")
