@@ -33,7 +33,7 @@ CHIP_ICON_PATHS = {
     "BOTTLES": ASSET_DIR / "icon_bottles.png",
 }
 MAX_IMAGE_BYTES = 6 * 1024 * 1024
-MAX_IMAGE_PIXELS = 12_000_000
+MAX_IMAGE_PIXELS = 8_000_000
 CACHE_BYTES = 12 * 1024 * 1024
 CACHE_TTL = 300
 _render_slot = BoundedSemaphore(1)
@@ -102,7 +102,7 @@ def _load_image(url: str, bounds: tuple[int, int]) -> Image.Image:
                     source.seek(0)
                     with Image.open(source) as image:
                         if image.width * image.height > MAX_IMAGE_PIXELS:
-                            raise CardGenerationError("Card image exceeds the 12 megapixel limit")
+                            raise CardGenerationError("Card image exceeds the 8 megapixel limit")
                         image.thumbnail(bounds, Image.Resampling.LANCZOS)
                         oriented = ImageOps.exif_transpose(image)
                         try:
@@ -257,7 +257,8 @@ def _draw_card(data: ReviewCardData) -> bytes:
         _text(draw, f"REVIEW BY {username.upper()}", (710, footer_center_y - 28, 1008, footer_center_y + 3), 14, "#D1B276", True, "center", True)
         _text(draw, f"@{data.channel_handle.lstrip('@')}", (710, footer_center_y + 16, 1008, footer_center_y + 49), 21, "#D1B276", align="center", serif=True)
         with BytesIO() as output:
-            card.convert("RGB").save(output, format="PNG")
+            with card.convert("RGB") as rgb_card:
+                rgb_card.save(output, format="PNG")
             return output.getvalue()
 
 
