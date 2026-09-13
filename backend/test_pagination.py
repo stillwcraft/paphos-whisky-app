@@ -97,6 +97,7 @@ class PaginationTest(unittest.TestCase):
             longitude=-3.1294,
             show_on_map=True,
             image_url="https://example.com/map-distillery.webp",
+            region="Speyside",
         )
         hidden = models.Distillery(
             name="Hidden Distillery",
@@ -113,6 +114,7 @@ class PaginationTest(unittest.TestCase):
         self.assertEqual(map_distilleries[0].latitude, 57.4554)
         self.assertEqual(map_distilleries[0].longitude, -3.1294)
         self.assertEqual(map_distilleries[0].image_url, visible.image_url)
+        self.assertEqual(map_distilleries[0].region, "Speyside")
 
     def test_member_and_user_state_pages_are_paginated(self):
         event = self.db.query(models.Event).first()

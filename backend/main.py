@@ -196,6 +196,10 @@ def ensure_catalog_schema() -> None:
                     "ADD COLUMN show_on_map BOOLEAN NOT NULL DEFAULT TRUE"
                 )
             )
+        if "region" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN region VARCHAR(100)")
+            )
 
         bottle_columns = get_table_columns(connection, "bottles")
         if "abv" not in bottle_columns:
@@ -843,6 +847,7 @@ class DistilleryCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     show_on_map: bool = True
+    region: Optional[str] = None
     description: Optional[str] = None
     description_i18n: Optional[I18nString] = None
 
@@ -860,6 +865,7 @@ class DistilleryMapResponse(BaseModel):
     latitude: float
     longitude: float
     image_url: Optional[str] = None
+    region: Optional[str] = None
 
 
 class TastingTagCreate(BaseModel):
@@ -1350,6 +1356,7 @@ def build_distillery_response(
         latitude=distillery.latitude,
         longitude=distillery.longitude,
         show_on_map=distillery.show_on_map,
+        region=distillery.region,
         description=get_localized_string(
             distillery.description_i18n,
             lang,
@@ -1938,6 +1945,7 @@ def get_map_distilleries(lang: str = "en", db: Session = Depends(get_db)):
             latitude=distillery.latitude,
             longitude=distillery.longitude,
             image_url=distillery.image_url,
+            region=distillery.region,
         )
         for distillery in distilleries
     ]

@@ -73,6 +73,7 @@ class Distillery(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     show_on_map = Column(Boolean, default=True, nullable=False)
+    region = Column(String(100), nullable=True)
     description = Column(String, nullable=True)
     description_i18n = Column(I18N_JSON, nullable=True)
     bottles = relationship(

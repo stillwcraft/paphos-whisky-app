@@ -22,7 +22,7 @@ type EventItem = {
 type Distillery = {
   id: number; name: string; name_i18n?: I18nResponse; image_url: string | null;
   logo_url: string | null; card_logo_url: string | null; latitude: number | null; longitude: number | null;
-  show_on_map: boolean; description: string | null; description_i18n?: I18nResponse;
+  show_on_map: boolean; region: string | null; description: string | null; description_i18n?: I18nResponse;
 };
 type TastingTag = {
   id: number; name: string; name_i18n?: I18nResponse;
@@ -46,7 +46,7 @@ type EventForm = {
 };
 type DistilleryForm = {
   name: string; name_i18n: I18nString; image_url: string | null; logo_url: string | null;
-  card_logo_url: string | null; latitude: string; longitude: string; show_on_map: boolean;
+  card_logo_url: string | null; latitude: string; longitude: string; show_on_map: boolean; region: string;
   description: string | null; description_i18n: I18nString;
 };
 type TastingTagForm = {
@@ -60,6 +60,7 @@ type BottleForm = {
 type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'tag'; item: TastingTag } | { kind: 'bottle'; item: Bottle };
 
 const locales: Locale[] = ['en', 'ru', 'uk'];
+const distilleryRegions = ['Highlands', 'Speyside', 'Lowlands', 'Islay', 'Islands', 'Campbeltown'] as const;
 const emptyI18n = (): I18nString => ({ en: '', ru: '', uk: '' });
 
 function toI18n(translations: I18nResponse | undefined, fallback: string | null | undefined): I18nString {
@@ -78,7 +79,7 @@ const emptyEvent = (): EventForm => ({
 });
 const emptyDistillery = (): DistilleryForm => ({
   name: '', name_i18n: emptyI18n(), image_url: null, logo_url: null, description: null,
-  card_logo_url: null, latitude: '', longitude: '', show_on_map: true, description_i18n: emptyI18n(),
+  card_logo_url: null, latitude: '', longitude: '', show_on_map: true, region: '', description_i18n: emptyI18n(),
 });
 const emptyTastingTag = (): TastingTagForm => ({
   name: '', name_i18n: emptyI18n(), description_i18n: emptyI18n(), icon_url: '',
@@ -108,7 +109,7 @@ function distilleryFormFromItem(item: Distillery): DistilleryForm {
     image_url: item.image_url, logo_url: item.logo_url, card_logo_url: item.card_logo_url,
     latitude: item.latitude === null ? '' : String(item.latitude),
     longitude: item.longitude === null ? '' : String(item.longitude),
-    show_on_map: item.show_on_map, description: item.description,
+    show_on_map: item.show_on_map, region: item.region ?? '', description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description),
   };
 }
@@ -330,6 +331,7 @@ export function AdminTab() {
         ...distilleryForm,
         latitude: distilleryForm.latitude === '' ? null : Number(distilleryForm.latitude),
         longitude: distilleryForm.longitude === '' ? null : Number(distilleryForm.longitude),
+        region: distilleryForm.region || null,
       };
       const response = await fetch(editing ? `${API_URL}/api/distilleries/${editingDistilleryId}` : `${API_URL}/api/distilleries`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) }, body: JSON.stringify(payload) });
       if (!response.ok) throw new Error(await getError(response));
@@ -488,6 +490,13 @@ export function AdminTab() {
         <input placeholder="Image URL" style={inputStyle} value={distilleryForm.image_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, image_url: event.target.value || null })} />
         <input placeholder="Distillery PNG Logo URL" style={inputStyle} type="url" value={distilleryForm.logo_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, logo_url: event.target.value || null })} />
         <input placeholder="Optimized Review Card Logo URL (760×240)" style={inputStyle} type="url" value={distilleryForm.card_logo_url ?? ''} onChange={(event) => setDistilleryForm({ ...distilleryForm, card_logo_url: event.target.value || null })} />
+        <label style={fieldGroupStyle}>
+          <span style={fieldLabelStyle}>Регіон (Region)</span>
+          <select aria-label="Регіон (Region)" style={inputStyle} value={distilleryForm.region} onChange={(event) => setDistilleryForm({ ...distilleryForm, region: event.target.value })}>
+            <option value="">Не вказано</option>
+            {distilleryRegions.map((region) => <option key={region} value={region}>{region}</option>)}
+          </select>
+        </label>
         <fieldset style={{ ...fieldGroupStyle, border: '1px solid #4A4847', borderRadius: 10, padding: 12 }}>
           <legend style={{ ...fieldLabelStyle, padding: '0 4px' }}>🗺 Інтерактивна карта</legend>
           <label style={{ alignItems: 'center', cursor: 'pointer', display: 'flex', justifyContent: 'space-between' }}>
