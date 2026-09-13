@@ -73,6 +73,7 @@
   },
   "tabs": {
     "events": "Events",
+    "map": "Map",
     "distilleries": "Distilleries",
     "bottles": "Bottles",
     "favorites": "Favorites",

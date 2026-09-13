@@ -9,7 +9,7 @@ import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 
-type TabId = 'events' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
+type TabId = 'events' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
@@ -26,6 +26,7 @@ const tabs: Tab[] = [
   { id: 'favorites', labelKey: 'tabs.favorites', iconSrc: '/assets/nav/Fav.webp' },
   { id: 'profile', labelKey: 'tabs.profile', iconSrc: '/assets/nav/Profile.webp' },
 ];
+const mapTab: Tab = { id: 'map', labelKey: 'tabs.map', iconSrc: '/assets/nav/Globe.webp' };
 const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', iconSrc: '/assets/nav/Admin.webp' };
 
 type FooterProps = {
@@ -36,7 +37,7 @@ type FooterProps = {
 
 function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
   const { t } = useTranslation();
-  const visibleTabs = isAdmin ? [...tabs, adminTab] : tabs;
+  const visibleTabs = isAdmin ? [tabs[0], mapTab, ...tabs.slice(1), adminTab] : tabs;
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
@@ -149,6 +150,15 @@ export function App() {
             <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
+          ) : activeTab === 'map' && isAdmin ? (
+            <div className="flex min-h-screen items-center justify-center text-center">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#C5A059]">
+                  Whisky Club
+                </p>
+                <h1 className="text-2xl font-semibold">{activeScreen}</h1>
+              </div>
+            </div>
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab />
           ) : (
