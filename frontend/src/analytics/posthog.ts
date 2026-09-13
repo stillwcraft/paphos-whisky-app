@@ -29,6 +29,18 @@ export function initAnalytics(telegramUser?: TelegramAnalyticsUser) {
         request_queue_config: {
           flush_interval_ms: 5000,
         },
+        session_recording: {
+          maskAllInputs: true,
+          maskCapturedNetworkRequestFn: (request) => {
+            if (request.name.includes('/api/reviews/') || request.name.includes('/card')) {
+              return null;
+            }
+            if (request.name.includes('tgWebAppData') || request.name.includes('token')) {
+              request.name = request.name.split('?')[0];
+            }
+            return request;
+          },
+        },
       });
       isInitialized = true;
     } catch {

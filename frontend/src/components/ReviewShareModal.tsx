@@ -129,7 +129,7 @@ export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onCl
             x
           </button>
         </div>
-        <img alt={t('review_share.preview_alt')} className="aspect-square w-full bg-[#0D0D0E] object-cover" src={cardUrl} />
+        <img alt={t('review_share.preview_alt')} className="ph-no-capture aspect-square w-full bg-[#0D0D0E] object-cover" src={cardUrl} />
         <div className="space-y-3 p-4">
           {error && <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
           {isPublished && <p className="rounded-xl border border-[#C5A059]/30 bg-[#C5A059]/10 px-3 py-2 text-center text-sm font-medium text-[#C5A059]">{t('review_share.published')}</p>}
