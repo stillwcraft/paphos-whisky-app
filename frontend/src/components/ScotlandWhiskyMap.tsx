@@ -23,10 +23,70 @@ type ScotlandWhiskyMapProps = {
   onSelectDistillery: (distillery: MapDistillery) => void;
 };
 
+type WhiskyRegion = {
+  sourceName: string;
+  label: string;
+  color: string;
+  center: [number, number];
+  labelCoordinates: [number, number];
+  zoom: number;
+};
+
 const initialPosition = {
   coordinates: [-4.2, 57.3] as [number, number],
   zoom: 1,
 };
+
+const whiskyRegions: WhiskyRegion[] = [
+  {
+    sourceName: 'Speyside',
+    label: 'Speyside',
+    color: '#806631',
+    center: [-3.5, 57.25],
+    labelCoordinates: [-2.25, 57.78],
+    zoom: 3.2,
+  },
+  {
+    sourceName: 'Highlands',
+    label: 'Highland',
+    color: '#4C4230',
+    center: [-4.2, 57.55],
+    labelCoordinates: [-3.7, 59.05],
+    zoom: 2.3,
+  },
+  {
+    sourceName: 'Islands',
+    label: 'Island',
+    color: '#51435B',
+    center: [-5.6, 57.8],
+    labelCoordinates: [-7.55, 57.25],
+    zoom: 1.8,
+  },
+  {
+    sourceName: 'Lowlands',
+    label: 'Lowland',
+    color: '#3F4A3B',
+    center: [-3.7, 55.45],
+    labelCoordinates: [-1.5, 55.2],
+    zoom: 2.5,
+  },
+  {
+    sourceName: 'Islay',
+    label: 'Islay',
+    color: '#65443A',
+    center: [-6.27, 55.75],
+    labelCoordinates: [-6.95, 55.85],
+    zoom: 5.5,
+  },
+  {
+    sourceName: 'Campbeltown',
+    label: 'Campbeltown',
+    color: '#6B5136',
+    center: [-5.64, 55.42],
+    labelCoordinates: [-6.2, 55.28],
+    zoom: 5.5,
+  },
+];
 
 export const mockMapDistilleries: MapDistillery[] = [
   { id: 'ardbeg', name: 'Ardbeg', region: 'Islay', coordinates: [-6.108, 55.64], tasted: true, rating: 87 },
@@ -42,6 +102,7 @@ export function ScotlandWhiskyMap({
 }: ScotlandWhiskyMapProps) {
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
+  const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
 
   const changeZoom = (amount: number) => {
     setPosition((current) => ({
@@ -53,6 +114,14 @@ export function ScotlandWhiskyMap({
   const selectDistillery = (distillery: MapDistillery) => {
     setActiveDistillery(distillery);
     onSelectDistillery(distillery);
+  };
+
+  const selectRegion = (region: WhiskyRegion) => {
+    const nextRegion = selectedRegion?.sourceName === region.sourceName ? null : region;
+    setSelectedRegion(nextRegion);
+    setPosition(nextRegion
+      ? { coordinates: nextRegion.center, zoom: nextRegion.zoom }
+      : initialPosition);
   };
 
   return (
@@ -72,32 +141,66 @@ export function ScotlandWhiskyMap({
           onMoveEnd={setPosition}
         >
           <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
-            {({ geographies }) => geographies.map((geography) => (
-              <Geography
-                key={geography.rsmKey}
-                geography={geography}
-                style={{
-                  default: {
-                    fill: '#16161A',
-                    stroke: 'rgba(197, 160, 89, 0.25)',
-                    strokeWidth: 0.8,
-                    outline: 'none',
-                  },
-                  hover: {
-                    fill: '#22222A',
-                    stroke: '#C5A059',
-                    strokeWidth: 1.2,
-                    cursor: 'pointer',
-                    outline: 'none',
-                  },
-                  pressed: {
-                    fill: '#2A2A33',
-                    outline: 'none',
-                  },
-                }}
-              />
-              ))}
+            {({ geographies }) => geographies.map((geography) => {
+              const region = whiskyRegions.find(
+                (item) => item.sourceName === geography.properties.name,
+              );
+              if (!region) return null;
+              const isSelected = selectedRegion?.sourceName === region.sourceName;
+
+              return (
+                <Geography
+                  key={geography.rsmKey}
+                  geography={geography}
+                  onClick={() => selectRegion(region)}
+                  style={{
+                    default: {
+                      fill: isSelected ? '#C5A059' : region.color,
+                      fillOpacity: isSelected ? 0.95 : 0.78,
+                      stroke: isSelected ? '#F4F4F5' : 'rgba(197, 160, 89, 0.45)',
+                      strokeWidth: isSelected ? 1.4 : 0.8,
+                      cursor: 'pointer',
+                      outline: 'none',
+                    },
+                    hover: {
+                      fill: '#C5A059',
+                      fillOpacity: 0.92,
+                      stroke: '#F4F4F5',
+                      strokeWidth: 1.2,
+                      cursor: 'pointer',
+                      outline: 'none',
+                    },
+                    pressed: {
+                      fill: '#E0BF78',
+                      outline: 'none',
+                    },
+                  }}
+                />
+              );
+            })}
           </Geographies>
+
+          {whiskyRegions.map((region) => (
+            <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
+              <text
+                fill="#C5A059"
+                fillOpacity={selectedRegion?.sourceName === region.sourceName ? 0.85 : 0.25}
+                fontSize={5}
+                fontFamily="'Cinzel', 'Playfair Display', serif"
+                fontWeight={600}
+                pointerEvents="none"
+                textAnchor="middle"
+                style={{
+                  filter: selectedRegion?.sourceName === region.sourceName
+                    ? 'drop-shadow(0 0 8px rgba(197, 160, 89, 0.6))'
+                    : undefined,
+                  letterSpacing: '0.3em',
+                }}
+              >
+                {region.label.toUpperCase()}
+              </text>
+            </Marker>
+          ))}
 
           {distilleries.map((distillery) => (
             <Marker
