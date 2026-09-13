@@ -2,12 +2,14 @@ import posthog from 'posthog-js';
 
 const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
 const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST;
+const EXCLUDED_TELEGRAM_IDS = [8546526596, 741623645];
 
 export type TelegramAnalyticsUser = {
   id: number | string;
   username?: string;
   language_code?: string;
   languageCode?: string;
+  is_admin?: boolean;
 };
 
 let isInitialized = false;
@@ -29,6 +31,20 @@ export function initAnalytics(telegramUser?: TelegramAnalyticsUser) {
     }
   }
 
+  const isExcludedUser = telegramUser && (
+    EXCLUDED_TELEGRAM_IDS.includes(Number(telegramUser.id))
+    || telegramUser.is_admin
+  );
+  if (import.meta.env.DEV || isExcludedUser) {
+    try {
+      posthog.opt_out_capturing();
+      console.log('PostHog tracking disabled for admin/developer session');
+    } catch {
+      // Analytics must never affect the Mini App when the SDK is unavailable.
+    }
+    return;
+  }
+
   if (!telegramUser) {
     return;
   }
@@ -48,11 +64,10 @@ export function captureAnalyticsEvent(
   eventName: string,
   properties?: Record<string, unknown>,
 ) {
-  if (!isInitialized) {
-    return;
-  }
-
   try {
+    if (!isInitialized || posthog.has_opted_out_capturing()) {
+      return;
+    }
     posthog.capture(eventName, properties);
   } catch {
     // Analytics must never affect the Mini App when the SDK is blocked.
