@@ -8,6 +8,7 @@ import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
 import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
+import { mockMapDistilleries, ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
 
 type TabId = 'events' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
@@ -151,13 +152,15 @@ export function App() {
           ) : activeTab === 'profile' ? (
             <ProfileTab />
           ) : activeTab === 'map' && isAdmin ? (
-            <div className="flex min-h-screen items-center justify-center text-center">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#C5A059]">
-                  Whisky Club
-                </p>
-                <h1 className="text-2xl font-semibold">{activeScreen}</h1>
-              </div>
+            <div className="mx-auto max-w-md pt-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#C5A059]">
+                Whisky Club
+              </p>
+              <h1 className="mb-5 font-serif text-3xl font-semibold">{activeScreen}</h1>
+              <ScotlandWhiskyMap
+                distilleries={mockMapDistilleries}
+                onSelectDistillery={() => undefined}
+              />
             </div>
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab />
