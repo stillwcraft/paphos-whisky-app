@@ -132,7 +132,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#0D0D0E] text-[#F4F4F5]">
-      <main className="min-h-screen px-6 pb-28">
+      <main className={activeTab === 'map' && isAdmin ? 'h-[calc(100dvh_-_6rem_-_env(safe-area-inset-bottom))]' : 'min-h-screen px-6 pb-28'}>
           {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
@@ -152,16 +152,10 @@ export function App() {
           ) : activeTab === 'profile' ? (
             <ProfileTab />
           ) : activeTab === 'map' && isAdmin ? (
-            <div className="mx-auto max-w-md pt-6">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.3em] text-[#C5A059]">
-                Whisky Club
-              </p>
-              <h1 className="mb-5 font-serif text-3xl font-semibold">{activeScreen}</h1>
-              <ScotlandWhiskyMap
-                distilleries={mockMapDistilleries}
-                onSelectDistillery={() => undefined}
-              />
-            </div>
+            <ScotlandWhiskyMap
+              distilleries={mockMapDistilleries}
+              onSelectDistillery={() => undefined}
+            />
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab />
           ) : (

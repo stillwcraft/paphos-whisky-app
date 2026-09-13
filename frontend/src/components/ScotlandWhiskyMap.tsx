@@ -7,7 +7,7 @@ import {
   ZoomableGroup,
 } from 'react-simple-maps';
 
-const SCOTLAND_TOPOLOGY_URL = 'https://raw.githubusercontent.com/deldersveld/topojson/master/countries/united-kingdom/scotland-council-areas.json';
+const SCOTLAND_TOPOLOGY_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json';
 
 export type MapDistillery = {
   id: string;
@@ -56,11 +56,13 @@ export function ScotlandWhiskyMap({
   };
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-[#C5A059]/15 bg-[#0D0D0E] shadow-2xl">
+    <section className="relative h-full w-full overflow-hidden bg-[#0D0D0E]">
       <ComposableMap
+        width={390}
+        height={640}
         projection="geoMercator"
         projectionConfig={{ center: [-4.2, 57.3], scale: 4200 }}
-        className="h-auto w-full touch-pan-y"
+        className="h-full w-full touch-pan-y"
       >
         <ZoomableGroup
           center={position.coordinates}
@@ -70,7 +72,9 @@ export function ScotlandWhiskyMap({
           onMoveEnd={setPosition}
         >
           <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
-            {({ geographies }) => geographies.map((geography) => (
+            {({ geographies }) => geographies
+              .filter((geography) => geography.properties.name === 'United Kingdom')
+              .map((geography) => (
               <Geography
                 key={geography.rsmKey}
                 geography={geography}
@@ -94,7 +98,7 @@ export function ScotlandWhiskyMap({
                   },
                 }}
               />
-            ))}
+              ))}
           </Geographies>
 
           {distilleries.map((distillery) => (
