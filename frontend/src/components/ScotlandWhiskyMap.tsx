@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import type { MultiPolygon, Polygon, Position } from 'geojson';
 import {
   ComposableMap,
   Geographies,
@@ -18,6 +17,7 @@ export type MapDistillery = {
   longitude: number | null;
   image_url?: string | null;
   logo_url?: string | null;
+  region?: string | null;
   tasted?: boolean;
   rating?: number;
 };
@@ -98,7 +98,6 @@ export function ScotlandWhiskyMap({
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
-  const [selectedRegionGeometry, setSelectedRegionGeometry] = useState<Polygon | MultiPolygon | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
@@ -186,18 +185,16 @@ export function ScotlandWhiskyMap({
     setSelectedBottles([]);
     setDetailLoadError(null);
     setSelectedRegion(null);
-    setSelectedRegionGeometry(null);
     setPosition(initialPosition);
   };
 
-  const selectRegion = (region: WhiskyRegion, geometry: Polygon | MultiPolygon) => {
+  const selectRegion = (region: WhiskyRegion) => {
     if (selectedDistillery) {
       resetMap();
       return;
     }
     const nextRegion = selectedRegion?.sourceName === region.sourceName ? null : region;
     setSelectedRegion(nextRegion);
-    setSelectedRegionGeometry(nextRegion ? geometry : null);
     setPosition(nextRegion
       ? { coordinates: nextRegion.center, zoom: nextRegion.zoom }
       : initialPosition);
@@ -247,7 +244,7 @@ export function ScotlandWhiskyMap({
                 const region = whiskyRegions.find(
                   (item) => item.sourceName === geography.properties.name,
                 );
-                if (!region || !isRegionGeometry(geography.geometry)) return null;
+                if (!region) return null;
                 const isSelected = selectedRegion?.sourceName === region.sourceName;
                 const isHighlighted = isSelected || hoveredRegion === region.sourceName;
 
@@ -259,7 +256,7 @@ export function ScotlandWhiskyMap({
                     onMouseLeave={() => setHoveredRegion(null)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      selectRegion(region, geography.geometry);
+                      selectRegion(region);
                     }}
                     style={{
                       default: {
@@ -319,84 +316,84 @@ export function ScotlandWhiskyMap({
 
           {mapDistilleries
             .filter(hasCoordinates)
-            .map((distillery) => (
-            <Marker
-              key={distillery.id}
-              coordinates={[distillery.longitude, distillery.latitude]}
-              onMouseEnter={() => setActiveDistillery(distillery)}
-              onFocus={() => setActiveDistillery(distillery)}
+            .map((distillery) => {
+              const isInSelectedRegion = selectedRegion?.sourceName === distillery.region;
+              return (
+                <Marker
+                  key={distillery.id}
+                  coordinates={[distillery.longitude, distillery.latitude]}
+                  onMouseEnter={() => setActiveDistillery(distillery)}
+                  onFocus={() => setActiveDistillery(distillery)}
                 onClick={(event) => {
                   event.stopPropagation();
                   void selectDistillery(distillery);
                 }}
-              >
-                {selectedDistillery?.id === distillery.id ? (
-                  <>
-                    <defs>
-                      <clipPath id={`distillery-image-${distillery.id}`}>
-                        <circle r={9} />
-                      </clipPath>
-                    </defs>
-                    <circle r={11} fill="#C5A059" fillOpacity={0.28} />
-                    {selectedDistillery.image_url ? (
-                      <image
-                        href={selectedDistillery.image_url}
-                        x={-9}
-                        y={-9}
-                        width={18}
-                        height={18}
-                        clipPath={`url(#distillery-image-${distillery.id})`}
-                        preserveAspectRatio="xMidYMid slice"
+                >
+                  {selectedDistillery?.id === distillery.id ? (
+                    <>
+                      <defs>
+                        <clipPath id={`distillery-image-${distillery.id}`}>
+                          <circle r={9} />
+                        </clipPath>
+                      </defs>
+                      <circle r={11} fill="#C5A059" fillOpacity={0.28} />
+                      {selectedDistillery.image_url ? (
+                        <image
+                          href={selectedDistillery.image_url}
+                          x={-9}
+                          y={-9}
+                          width={18}
+                          height={18}
+                          clipPath={`url(#distillery-image-${distillery.id})`}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      ) : (
+                        <circle r={9} fill="#C5A059" />
+                      )}
+                      <circle r={9} fill="none" stroke="#F4F4F5" strokeWidth={1} />
+                    </>
+                  ) : isInSelectedRegion ? (
+                    <>
+                      <defs>
+                        <clipPath id={`region-distillery-image-${distillery.id}`}>
+                          <circle r={5} />
+                        </clipPath>
+                      </defs>
+                      <circle r={6.5} fill="#C5A059" fillOpacity={0.28} />
+                      {distillery.image_url ? (
+                        <image
+                          href={distillery.image_url}
+                          x={-5}
+                          y={-5}
+                          width={10}
+                          height={10}
+                          clipPath={`url(#region-distillery-image-${distillery.id})`}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      ) : (
+                        <circle r={5} fill="#C5A059" />
+                      )}
+                      <circle r={5} fill="none" stroke="#F4F4F5" strokeWidth={0.75} />
+                    </>
+                  ) : (
+                    <>
+                      {distillery.tasted && (
+                        <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
+                      )}
+                      <circle
+                        r={markerRadius}
+                        fill={distillery.tasted ? '#C5A059' : '#3A3935'}
+                        stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
+                        strokeWidth={1}
+                        style={distillery.tasted
+                          ? { filter: 'drop-shadow(0 0 6px rgba(197, 160, 89, 0.8))' }
+                          : undefined}
                       />
-                    ) : selectedRegionGeometry && pointIsInRegion(
-                      [distillery.longitude, distillery.latitude],
-                      selectedRegionGeometry,
-                    ) ? (
-                      <>
-                        <defs>
-                          <clipPath id={`region-distillery-image-${distillery.id}`}>
-                            <circle r={5} />
-                          </clipPath>
-                        </defs>
-                        <circle r={6.5} fill="#C5A059" fillOpacity={0.28} />
-                        {distillery.image_url ? (
-                          <image
-                            href={distillery.image_url}
-                            x={-5}
-                            y={-5}
-                            width={10}
-                            height={10}
-                            clipPath={`url(#region-distillery-image-${distillery.id})`}
-                            preserveAspectRatio="xMidYMid slice"
-                          />
-                        ) : (
-                          <circle r={5} fill="#C5A059" />
-                        )}
-                        <circle r={5} fill="none" stroke="#F4F4F5" strokeWidth={0.75} />
-                      </>
-                    ) : (
-                      <circle r={9} fill="#C5A059" />
-                    )}
-                    <circle r={9} fill="none" stroke="#F4F4F5" strokeWidth={1} />
-                  </>
-                ) : (
-                  <>
-                    {distillery.tasted && (
-                      <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
-                    )}
-                    <circle
-                      r={markerRadius}
-                      fill={distillery.tasted ? '#C5A059' : '#3A3935'}
-                      stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
-                      strokeWidth={1}
-                      style={distillery.tasted
-                        ? { filter: 'drop-shadow(0 0 6px rgba(197, 160, 89, 0.8))' }
-                        : undefined}
-                    />
-                  </>
-                )}
-              </Marker>
-            ))}
+                    </>
+                  )}
+                </Marker>
+              );
+            })}
         </ZoomableGroup>
         </ComposableMap>
 
@@ -490,44 +487,4 @@ function hasCoordinates(
   distillery: MapDistillery,
 ): distillery is MapDistillery & { latitude: number; longitude: number } {
   return Number.isFinite(distillery.latitude) && Number.isFinite(distillery.longitude);
-}
-
-function isRegionGeometry(
-  geometry: unknown,
-): geometry is Polygon | MultiPolygon {
-  return typeof geometry === 'object'
-    && geometry !== null
-    && 'type' in geometry
-    && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon');
-}
-
-function pointIsInRegion(
-  [longitude, latitude]: [number, number],
-  geometry: Polygon | MultiPolygon,
-): boolean {
-  const polygons = geometry.type === 'Polygon'
-    ? [geometry.coordinates]
-    : geometry.coordinates;
-  return polygons.some((polygon) => pointIsInRing([longitude, latitude], polygon[0]));
-}
-
-function pointIsInRing(
-  [longitude, latitude]: [number, number],
-  ring: Position[],
-): boolean {
-  let inside = false;
-  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
-    const [currentLongitude, currentLatitude] = ring[index];
-    const [previousLongitude, previousLatitude] = ring[previous];
-    const crossesLatitude = (currentLatitude > latitude) !== (previousLatitude > latitude);
-    const intersection = (
-      (previousLongitude - currentLongitude) * (latitude - currentLatitude)
-      / (previousLatitude - currentLatitude)
-      + currentLongitude
-    );
-    if (crossesLatitude && longitude < intersection) {
-      inside = !inside;
-    }
-  }
-  return inside;
 }
