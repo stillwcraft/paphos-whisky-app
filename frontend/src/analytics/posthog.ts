@@ -24,6 +24,11 @@ export function initAnalytics(telegramUser?: TelegramAnalyticsUser) {
       posthog.init(POSTHOG_KEY, {
         api_host: POSTHOG_HOST,
         autocapture: false,
+        capture_pageview: false,
+        request_batching: true,
+        request_queue_config: {
+          flush_interval_ms: 5000,
+        },
       });
       isInitialized = true;
     } catch {
