@@ -7,7 +7,7 @@ import {
   ZoomableGroup,
 } from 'react-simple-maps';
 
-const SCOTLAND_TOPOLOGY_URL = 'https://raw.githubusercontent.com/jovrtn/ScotchRegions/35f68d55a517c95c476c7500333ab4a540c1bbbe/topojson/ScotchRegions.topo.json';
+const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
 export type MapDistillery = {
