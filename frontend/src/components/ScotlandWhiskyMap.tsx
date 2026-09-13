@@ -26,7 +26,6 @@ type ScotlandWhiskyMapProps = {
 type WhiskyRegion = {
   sourceName: string;
   label: string;
-  color: string;
   center: [number, number];
   labelCoordinates: [number, number];
   zoom: number;
@@ -41,15 +40,13 @@ const whiskyRegions: WhiskyRegion[] = [
   {
     sourceName: 'Speyside',
     label: 'Speyside',
-    color: '#806631',
     center: [-3.5, 57.25],
-    labelCoordinates: [-2.25, 57.78],
+    labelCoordinates: [-2.05, 57.78],
     zoom: 3.2,
   },
   {
     sourceName: 'Highlands',
     label: 'Highland',
-    color: '#4C4230',
     center: [-4.2, 57.55],
     labelCoordinates: [-3.7, 59.05],
     zoom: 2.3,
@@ -57,7 +54,6 @@ const whiskyRegions: WhiskyRegion[] = [
   {
     sourceName: 'Islands',
     label: 'Island',
-    color: '#51435B',
     center: [-5.6, 57.8],
     labelCoordinates: [-7.55, 57.25],
     zoom: 1.8,
@@ -65,7 +61,6 @@ const whiskyRegions: WhiskyRegion[] = [
   {
     sourceName: 'Lowlands',
     label: 'Lowland',
-    color: '#3F4A3B',
     center: [-3.7, 55.45],
     labelCoordinates: [-1.5, 55.2],
     zoom: 2.5,
@@ -73,17 +68,15 @@ const whiskyRegions: WhiskyRegion[] = [
   {
     sourceName: 'Islay',
     label: 'Islay',
-    color: '#65443A',
     center: [-6.27, 55.75],
-    labelCoordinates: [-6.95, 55.85],
+    labelCoordinates: [-7.05, 55.55],
     zoom: 5.5,
   },
   {
     sourceName: 'Campbeltown',
     label: 'Campbeltown',
-    color: '#6B5136',
     center: [-5.64, 55.42],
-    labelCoordinates: [-6.2, 55.28],
+    labelCoordinates: [-6.35, 55.18],
     zoom: 5.5,
   },
 ];
@@ -140,45 +133,47 @@ export function ScotlandWhiskyMap({
           maxZoom={8}
           onMoveEnd={setPosition}
         >
-          <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
-            {({ geographies }) => geographies.map((geography) => {
-              const region = whiskyRegions.find(
-                (item) => item.sourceName === geography.properties.name,
-              );
-              if (!region) return null;
-              const isSelected = selectedRegion?.sourceName === region.sourceName;
+          <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
+            <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
+              {({ geographies }) => geographies.map((geography) => {
+                const region = whiskyRegions.find(
+                  (item) => item.sourceName === geography.properties.name,
+                );
+                if (!region) return null;
+                const isSelected = selectedRegion?.sourceName === region.sourceName;
 
-              return (
-                <Geography
-                  key={geography.rsmKey}
-                  geography={geography}
-                  onClick={() => selectRegion(region)}
-                  style={{
-                    default: {
-                      fill: isSelected ? '#C5A059' : region.color,
-                      fillOpacity: isSelected ? 0.95 : 0.78,
-                      stroke: isSelected ? '#F4F4F5' : 'rgba(197, 160, 89, 0.45)',
-                      strokeWidth: isSelected ? 1.4 : 0.8,
-                      cursor: 'pointer',
-                      outline: 'none',
-                    },
-                    hover: {
-                      fill: '#C5A059',
-                      fillOpacity: 0.92,
-                      stroke: '#F4F4F5',
-                      strokeWidth: 1.2,
-                      cursor: 'pointer',
-                      outline: 'none',
-                    },
-                    pressed: {
-                      fill: '#E0BF78',
-                      outline: 'none',
-                    },
-                  }}
-                />
-              );
-            })}
-          </Geographies>
+                return (
+                  <Geography
+                    key={geography.rsmKey}
+                    geography={geography}
+                    onClick={() => selectRegion(region)}
+                    style={{
+                      default: {
+                        fill: isSelected ? '#1E1E24' : '#141417',
+                        stroke: 'rgba(197, 160, 89, 0.3)',
+                        strokeWidth: 0.8,
+                        cursor: 'pointer',
+                        outline: 'none',
+                        transition: 'fill 0.3s ease',
+                      },
+                      hover: {
+                        fill: '#1E1E24',
+                        stroke: 'rgba(197, 160, 89, 0.3)',
+                        strokeWidth: 0.8,
+                        cursor: 'pointer',
+                        outline: 'none',
+                        transition: 'fill 0.3s ease',
+                      },
+                      pressed: {
+                        fill: '#24242C',
+                        outline: 'none',
+                      },
+                    }}
+                  />
+                );
+              })}
+            </Geographies>
+          </g>
 
           {whiskyRegions.map((region) => (
             <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
@@ -210,8 +205,11 @@ export function ScotlandWhiskyMap({
               onFocus={() => setActiveDistillery(distillery)}
               onClick={() => selectDistillery(distillery)}
             >
+              {distillery.tasted && (
+                <circle r={12} fill="#C5A059" fillOpacity={0.12} />
+              )}
               <circle
-                r={distillery.tasted ? 6 : 5}
+                r={6}
                 fill={distillery.tasted ? '#C5A059' : '#3A3935'}
                 stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
                 strokeWidth={1}
@@ -224,10 +222,10 @@ export function ScotlandWhiskyMap({
         </ZoomableGroup>
       </ComposableMap>
 
-      <div className="absolute right-3 top-3 flex gap-2">
+      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/80 p-1 text-[#C5A059] shadow-2xl backdrop-blur-md">
         <button
           aria-label="Zoom in"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 font-bold text-[#C5A059] shadow-lg"
+          className="flex h-8 w-8 items-center justify-center rounded-lg font-bold"
           type="button"
           onClick={() => changeZoom(1)}
         >
@@ -235,7 +233,7 @@ export function ScotlandWhiskyMap({
         </button>
         <button
           aria-label="Zoom out"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C5A059]/30 bg-[#16161A]/90 font-bold text-[#C5A059] shadow-lg"
+          className="flex h-8 w-8 items-center justify-center rounded-lg font-bold"
           type="button"
           onClick={() => changeZoom(-1)}
         >
