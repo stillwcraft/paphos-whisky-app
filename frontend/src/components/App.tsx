@@ -34,11 +34,17 @@ type FooterProps = {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
+  showMapTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showMapTab }: FooterProps) {
   const { t } = useTranslation();
-  const visibleTabs = isAdmin ? [tabs[0], mapTab, ...tabs.slice(1), adminTab] : tabs;
+  const visibleTabs = [
+    tabs[0],
+    ...(showMapTab ? [mapTab] : []),
+    ...tabs.slice(1),
+    ...(isAdmin ? [adminTab] : []),
+  ];
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
@@ -84,6 +90,9 @@ export function App() {
   const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
+  const showMapTab = isAdmin || (
+    import.meta.env.DEV && window.location.hostname === '127.0.0.1'
+  );
   const activeScreen = t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
@@ -151,7 +160,7 @@ export function App() {
             <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
-          ) : activeTab === 'map' && isAdmin ? (
+          ) : activeTab === 'map' && showMapTab ? (
             <ScotlandWhiskyMap
               distilleries={mockMapDistilleries}
               onSelectDistillery={() => undefined}
@@ -169,7 +178,12 @@ export function App() {
             </div>
           )}
       </main>
-      <Footer activeTab={activeTab} onTabChange={setActiveTab} isAdmin={isAdmin} />
+      <Footer
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        isAdmin={isAdmin}
+        showMapTab={showMapTab}
+      />
     </div>
   );
 }
