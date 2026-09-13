@@ -8,7 +8,7 @@ import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
 import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
-import { mockMapDistilleries, ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
+import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
 
 type TabId = 'events' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
@@ -162,7 +162,6 @@ export function App() {
             <ProfileTab />
           ) : activeTab === 'map' && showMapTab ? (
             <ScotlandWhiskyMap
-              distilleries={mockMapDistilleries}
               onSelectDistillery={() => undefined}
             />
           ) : activeTab === 'admin' && isAdmin ? (

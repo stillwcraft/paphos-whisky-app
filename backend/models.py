@@ -70,6 +70,9 @@ class Distillery(Base):
     image_url = Column(String, nullable=True)
     logo_url = Column(String, nullable=True)
     card_logo_url = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    show_on_map = Column(Boolean, default=True, nullable=False)
     description = Column(String, nullable=True)
     description_i18n = Column(I18N_JSON, nullable=True)
     bottles = relationship(

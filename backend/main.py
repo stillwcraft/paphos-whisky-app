@@ -181,6 +181,21 @@ def ensure_catalog_schema() -> None:
             connection.execute(
                 text("ALTER TABLE distilleries ADD COLUMN card_logo_url VARCHAR")
             )
+        if "latitude" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN latitude FLOAT")
+            )
+        if "longitude" not in distillery_columns:
+            connection.execute(
+                text("ALTER TABLE distilleries ADD COLUMN longitude FLOAT")
+            )
+        if "show_on_map" not in distillery_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE distilleries "
+                    "ADD COLUMN show_on_map BOOLEAN NOT NULL DEFAULT TRUE"
+                )
+            )
 
         bottle_columns = get_table_columns(connection, "bottles")
         if "abv" not in bottle_columns:
@@ -825,6 +840,9 @@ class DistilleryCreate(BaseModel):
     image_url: Optional[str] = None
     logo_url: Optional[str] = None
     card_logo_url: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    show_on_map: bool = True
     description: Optional[str] = None
     description_i18n: Optional[I18nString] = None
 
@@ -834,6 +852,13 @@ class DistilleryResponse(DistilleryCreate):
 
     class Config:
         from_attributes = True
+
+
+class DistilleryMapResponse(BaseModel):
+    id: int
+    name: str
+    latitude: float
+    longitude: float
 
 
 class TastingTagCreate(BaseModel):
@@ -1321,6 +1346,9 @@ def build_distillery_response(
         image_url=distillery.image_url,
         logo_url=distillery.logo_url,
         card_logo_url=distillery.card_logo_url,
+        latitude=distillery.latitude,
+        longitude=distillery.longitude,
+        show_on_map=distillery.show_on_map,
         description=get_localized_string(
             distillery.description_i18n,
             lang,
@@ -1886,6 +1914,33 @@ def get_distilleries(
     )
 
 
+@app.get("/api/distilleries/map", response_model=List[DistilleryMapResponse])
+def get_map_distilleries(lang: str = "en", db: Session = Depends(get_db)):
+    distilleries = (
+        db.query(models.Distillery)
+        .filter(
+            models.Distillery.show_on_map.is_(True),
+            models.Distillery.latitude.is_not(None),
+            models.Distillery.longitude.is_not(None),
+        )
+        .order_by(models.Distillery.name.asc(), models.Distillery.id.asc())
+        .all()
+    )
+    return [
+        DistilleryMapResponse(
+            id=distillery.id,
+            name=get_localized_string(
+                distillery.name_i18n,
+                lang,
+                distillery.name,
+            ),
+            latitude=distillery.latitude,
+            longitude=distillery.longitude,
+        )
+        for distillery in distilleries
+    ]
+
+
 @app.get("/api/distilleries/{distillery_id}", response_model=DistillerySummaryResponse)
 def get_distillery(
     distillery_id: int,
@@ -1935,6 +1990,25 @@ def get_distillery_bottles(
     )
 
 
+@app.get("/api/admin/distilleries", response_model=List[DistilleryResponse])
+def get_admin_distilleries(
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    return [
+        build_distillery_response(distillery)
+        for distillery in db.query(models.Distillery).order_by(
+            models.Distillery.name.asc(),
+            models.Distillery.id.asc(),
+        ).all()
+    ]
+
+
+@app.post(
+    "/api/admin/distilleries",
+    response_model=DistilleryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 @app.post(
     "/api/distilleries",
     response_model=DistilleryResponse,
@@ -1958,6 +2032,7 @@ def create_distillery(
     return build_distillery_response(distillery)
 
 
+@app.put("/api/admin/distilleries/{distillery_id}", response_model=DistilleryResponse)
 @app.put("/api/distilleries/{distillery_id}", response_model=DistilleryResponse)
 def update_distillery(
     distillery_id: int,

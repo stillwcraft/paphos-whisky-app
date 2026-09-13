@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -8,18 +8,18 @@ import {
 } from 'react-simple-maps';
 
 const SCOTLAND_TOPOLOGY_URL = 'https://raw.githubusercontent.com/jovrtn/ScotchRegions/35f68d55a517c95c476c7500333ab4a540c1bbbe/topojson/ScotchRegions.topo.json';
+const API_URL = 'https://paphos-whisky-api.onrender.com';
 
 export type MapDistillery = {
-  id: string;
+  id: number;
   name: string;
-  region: string;
-  coordinates: [number, number];
-  tasted: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  tasted?: boolean;
   rating?: number;
 };
 
 type ScotlandWhiskyMapProps = {
-  distilleries: MapDistillery[];
   onSelectDistillery: (distillery: MapDistillery) => void;
 };
 
@@ -81,22 +81,43 @@ const whiskyRegions: WhiskyRegion[] = [
   },
 ];
 
-export const mockMapDistilleries: MapDistillery[] = [
-  { id: 'ardbeg', name: 'Ardbeg', region: 'Islay', coordinates: [-6.108, 55.64], tasted: true, rating: 87 },
-  { id: 'laphroaig', name: 'Laphroaig', region: 'Islay', coordinates: [-6.152, 55.64], tasted: true, rating: 89 },
-  { id: 'the-macallan', name: 'The Macallan', region: 'Speyside', coordinates: [-3.226, 57.49], tasted: false },
-  { id: 'glenfiddich', name: 'Glenfiddich', region: 'Speyside', coordinates: [-3.127, 57.46], tasted: true, rating: 85 },
-  { id: 'talisker', name: 'Talisker', region: 'Isle of Skye', coordinates: [-6.361, 57.302], tasted: false },
-];
-
 export function ScotlandWhiskyMap({
-  distilleries,
   onSelectDistillery,
 }: ScotlandWhiskyMapProps) {
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
+  const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadMapDistilleries = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/distilleries/map`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Could not load map distilleries (${response.status})`);
+        }
+        const data: unknown = await response.json();
+        if (!Array.isArray(data)) {
+          throw new Error('Map distilleries response is invalid');
+        }
+        setMapDistilleries(data.filter(isMapDistillery));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        setMapLoadError(error instanceof Error ? error.message : 'Could not load map distilleries');
+      }
+    };
+
+    void loadMapDistilleries();
+    return () => controller.abort();
+  }, []);
 
   const changeZoom = (amount: number) => {
     setPosition((current) => ({
@@ -198,10 +219,12 @@ export function ScotlandWhiskyMap({
             </Marker>
           ))}
 
-          {distilleries.map((distillery) => (
+          {mapDistilleries
+            .filter(hasCoordinates)
+            .map((distillery) => (
             <Marker
               key={distillery.id}
-              coordinates={distillery.coordinates}
+              coordinates={[distillery.longitude, distillery.latitude]}
               onMouseEnter={() => setActiveDistillery(distillery)}
               onFocus={() => setActiveDistillery(distillery)}
               onClick={() => selectDistillery(distillery)}
@@ -219,7 +242,7 @@ export function ScotlandWhiskyMap({
                   : undefined}
               />
             </Marker>
-          ))}
+            ))}
         </ZoomableGroup>
       </ComposableMap>
 
@@ -245,9 +268,6 @@ export function ScotlandWhiskyMap({
       {activeDistillery && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/95 px-3 py-2 shadow-xl">
           <p className="font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-[#C5A059]">
-            {activeDistillery.region}
-          </p>
           <p className="mt-1 text-xs text-[#9E9D9A]">
             {activeDistillery.tasted
               ? `★ Tasted${activeDistillery.rating ? ` · ${activeDistillery.rating}` : ''}`
@@ -255,6 +275,22 @@ export function ScotlandWhiskyMap({
           </p>
         </div>
       )}
+      {mapLoadError && (
+        <p className="absolute bottom-3 right-3 text-xs text-[#9E9D9A]">{mapLoadError}</p>
+      )}
     </section>
   );
+}
+
+function isMapDistillery(value: unknown): value is MapDistillery {
+  return typeof value === 'object'
+    && value !== null
+    && typeof (value as MapDistillery).id === 'number'
+    && typeof (value as MapDistillery).name === 'string';
+}
+
+function hasCoordinates(
+  distillery: MapDistillery,
+): distillery is MapDistillery & { latitude: number; longitude: number } {
+  return Number.isFinite(distillery.latitude) && Number.isFinite(distillery.longitude);
 }

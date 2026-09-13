@@ -14,6 +14,7 @@ from main import (
     get_distillery_bottles,
     get_event_members,
     get_events,
+    get_map_distilleries,
     get_user_bottle_states,
 )
 
@@ -88,6 +89,28 @@ class PaginationTest(unittest.TestCase):
         bottles = get_distillery_bottles(self.distillery.id, limit=2, offset=0, db=self.db)
         self.assert_page(bottles, total=3, limit=2, offset=0, size=2, has_more=True)
         self.assertTrue(all(item.distillery_id == self.distillery.id for item in bottles["items"]))
+
+    def test_map_only_returns_visible_distilleries_with_coordinates(self):
+        visible = models.Distillery(
+            name="Map Distillery",
+            latitude=57.4554,
+            longitude=-3.1294,
+            show_on_map=True,
+        )
+        hidden = models.Distillery(
+            name="Hidden Distillery",
+            latitude=57.1,
+            longitude=-3.2,
+            show_on_map=False,
+        )
+        self.db.add_all([visible, hidden])
+        self.db.commit()
+
+        map_distilleries = get_map_distilleries(db=self.db)
+
+        self.assertEqual([item.id for item in map_distilleries], [visible.id])
+        self.assertEqual(map_distilleries[0].latitude, 57.4554)
+        self.assertEqual(map_distilleries[0].longitude, -3.1294)
 
     def test_member_and_user_state_pages_are_paginated(self):
         event = self.db.query(models.Event).first()
