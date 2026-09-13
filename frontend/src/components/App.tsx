@@ -9,6 +9,8 @@ import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
+import { initAnalytics } from '@/analytics/posthog.ts';
+import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 
 type TabId = 'events' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
@@ -104,6 +106,16 @@ export function App() {
       && initDataState?.user?.id === ADMIN_TELEGRAM_ID,
     );
   }, [initDataState]);
+
+  useEffect(() => {
+    initAnalytics(initDataState?.user);
+  }, [initDataState?.user]);
+
+  useScreenTracking({
+    eventName: '$pageview',
+    screenName: activeTab,
+    title: activeScreen,
+  });
 
   useEffect(() => {
     const startParam = retrieveLaunchParams().tgWebAppStartParam

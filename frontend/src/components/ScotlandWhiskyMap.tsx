@@ -6,6 +6,7 @@ import {
   Marker,
   ZoomableGroup,
 } from 'react-simple-maps';
+import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -95,6 +96,7 @@ const whiskyRegions: WhiskyRegion[] = [
 export function ScotlandWhiskyMap({
   onSelectDistillery,
 }: ScotlandWhiskyMapProps) {
+  const { trackEvent } = useAnalytics();
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
@@ -143,6 +145,10 @@ export function ScotlandWhiskyMap({
   };
 
   const selectDistillery = async (distillery: MapDistillery) => {
+    trackEvent('map_distillery_selected', {
+      distillery_id: distillery.id,
+      region: distillery.region ?? null,
+    });
     setActiveDistillery(distillery);
     setSelectedDistillery(distillery);
     setSelectedBottles([]);

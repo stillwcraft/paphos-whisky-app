@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { ReviewShareModal } from '@/components/ReviewShareModal.tsx';
+import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -69,6 +70,10 @@ function getScoreVerdictKey(score: number): 'masterpiece' | 'gem' | 'classic' | 
 
 export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose, onSaved }: Props) {
   const { i18n, t } = useTranslation();
+  useScreenTracking({
+    entityId: bottleId,
+    screenName: 'Review Modal',
+  });
   const languageCode = i18n.language;
   const [nose, setNose] = useState(80);
   const [taste, setTaste] = useState(80);
@@ -315,8 +320,10 @@ export function BottleReviewOverlay({ bottleId, telegramId, initDataRaw, onClose
     </div>
     {savedReviewId !== null && (
       <ReviewShareModal
+        bottleId={bottleId}
         initDataRaw={initDataRaw}
         onClose={onClose}
+        rating={averageScore}
         reviewId={savedReviewId}
       />
     )}

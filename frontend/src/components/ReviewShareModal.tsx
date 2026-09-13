@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { AccessDeniedError, downloadFile, openLink, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
 type Props = {
+  bottleId: number;
+  rating: number;
   reviewId: number;
   initDataRaw: string | undefined;
   onClose: () => void;
@@ -24,8 +27,9 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return `Server error: ${response.status}`;
 }
 
-export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: Props) {
+export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onClose, threadId }: Props) {
   const { i18n, t } = useTranslation();
+  const { trackEvent } = useAnalytics();
   const useNativeDownload = useSignal(downloadFile.isAvailable);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
@@ -65,6 +69,10 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
     setError(null);
     try {
       await downloadFile(createDownloadUrl(), `whisky-review-${reviewId}.png`, { timeout: 60_000 });
+      trackEvent('review_card_downloaded', {
+        bottle_id: bottleId,
+        rating,
+      });
     } catch (err) {
       if (err instanceof AccessDeniedError) {
         setError(t('review_share.download_cancelled'));
@@ -83,6 +91,10 @@ export function ReviewShareModal({ reviewId, initDataRaw, onClose, threadId }: P
       href={`${cardEndpoint}?download=1&lang=${cardLanguage}&t=${previewTimestamp}`}
       onClick={(event) => {
         const downloadUrl = createDownloadUrl();
+        trackEvent('review_card_downloaded', {
+          bottle_id: bottleId,
+          rating,
+        });
         // Let the Telegram host open the URL outside the Mini App's iframe.
         if (openLink.isAvailable()) {
           event.preventDefault();

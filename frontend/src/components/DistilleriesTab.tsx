@@ -5,6 +5,7 @@ import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
+import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -134,6 +135,10 @@ export function DistilleriesTab({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewRevision, setReviewRevision] = useState(0);
+  useScreenTracking({
+    entityId: selectedDistillery?.id,
+    screenName: selectedDistillery ? 'Distillery Sheet' : null,
+  });
 
   const loadDistilleries = useCallback(async (offset: number, replace = false) => {
     if (replace) setIsLoading(true);
