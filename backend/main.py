@@ -859,6 +859,7 @@ class DistilleryMapResponse(BaseModel):
     name: str
     latitude: float
     longitude: float
+    image_url: Optional[str] = None
 
 
 class TastingTagCreate(BaseModel):
@@ -1936,6 +1937,7 @@ def get_map_distilleries(lang: str = "en", db: Session = Depends(get_db)):
             ),
             latitude=distillery.latitude,
             longitude=distillery.longitude,
+            image_url=distillery.image_url,
         )
         for distillery in distilleries
     ]

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { MultiPolygon, Polygon, Position } from 'geojson';
 import {
   ComposableMap,
   Geographies,
@@ -97,6 +98,7 @@ export function ScotlandWhiskyMap({
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
+  const [selectedRegionGeometry, setSelectedRegionGeometry] = useState<Polygon | MultiPolygon | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
@@ -184,16 +186,18 @@ export function ScotlandWhiskyMap({
     setSelectedBottles([]);
     setDetailLoadError(null);
     setSelectedRegion(null);
+    setSelectedRegionGeometry(null);
     setPosition(initialPosition);
   };
 
-  const selectRegion = (region: WhiskyRegion) => {
+  const selectRegion = (region: WhiskyRegion, geometry: Polygon | MultiPolygon) => {
     if (selectedDistillery) {
       resetMap();
       return;
     }
     const nextRegion = selectedRegion?.sourceName === region.sourceName ? null : region;
     setSelectedRegion(nextRegion);
+    setSelectedRegionGeometry(nextRegion ? geometry : null);
     setPosition(nextRegion
       ? { coordinates: nextRegion.center, zoom: nextRegion.zoom }
       : initialPosition);
@@ -243,8 +247,9 @@ export function ScotlandWhiskyMap({
                 const region = whiskyRegions.find(
                   (item) => item.sourceName === geography.properties.name,
                 );
-                if (!region) return null;
+                if (!region || !isRegionGeometry(geography.geometry)) return null;
                 const isSelected = selectedRegion?.sourceName === region.sourceName;
+                const isHighlighted = isSelected || hoveredRegion === region.sourceName;
 
                 return (
                   <Geography
@@ -254,11 +259,11 @@ export function ScotlandWhiskyMap({
                     onMouseLeave={() => setHoveredRegion(null)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      selectRegion(region);
+                      selectRegion(region, geography.geometry);
                     }}
                     style={{
                       default: {
-                        fill: isSelected ? '#1E1E24' : '#141417',
+                        fill: isHighlighted ? '#1E1E24' : '#141417',
                         stroke: 'rgba(197, 160, 89, 0.3)',
                         strokeWidth: 0.8,
                         cursor: 'pointer',
@@ -343,6 +348,32 @@ export function ScotlandWhiskyMap({
                         clipPath={`url(#distillery-image-${distillery.id})`}
                         preserveAspectRatio="xMidYMid slice"
                       />
+                    ) : selectedRegionGeometry && pointIsInRegion(
+                      [distillery.longitude, distillery.latitude],
+                      selectedRegionGeometry,
+                    ) ? (
+                      <>
+                        <defs>
+                          <clipPath id={`region-distillery-image-${distillery.id}`}>
+                            <circle r={5} />
+                          </clipPath>
+                        </defs>
+                        <circle r={6.5} fill="#C5A059" fillOpacity={0.28} />
+                        {distillery.image_url ? (
+                          <image
+                            href={distillery.image_url}
+                            x={-5}
+                            y={-5}
+                            width={10}
+                            height={10}
+                            clipPath={`url(#region-distillery-image-${distillery.id})`}
+                            preserveAspectRatio="xMidYMid slice"
+                          />
+                        ) : (
+                          <circle r={5} fill="#C5A059" />
+                        )}
+                        <circle r={5} fill="none" stroke="#F4F4F5" strokeWidth={0.75} />
+                      </>
                     ) : (
                       <circle r={9} fill="#C5A059" />
                     )}
@@ -459,4 +490,44 @@ function hasCoordinates(
   distillery: MapDistillery,
 ): distillery is MapDistillery & { latitude: number; longitude: number } {
   return Number.isFinite(distillery.latitude) && Number.isFinite(distillery.longitude);
+}
+
+function isRegionGeometry(
+  geometry: unknown,
+): geometry is Polygon | MultiPolygon {
+  return typeof geometry === 'object'
+    && geometry !== null
+    && 'type' in geometry
+    && (geometry.type === 'Polygon' || geometry.type === 'MultiPolygon');
+}
+
+function pointIsInRegion(
+  [longitude, latitude]: [number, number],
+  geometry: Polygon | MultiPolygon,
+): boolean {
+  const polygons = geometry.type === 'Polygon'
+    ? [geometry.coordinates]
+    : geometry.coordinates;
+  return polygons.some((polygon) => pointIsInRing([longitude, latitude], polygon[0]));
+}
+
+function pointIsInRing(
+  [longitude, latitude]: [number, number],
+  ring: Position[],
+): boolean {
+  let inside = false;
+  for (let index = 0, previous = ring.length - 1; index < ring.length; previous = index++) {
+    const [currentLongitude, currentLatitude] = ring[index];
+    const [previousLongitude, previousLatitude] = ring[previous];
+    const crossesLatitude = (currentLatitude > latitude) !== (previousLatitude > latitude);
+    const intersection = (
+      (previousLongitude - currentLongitude) * (latitude - currentLatitude)
+      / (previousLatitude - currentLatitude)
+      + currentLongitude
+    );
+    if (crossesLatitude && longitude < intersection) {
+      inside = !inside;
+    }
+  }
+  return inside;
 }
