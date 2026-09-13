@@ -523,12 +523,12 @@ export function AdminTab() {
           {distilleryForm.show_on_map && (
             <div className="grid grid-cols-2 gap-3">
               <label style={fieldGroupStyle}>
-                <span style={fieldLabelStyle}>Широта (Latitude)</span>
-                <input placeholder="наприклад, 57.4554" style={inputStyle} type="number" step="any" value={distilleryForm.latitude} onChange={(event) => setDistilleryForm({ ...distilleryForm, latitude: event.target.value })} />
+                <span style={fieldLabelStyle}>Latitude</span>
+                <input aria-label="Latitude" inputMode="decimal" placeholder="наприклад, 57.4554" style={inputStyle} type="text" value={distilleryForm.latitude} onChange={(event) => setDistilleryForm({ ...distilleryForm, latitude: event.target.value })} />
               </label>
               <label style={fieldGroupStyle}>
-                <span style={fieldLabelStyle}>Довгота (Longitude)</span>
-                <input placeholder="наприклад, -3.1294" style={inputStyle} type="number" step="any" value={distilleryForm.longitude} onChange={(event) => setDistilleryForm({ ...distilleryForm, longitude: event.target.value })} />
+                <span style={fieldLabelStyle}>Longitude</span>
+                <input aria-label="Longitude" inputMode="decimal" placeholder="наприклад, -3.1294" style={inputStyle} type="text" value={distilleryForm.longitude} onChange={(event) => setDistilleryForm({ ...distilleryForm, longitude: event.target.value })} />
               </label>
             </div>
           )}
