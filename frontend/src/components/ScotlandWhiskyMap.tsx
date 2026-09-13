@@ -48,7 +48,7 @@ const whiskyRegions: WhiskyRegion[] = [
     sourceName: 'Highlands',
     label: 'Highland',
     center: [-4.2, 57.55],
-    labelCoordinates: [-6.75, 58.75],
+    labelCoordinates: [-2.55, 58.5],
     zoom: 2.3,
   },
   {
@@ -76,7 +76,7 @@ const whiskyRegions: WhiskyRegion[] = [
     sourceName: 'Campbeltown',
     label: 'Campbeltown',
     center: [-5.64, 55.42],
-    labelCoordinates: [-6.35, 55.18],
+    labelCoordinates: [-5.1, 55.3],
     zoom: 5.5,
   },
 ];
@@ -96,6 +96,7 @@ export function ScotlandWhiskyMap({
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
+  const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
 
   const changeZoom = (amount: number) => {
     setPosition((current) => ({
@@ -123,7 +124,7 @@ export function ScotlandWhiskyMap({
         width={390}
         height={640}
         projection="geoMercator"
-        projectionConfig={{ center: [-4.2, 57.3], scale: 1800 }}
+        projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
         className="h-full w-full touch-pan-y"
       >
         <ZoomableGroup
@@ -206,10 +207,10 @@ export function ScotlandWhiskyMap({
               onClick={() => selectDistillery(distillery)}
             >
               {distillery.tasted && (
-                <circle r={5} fill="#C5A059" fillOpacity={0.12} />
+                <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
               )}
               <circle
-                r={2.5}
+                r={markerRadius}
                 fill={distillery.tasted ? '#C5A059' : '#3A3935'}
                 stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
                 strokeWidth={1}
