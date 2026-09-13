@@ -15,8 +15,18 @@ export type MapDistillery = {
   name: string;
   latitude: number | null;
   longitude: number | null;
+  image_url?: string | null;
+  logo_url?: string | null;
   tasted?: boolean;
   rating?: number;
+};
+
+type BottlePreview = {
+  id: number;
+  name: string;
+  image_url: string | null;
+  age: string | null;
+  abv: string | null;
 };
 
 type ScotlandWhiskyMapProps = {
@@ -90,6 +100,10 @@ export function ScotlandWhiskyMap({
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
+  const [selectedDistillery, setSelectedDistillery] = useState<MapDistillery | null>(null);
+  const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -126,12 +140,57 @@ export function ScotlandWhiskyMap({
     }));
   };
 
-  const selectDistillery = (distillery: MapDistillery) => {
+  const selectDistillery = async (distillery: MapDistillery) => {
     setActiveDistillery(distillery);
-    onSelectDistillery(distillery);
+    setSelectedDistillery(distillery);
+    setSelectedBottles([]);
+    setDetailLoadError(null);
+    setIsLoadingDetails(true);
+    setPosition({
+      coordinates: [distillery.longitude!, distillery.latitude!],
+      zoom: 8,
+    });
+
+    try {
+      const [distilleryResponse, bottlesResponse] = await Promise.all([
+        fetch(`${API_URL}/api/distilleries/${distillery.id}`),
+        fetch(`${API_URL}/api/distilleries/${distillery.id}/bottles?limit=100&offset=0`),
+      ]);
+      if (!distilleryResponse.ok || !bottlesResponse.ok) {
+        throw new Error('Could not load distillery details');
+      }
+      const detail: MapDistillery = await distilleryResponse.json();
+      const bottles: unknown = await bottlesResponse.json();
+      const bottleItems = Array.isArray(bottles)
+        ? bottles
+        : isBottlePage(bottles)
+          ? bottles.items
+          : [];
+
+      setSelectedDistillery(detail);
+      setSelectedBottles(bottleItems.filter(isBottlePreview));
+      onSelectDistillery(detail);
+    } catch (error) {
+      setDetailLoadError(error instanceof Error ? error.message : 'Could not load distillery details');
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
+
+  const resetMap = () => {
+    setActiveDistillery(null);
+    setSelectedDistillery(null);
+    setSelectedBottles([]);
+    setDetailLoadError(null);
+    setSelectedRegion(null);
+    setPosition(initialPosition);
   };
 
   const selectRegion = (region: WhiskyRegion) => {
+    if (selectedDistillery) {
+      resetMap();
+      return;
+    }
     const nextRegion = selectedRegion?.sourceName === region.sourceName ? null : region;
     setSelectedRegion(nextRegion);
     setPosition(nextRegion
@@ -140,13 +199,35 @@ export function ScotlandWhiskyMap({
   };
 
   return (
-    <section className="relative h-full w-full overflow-hidden bg-[#0D0D0E]">
-      <ComposableMap
+    <section className={`relative w-full overflow-hidden bg-[#0D0D0E] ${
+      selectedDistillery ? 'flex h-full flex-col gap-3 px-4 py-3' : 'h-full'
+    }`}>
+      {selectedDistillery && (
+        <div className="flex h-16 shrink-0 items-center justify-center">
+          {selectedDistillery.logo_url ? (
+            <img
+              src={selectedDistillery.logo_url}
+              alt={selectedDistillery.name}
+              className="max-h-14 max-w-[220px] object-contain"
+            />
+          ) : (
+            <h2 className="font-serif text-xl text-[#EAD7AE]">{selectedDistillery.name}</h2>
+          )}
+        </div>
+      )}
+
+      <div className={`relative w-full overflow-hidden ${
+        selectedDistillery
+          ? 'h-[42dvh] min-h-[250px] shrink-0 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
+          : 'h-full'
+      }`}>
+        <ComposableMap
         width={390}
         height={640}
         projection="geoMercator"
         projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
         className="h-full w-full touch-pan-y"
+        onClick={resetMap}
       >
         <ZoomableGroup
           center={position.coordinates}
@@ -168,7 +249,10 @@ export function ScotlandWhiskyMap({
                   <Geography
                     key={geography.rsmKey}
                     geography={geography}
-                    onClick={() => selectRegion(region)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      selectRegion(region);
+                    }}
                     style={{
                       default: {
                         fill: isSelected ? '#1E1E24' : '#141417',
@@ -227,26 +311,56 @@ export function ScotlandWhiskyMap({
               coordinates={[distillery.longitude, distillery.latitude]}
               onMouseEnter={() => setActiveDistillery(distillery)}
               onFocus={() => setActiveDistillery(distillery)}
-              onClick={() => selectDistillery(distillery)}
-            >
-              {distillery.tasted && (
-                <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
-              )}
-              <circle
-                r={markerRadius}
-                fill={distillery.tasted ? '#C5A059' : '#3A3935'}
-                stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
-                strokeWidth={1}
-                style={distillery.tasted
-                  ? { filter: 'drop-shadow(0 0 6px rgba(197, 160, 89, 0.8))' }
-                  : undefined}
-              />
-            </Marker>
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void selectDistillery(distillery);
+                }}
+              >
+                {selectedDistillery?.id === distillery.id ? (
+                  <>
+                    <defs>
+                      <clipPath id={`distillery-image-${distillery.id}`}>
+                        <circle r={9} />
+                      </clipPath>
+                    </defs>
+                    <circle r={11} fill="#C5A059" fillOpacity={0.28} />
+                    {selectedDistillery.image_url ? (
+                      <image
+                        href={selectedDistillery.image_url}
+                        x={-9}
+                        y={-9}
+                        width={18}
+                        height={18}
+                        clipPath={`url(#distillery-image-${distillery.id})`}
+                        preserveAspectRatio="xMidYMid slice"
+                      />
+                    ) : (
+                      <circle r={9} fill="#C5A059" />
+                    )}
+                    <circle r={9} fill="none" stroke="#F4F4F5" strokeWidth={1} />
+                  </>
+                ) : (
+                  <>
+                    {distillery.tasted && (
+                      <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
+                    )}
+                    <circle
+                      r={markerRadius}
+                      fill={distillery.tasted ? '#C5A059' : '#3A3935'}
+                      stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
+                      strokeWidth={1}
+                      style={distillery.tasted
+                        ? { filter: 'drop-shadow(0 0 6px rgba(197, 160, 89, 0.8))' }
+                        : undefined}
+                    />
+                  </>
+                )}
+              </Marker>
             ))}
         </ZoomableGroup>
-      </ComposableMap>
+        </ComposableMap>
 
-      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/80 p-1 text-[#C5A059] shadow-2xl backdrop-blur-md">
+        <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/80 p-1 text-[#C5A059] shadow-2xl backdrop-blur-md">
         <button
           aria-label="Zoom in"
           className="flex h-8 w-8 items-center justify-center rounded-lg font-bold"
@@ -263,9 +377,35 @@ export function ScotlandWhiskyMap({
         >
           -
         </button>
+        </div>
       </div>
 
-      {activeDistillery && (
+      {selectedDistillery ? (
+        <div className="min-h-0 flex-1">
+          <div className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
+            {selectedBottles.map((bottle) => (
+              <article
+                key={bottle.id}
+                className="w-28 shrink-0 snap-start rounded-2xl border border-[#C5A059]/25 bg-[#16161A] p-2 shadow-xl"
+              >
+                <div className="flex h-20 items-center justify-center rounded-xl bg-[#0D0D0E]">
+                  {bottle.image_url ? (
+                    <img src={bottle.image_url} alt="" className="h-full w-full object-contain" />
+                  ) : (
+                    <span className="text-[#6E6D6A]">🥃</span>
+                  )}
+                </div>
+                <p className="mt-2 truncate text-center text-xs text-[#F4F4F5]">{bottle.name}</p>
+                <p className="mt-1 text-center text-[10px] text-[#C5A059]">
+                  {[bottle.age, bottle.abv].filter(Boolean).join(' · ')}
+                </p>
+              </article>
+            ))}
+            {isLoadingDetails && <p className="py-4 text-sm text-[#9E9D9A]">Loading bottles...</p>}
+            {detailLoadError && <p className="py-4 text-sm text-[#9E9D9A]">{detailLoadError}</p>}
+          </div>
+        </div>
+      ) : activeDistillery && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/95 px-3 py-2 shadow-xl">
           <p className="font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</p>
           <p className="mt-1 text-xs text-[#9E9D9A]">
@@ -280,6 +420,23 @@ export function ScotlandWhiskyMap({
       )}
     </section>
   );
+}
+
+function isBottlePage(value: unknown): value is { items: unknown[] } {
+  return typeof value === 'object'
+    && value !== null
+    && 'items' in value
+    && Array.isArray(value.items);
+}
+
+function isBottlePreview(value: unknown): value is BottlePreview {
+  return typeof value === 'object'
+    && value !== null
+    && 'id' in value
+    && typeof value.id === 'number'
+    && 'name' in value
+    && typeof value.name === 'string'
+    && 'image_url' in value;
 }
 
 function isMapDistillery(value: unknown): value is MapDistillery {

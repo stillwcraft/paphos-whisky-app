@@ -141,7 +141,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#0D0D0E] text-[#F4F4F5]">
-      <main className={activeTab === 'map' && isAdmin ? 'h-[calc(100dvh_-_6rem_-_env(safe-area-inset-bottom))]' : 'min-h-screen px-6 pb-28'}>
+      <main className={activeTab === 'map' && showMapTab ? 'h-[calc(100dvh_-_6rem_-_env(safe-area-inset-bottom))]' : 'min-h-screen px-6 pb-28'}>
           {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
