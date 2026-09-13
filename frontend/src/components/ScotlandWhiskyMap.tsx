@@ -86,7 +86,7 @@ const whiskyRegions: WhiskyRegion[] = [
     sourceName: 'Campbeltown',
     label: 'Campbeltown',
     center: [-5.64, 55.42],
-    labelCoordinates: [-5.1, 55.3],
+    labelCoordinates: [-6.55, 54.95],
     zoom: 5.5,
   },
 ];
@@ -97,6 +97,7 @@ export function ScotlandWhiskyMap({
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
+  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
@@ -249,6 +250,8 @@ export function ScotlandWhiskyMap({
                   <Geography
                     key={geography.rsmKey}
                     geography={geography}
+                    onMouseEnter={() => setHoveredRegion(region.sourceName)}
+                    onMouseLeave={() => setHoveredRegion(null)}
                     onClick={(event) => {
                       event.stopPropagation();
                       selectRegion(region);
@@ -285,7 +288,12 @@ export function ScotlandWhiskyMap({
             <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
               <text
                 fill="#C5A059"
-                fillOpacity={selectedRegion?.sourceName === region.sourceName ? 0.85 : 0.25}
+                fillOpacity={
+                  selectedRegion?.sourceName === region.sourceName
+                  || hoveredRegion === region.sourceName
+                    ? 0.85
+                    : 0.25
+                }
                 fontSize={5}
                 fontFamily="'Cinzel', 'Playfair Display', serif"
                 fontWeight={600}
@@ -293,6 +301,7 @@ export function ScotlandWhiskyMap({
                 textAnchor="middle"
                 style={{
                   filter: selectedRegion?.sourceName === region.sourceName
+                    || hoveredRegion === region.sourceName
                     ? 'drop-shadow(0 0 8px rgba(197, 160, 89, 0.6))'
                     : undefined,
                   letterSpacing: '0.3em',
