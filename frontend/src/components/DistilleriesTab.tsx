@@ -36,6 +36,7 @@ type Distillery = {
   description: string | null;
   description_i18n?: I18nString;
   bottle_count: number;
+  region?: string | null;
 };
 
 type BottleActionState = {
@@ -392,7 +393,7 @@ export function DistilleriesTab({
               <article key={distillery.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
                 <button
                   aria-label={t('bottle.open_distillery_details', { name: distillery.name })}
-                  className="block h-44 w-full overflow-hidden text-left"
+                  className="relative block h-44 w-full overflow-hidden text-left"
                   onClick={() => setSelectedDistillery(distillery)}
                   type="button"
                 >
@@ -401,6 +402,11 @@ export function DistilleriesTab({
                     className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
                     source={distillery.image_url}
                   />
+                  {distillery.region && (
+                    <span className="absolute left-3 top-3 rounded-full border border-[#C5A059]/30 bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-[#C5A059]">
+                      {distillery.region}
+                    </span>
+                  )}
                 </button>
                 <div className="flex items-center justify-between gap-3 px-5 py-4">
                   <h2 className="min-w-0 truncate text-lg font-semibold text-white">{distillery.name}</h2>
