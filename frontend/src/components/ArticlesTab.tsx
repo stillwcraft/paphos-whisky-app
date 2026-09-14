@@ -26,6 +26,8 @@ function formatArticleDate(value: string, language: string) {
 }
 
 function ArticleImages({ article, expanded = false }: { article: Article; expanded?: boolean }) {
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+
   if (article.image_urls.length === 0) {
     return null;
   }
@@ -41,27 +43,57 @@ function ArticleImages({ article, expanded = false }: { article: Article; expand
   }
 
   return (
-    <div className={`flex snap-x snap-mandatory overflow-x-auto ${expanded ? 'h-72' : 'h-44'}`}>
-      {article.image_urls.map((imageUrl) => (
-        <img
-          alt=""
-          className="h-full w-[88%] shrink-0 snap-center object-cover first:w-full"
-          key={imageUrl}
-          src={imageUrl}
-        />
-      ))}
+    <div className={`relative ${expanded ? 'h-72' : 'h-44'}`}>
+      <div
+        className="flex h-full snap-x snap-mandatory overflow-x-auto"
+        onScroll={(event) => {
+          const gallery = event.currentTarget;
+          const viewportCenter = gallery.scrollLeft + gallery.clientWidth / 2;
+          let closestIndex = 0;
+          let closestDistance = Number.POSITIVE_INFINITY;
+
+          Array.from(gallery.children).forEach((image, index) => {
+            if (!(image instanceof HTMLElement)) {
+              return;
+            }
+            const imageCenter = image.offsetLeft + image.clientWidth / 2;
+            const distance = Math.abs(imageCenter - viewportCenter);
+            if (distance < closestDistance) {
+              closestIndex = index;
+              closestDistance = distance;
+            }
+          });
+          setActiveImageIndex((current) => current === closestIndex ? current : closestIndex);
+        }}
+      >
+        {article.image_urls.map((imageUrl, index) => (
+          <img
+            alt=""
+            className="h-full w-[88%] shrink-0 snap-center object-cover first:w-full"
+            key={`${imageUrl}-${index}`}
+            src={imageUrl}
+          />
+        ))}
+      </div>
+      {(
+        <span className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center gap-1.5">
+          {article.image_urls.map((imageUrl, index) => (
+            <i aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${index === activeImageIndex ? 'bg-[#C5A059]' : 'bg-white/50'}`} key={`${imageUrl}-${index}`} />
+          ))}
+        </span>
+      )}
     </div>
   );
 }
 
 function ArticleReader({ article, onClose }: { article: Article; onClose: () => void }) {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/95 p-4 backdrop-blur-sm">
       <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-[#C5A059]/20 bg-[#141417] shadow-2xl shadow-black/60">
         <div className="flex items-center justify-between px-5 py-4">
           <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${article.type === 'article' ? 'border-[#C5A059]/50 bg-gradient-to-r from-[#8D6A28] to-[#C5A059] text-black' : 'border-slate-400/30 bg-slate-500/20 text-slate-200'}`}>
-            {article.type === 'article' ? 'СТАТЬЯ' : 'НОВОСТЬ'}
+            {article.type === 'article' ? t('articles.article') : t('articles.news')}
           </span>
           <button aria-label="Закрыть публикацию" className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-xl text-[#F4F4F5] transition-colors hover:bg-white/10" onClick={onClose} type="button">x</button>
         </div>
@@ -79,7 +111,7 @@ function ArticleReader({ article, onClose }: { article: Article; onClose: () => 
 }
 
 export function ArticlesTab() {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -128,8 +160,8 @@ export function ArticlesTab() {
               <button aria-label={`Відкрити ${article.title}`} className="block w-full text-left" onClick={() => setSelectedArticle(article)} type="button">
                 <div className={`relative ${article.image_urls.length === 0 ? 'min-h-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#C5A059]/15 via-[#141417] to-[#141417]' : ''}`}>
                   <ArticleImages article={article} />
-                  <span className={`absolute right-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${article.type === 'article' ? 'border-[#C5A059]/50 bg-gradient-to-r from-[#8D6A28] to-[#C5A059] text-black' : 'border-slate-400/30 bg-slate-500/20 text-slate-200'}`}>
-                    {article.type === 'article' ? 'СТАТЬЯ' : 'НОВОСТЬ'}
+                  <span className={`absolute left-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${article.type === 'article' ? 'border-[#C5A059]/50 bg-gradient-to-r from-[#8D6A28] to-[#C5A059] text-black' : 'border-slate-400/30 bg-slate-500/20 text-slate-200'}`}>
+                    {article.type === 'article' ? t('articles.article') : t('articles.news')}
                   </span>
                 </div>
                 <div className="p-4">
