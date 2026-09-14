@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -33,6 +33,8 @@ type BottlePreview = {
 
 type ScotlandWhiskyMapProps = {
   onSelectDistillery: (distillery: MapDistillery) => void;
+  selectedDistilleryId?: number | null;
+  onSelectedDistilleryHandled?: () => void;
 };
 
 type WhiskyRegion = {
@@ -95,6 +97,8 @@ const whiskyRegions: WhiskyRegion[] = [
 
 export function ScotlandWhiskyMap({
   onSelectDistillery,
+  selectedDistilleryId = null,
+  onSelectedDistilleryHandled,
 }: ScotlandWhiskyMapProps) {
   const { trackEvent } = useAnalytics();
   const [position, setPosition] = useState(initialPosition);
@@ -144,7 +148,7 @@ export function ScotlandWhiskyMap({
     }));
   };
 
-  const selectDistillery = async (distillery: MapDistillery) => {
+  const selectDistillery = useCallback(async (distillery: MapDistillery) => {
     trackEvent('map_distillery_selected', {
       distillery_id: distillery.id,
       region: distillery.region ?? null,
@@ -183,7 +187,26 @@ export function ScotlandWhiskyMap({
     } finally {
       setIsLoadingDetails(false);
     }
-  };
+  }, [onSelectDistillery, trackEvent]);
+
+  useEffect(() => {
+    if (selectedDistilleryId === null || mapDistilleries.length === 0) {
+      return;
+    }
+
+    const distillery = mapDistilleries.find(
+      (item) => item.id === selectedDistilleryId && hasCoordinates(item),
+    );
+    if (distillery) {
+      void selectDistillery(distillery);
+    }
+    onSelectedDistilleryHandled?.();
+  }, [
+    mapDistilleries,
+    onSelectedDistilleryHandled,
+    selectedDistilleryId,
+    selectDistillery,
+  ]);
 
   const resetMap = () => {
     setActiveDistillery(null);

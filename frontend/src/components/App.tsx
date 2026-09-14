@@ -94,6 +94,7 @@ export function App() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedBottleId, setSelectedBottleId] = useState<number | null>(null);
   const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
+  const [mapDistilleryId, setMapDistilleryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showMapTab = true;
@@ -102,6 +103,12 @@ export function App() {
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
   const clearSelectedDistillery = useCallback(() => setSelectedDistilleryId(null), []);
+  const clearMapDistillery = useCallback(() => setMapDistilleryId(null), []);
+  const openDistilleryOnMap = useCallback((distilleryId: number) => {
+    setMapDistilleryId(distilleryId);
+    setActiveTab('map');
+  }, []);
+  const handleMapDistillerySelected = useCallback(() => undefined, []);
 
   useEffect(() => {
     setIsAdmin(
@@ -168,6 +175,7 @@ export function App() {
               onSelectedBottleHandled={clearSelectedBottle}
               selectedDistilleryId={selectedDistilleryId}
               onSelectedDistilleryHandled={clearSelectedDistillery}
+              onOpenOnMap={openDistilleryOnMap}
             />
           ) : activeTab === 'articles' ? (
             showArticlesTab ? <ArticlesTab /> : (
@@ -183,7 +191,9 @@ export function App() {
             <ProfileTab />
           ) : activeTab === 'map' && showMapTab ? (
             <ScotlandWhiskyMap
-              onSelectDistillery={() => undefined}
+              onSelectDistillery={handleMapDistillerySelected}
+              selectedDistilleryId={mapDistilleryId}
+              onSelectedDistilleryHandled={clearMapDistillery}
             />
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab />

@@ -61,6 +61,7 @@
     "close_details": "Закрити картку пляшки",
     "close_distillery_details": "Закрити картку дистилерії",
     "open_distillery_details": "Відкрити картку {{name}}",
+    "open_distillery_on_map": "Показати {{name}} на мапі",
     "show_bottles": "Показати пляшки {{name}}",
     "hide_bottles": "Сховати пляшки {{name}}",
     "description_soon": "Опис буде додано пізніше.",

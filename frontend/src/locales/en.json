@@ -61,6 +61,7 @@
     "close_details": "Close bottle details",
     "close_distillery_details": "Close distillery details",
     "open_distillery_details": "Open {{name}} details",
+    "open_distillery_on_map": "Show {{name}} on the map",
     "show_bottles": "Show {{name}} bottles",
     "hide_bottles": "Hide {{name}} bottles",
     "description_soon": "Description will be added soon.",

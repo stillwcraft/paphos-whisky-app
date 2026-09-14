@@ -66,6 +66,24 @@ function ChevronIcon({ isOpen }: { isOpen: boolean }) {
   );
 }
 
+function LocationPinIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </svg>
+  );
+}
+
 function CatalogImage({
   alt,
   className,
@@ -108,11 +126,13 @@ export function DistilleriesTab({
   onSelectedBottleHandled,
   selectedDistilleryId = null,
   onSelectedDistilleryHandled,
+  onOpenOnMap,
 }: {
   selectedBottleId?: number | null;
   onSelectedBottleHandled?: () => void;
   selectedDistilleryId?: number | null;
   onSelectedDistilleryHandled?: () => void;
+  onOpenOnMap?: (distilleryId: number) => void;
 }) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
@@ -395,7 +415,7 @@ export function DistilleriesTab({
             const panelId = `distillery-${distillery.id}-bottles`;
 
             return (
-              <article key={distillery.id} className="overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
+              <article key={distillery.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
                 <button
                   aria-label={t('bottle.open_distillery_details', { name: distillery.name })}
                   className="relative block h-44 w-full overflow-hidden text-left"
@@ -412,6 +432,14 @@ export function DistilleriesTab({
                       {distillery.region}
                     </span>
                   )}
+                </button>
+                <button
+                  aria-label={t('bottle.open_distillery_on_map', { name: distillery.name })}
+                  className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[#C5A059]/45 bg-[#16161A]/90 text-[#C5A059] shadow-lg backdrop-blur-sm transition-colors hover:bg-[#25242A]"
+                  onClick={() => onOpenOnMap?.(distillery.id)}
+                  type="button"
+                >
+                  <LocationPinIcon />
                 </button>
                 <div className="flex items-center justify-between gap-3 px-5 py-4">
                   <h2 className="min-w-0 truncate text-lg font-semibold text-white">{distillery.name}</h2>
