@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { localizedApiUrl } from '@/localization.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -88,7 +89,10 @@ export function ArticlesTab() {
     const controller = new AbortController();
     const loadArticles = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/articles`, { signal: controller.signal });
+        const response = await fetch(
+          localizedApiUrl(`${API_URL}/api/articles`, i18n.language),
+          { signal: controller.signal },
+        );
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
         }
@@ -107,7 +111,7 @@ export function ArticlesTab() {
 
     void loadArticles();
     return () => controller.abort();
-  }, []);
+  }, [i18n.language]);
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-[calc(env(safe-area-inset-top)+1rem)]">

@@ -4,6 +4,10 @@ import { AdminArticleForm, type AdminArticle, type ArticleFormValues } from '@/c
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
+function articleTitle(article: AdminArticle) {
+  return article.title.ru || article.title.en || article.title.uk || 'Без назви';
+}
+
 type Props = {
   initDataRaw: string | undefined;
 };
@@ -72,7 +76,7 @@ export function AdminArticles({ initDataRaw }: Props) {
   };
 
   const deleteArticle = async (article: AdminArticle) => {
-    if (!window.confirm(`Видалити публікацію «${article.title}»?`)) {
+    if (!window.confirm(`Видалити публікацію «${articleTitle(article)}»?`)) {
       return;
     }
     try {
@@ -109,11 +113,11 @@ export function AdminArticles({ initDataRaw }: Props) {
                   </span>
                   {!article.is_published && <span className="text-[10px] font-semibold text-[#9E9D9A]">Черновик</span>}
                 </div>
-                <p className="mt-1 truncate text-sm font-semibold text-[#F4F4F5]">{article.title}</p>
+                <p className="mt-1 truncate text-sm font-semibold text-[#F4F4F5]">{articleTitle(article)}</p>
               </div>
               <div className="flex shrink-0 gap-1">
-                <button aria-label={`Редагувати ${article.title}`} className="rounded-lg p-2 text-[#C5A059] transition-colors hover:bg-white/5" onClick={() => setEditingArticle(article)} type="button">✏️</button>
-                <button aria-label={`Видалити ${article.title}`} className="rounded-lg p-2 text-red-300 transition-colors hover:bg-red-400/10" onClick={() => void deleteArticle(article)} type="button">🗑️</button>
+                <button aria-label={`Редагувати ${articleTitle(article)}`} className="rounded-lg p-2 text-[#C5A059] transition-colors hover:bg-white/5" onClick={() => setEditingArticle(article)} type="button">✏️</button>
+                <button aria-label={`Видалити ${articleTitle(article)}`} className="rounded-lg p-2 text-red-300 transition-colors hover:bg-red-400/10" onClick={() => void deleteArticle(article)} type="button">🗑️</button>
               </div>
             </article>
           ))}

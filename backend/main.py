@@ -10,6 +10,7 @@ import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import case, func, inspect, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel, Field
@@ -24,6 +25,7 @@ models.Base.metadata.create_all(bind=engine)
 
 BottleLabel = Literal["bottle", "samples", "event"]
 ArticleType = Literal["article", "news"]
+ArticleLanguage = Literal["ru", "en", "uk"]
 CardLanguage = Literal["en", "ru", "uk"]
 I18nString = Dict[str, str]
 TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
@@ -265,6 +267,65 @@ def ensure_catalog_schema() -> None:
                 )
 
 
+def normalize_legacy_article_translation(value: Any) -> dict[str, str]:
+    if isinstance(value, dict):
+        return {
+            language: text
+            for language, text in value.items()
+            if isinstance(language, str) and isinstance(text, str)
+        }
+    if isinstance(value, str) and value:
+        return {"ru": value}
+    return {}
+
+
+def rebuild_sqlite_articles_table(connection, article_columns: dict[str, dict]) -> None:
+    legacy_table_name = "articles_legacy_schema"
+    article_indexes = inspect(connection).get_indexes("articles")
+    connection.execute(text(f"ALTER TABLE articles RENAME TO {legacy_table_name}"))
+    for index in article_indexes:
+        index_name = index.get("name")
+        if index_name:
+            connection.execute(text(f"DROP INDEX IF EXISTS {index_name}"))
+
+    models.Article.__table__.create(bind=connection)
+    articles = connection.execute(
+        text(f"SELECT * FROM {legacy_table_name}")
+    ).mappings().all()
+    rows = []
+    for article in articles:
+        row = {
+            column.name: article[column.name] if column.name in article_columns else None
+            for column in models.Article.__table__.columns
+        }
+        row["title"] = normalize_legacy_article_translation(article["title"])
+        row["content"] = normalize_legacy_article_translation(article["content"])
+        rows.append(row)
+    if rows:
+        connection.execute(models.Article.__table__.insert(), rows)
+    connection.execute(text(f"DROP TABLE {legacy_table_name}"))
+
+
+def ensure_articles_schema() -> None:
+    with engine.begin() as connection:
+        article_columns = get_table_columns(connection, "articles")
+        title_type = str(article_columns["title"]["type"]).upper()
+        content_type = str(article_columns["content"]["type"]).upper()
+        if "JSON" in title_type and "JSON" in content_type:
+            return
+
+        if engine.dialect.name == "postgresql":
+            for column_name in ("title", "content"):
+                connection.execute(
+                    text(
+                        f"ALTER TABLE articles ALTER COLUMN {column_name} "
+                        f"TYPE JSONB USING jsonb_build_object('ru', {column_name})"
+                    )
+                )
+        elif engine.dialect.name == "sqlite":
+            rebuild_sqlite_articles_table(connection, article_columns)
+
+
 def ensure_i18n_schema() -> None:
     json_type = "JSONB" if engine.dialect.name == "postgresql" else "JSON"
     i18n_columns = {
@@ -387,6 +448,7 @@ def ensure_event_bottles_schema() -> None:
 
 ensure_event_schema()
 ensure_catalog_schema()
+ensure_articles_schema()
 ensure_i18n_schema()
 ensure_user_bottle_action_schema()
 ensure_event_bottles_schema()
@@ -841,8 +903,8 @@ class EventUpdate(EventCreate):
 
 
 class ArticleBase(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
-    content: str = Field(min_length=1)
+    title: I18nString
+    content: I18nString
     type: ArticleType = "news"
     image_urls: List[str] = Field(default_factory=list)
     is_published: bool = True
@@ -853,8 +915,8 @@ class ArticleCreate(ArticleBase):
 
 
 class ArticleUpdate(BaseModel):
-    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    content: Optional[str] = Field(default=None, min_length=1)
+    title: Optional[I18nString] = None
+    content: Optional[I18nString] = None
     type: Optional[ArticleType] = None
     image_urls: Optional[List[str]] = None
     is_published: Optional[bool] = None
@@ -867,6 +929,17 @@ class ArticleResponse(ArticleBase):
 
     class Config:
         from_attributes = True
+
+
+class ArticleClientResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    type: ArticleType
+    image_urls: List[str]
+    is_published: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class DistilleryCreate(BaseModel):
@@ -1518,14 +1591,63 @@ def get_event_bottle_counts_subquery(db: Session):
 
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
 
-@app.get("/api/articles", response_model=List[ArticleResponse])
-def get_articles(db: Session = Depends(get_db)):
-    return (
-        db.query(models.Article)
-        .filter(models.Article.is_published.is_(True))
+def article_translation(article: models.Article, language: ArticleLanguage) -> ArticleClientResponse:
+    title = article.title.get(language, "") if isinstance(article.title, dict) else ""
+    content = article.content.get(language, "") if isinstance(article.content, dict) else ""
+    return ArticleClientResponse(
+        id=article.id,
+        title=title,
+        content=content,
+        type=article.type,
+        image_urls=article.image_urls,
+        is_published=article.is_published,
+        created_at=article.created_at,
+        updated_at=article.updated_at,
+    )
+
+
+def articles_with_translation(
+    db: Session,
+    language: ArticleLanguage,
+    *,
+    published_only: bool,
+):
+    query = db.query(models.Article)
+    if published_only:
+        query = query.filter(models.Article.is_published.is_(True))
+
+    if engine.dialect.name == "postgresql":
+        title = models.Article.title.cast(JSONB)
+        content = models.Article.content.cast(JSONB)
+        query = query.filter(
+            title.has_key(language),
+            content.has_key(language),
+            title[language].astext != "",
+            content[language].astext != "",
+        )
+    else:
+        title = func.json_extract(models.Article.title, f"$.{language}")
+        content = func.json_extract(models.Article.content, f"$.{language}")
+        query = query.filter(
+            title.is_not(None),
+            content.is_not(None),
+            title != "",
+            content != "",
+        )
+    return query
+
+
+@app.get("/api/articles", response_model=List[ArticleClientResponse])
+def get_articles(
+    lang: ArticleLanguage = "ru",
+    db: Session = Depends(get_db),
+):
+    articles = (
+        articles_with_translation(db, lang, published_only=True)
         .order_by(models.Article.created_at.desc(), models.Article.id.desc())
         .all()
     )
+    return [article_translation(article, lang) for article in articles]
 
 
 @app.get("/api/admin/articles", response_model=List[ArticleResponse])
@@ -1540,19 +1662,20 @@ def get_admin_articles(
     )
 
 
-@app.get("/api/articles/{article_id}", response_model=ArticleResponse)
-def get_article(article_id: int, db: Session = Depends(get_db)):
+@app.get("/api/articles/{article_id}", response_model=ArticleClientResponse)
+def get_article(
+    article_id: int,
+    lang: ArticleLanguage = "ru",
+    db: Session = Depends(get_db),
+):
     article = (
-        db.query(models.Article)
-        .filter(
-            models.Article.id == article_id,
-            models.Article.is_published.is_(True),
-        )
+        articles_with_translation(db, lang, published_only=True)
+        .filter(models.Article.id == article_id)
         .first()
     )
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
-    return article
+    return article_translation(article, lang)
 
 
 @app.post(

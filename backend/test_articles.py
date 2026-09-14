@@ -30,18 +30,27 @@ class ArticlesTest(unittest.TestCase):
 
     def test_public_api_only_returns_published_articles_newest_first(self):
         old_article = models.Article(
-            title="Old",
-            content="Old article",
+            title={"ru": "Старая", "en": "Old"},
+            content={"ru": "Старая статья", "en": "Old article"},
             created_at=datetime.now(timezone.utc) - timedelta(days=1),
         )
-        newest_article = models.Article(title="New", content="New article")
-        draft = models.Article(title="Draft", content="Draft article", is_published=False)
+        newest_article = models.Article(
+            title={"ru": "Новая"},
+            content={"ru": "Новая статья"},
+        )
+        draft = models.Article(
+            title={"ru": "Черновик"},
+            content={"ru": "Черновик статьи"},
+            is_published=False,
+        )
         self.db.add_all([old_article, newest_article, draft])
         self.db.commit()
 
         articles = get_articles(db=self.db)
 
         self.assertEqual([article.id for article in articles], [newest_article.id, old_article.id])
+        self.assertEqual(articles[0].title, "Новая")
+        self.assertEqual(get_articles(lang="en", db=self.db), [get_article(old_article.id, lang="en", db=self.db)])
         with self.assertRaises(HTTPException) as context:
             get_article(draft.id, db=self.db)
         self.assertEqual(context.exception.status_code, 404)
@@ -53,8 +62,12 @@ class ArticlesTest(unittest.TestCase):
     def test_admin_crud_persists_article_fields(self):
         article = create_article(
             ArticleCreate(
-                title="New release",
-                content="A new bottle is available.",
+                title={"ru": "Новый релиз", "en": "New release", "uk": "Новий реліз"},
+                content={
+                    "ru": "Доступна новая бутылка.",
+                    "en": "A new bottle is available.",
+                    "uk": "Доступна нова пляшка.",
+                },
                 type="article",
                 image_urls=["https://example.com/article.webp"],
                 is_published=False,
@@ -66,12 +79,12 @@ class ArticlesTest(unittest.TestCase):
 
         updated = update_article(
             article.id,
-            ArticleUpdate(is_published=True, title="Updated release"),
+            ArticleUpdate(is_published=True, title={"ru": "Обновленный релиз"}),
             db=self.db,
         )
         self.assertTrue(updated.is_published)
-        self.assertEqual(updated.title, "Updated release")
-        self.assertEqual(updated.content, "A new bottle is available.")
+        self.assertEqual(updated.title, {"ru": "Обновленный релиз"})
+        self.assertEqual(updated.content["en"], "A new bottle is available.")
 
         delete_article(article.id, db=self.db)
         with self.assertRaises(HTTPException) as context:

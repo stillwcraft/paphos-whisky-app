@@ -52,8 +52,8 @@ class Article(Base):
     __tablename__ = "articles"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    content = Column(Text, nullable=False)
+    title = Column(I18N_JSON, nullable=False)
+    content = Column(I18N_JSON, nullable=False)
     type = Column(String(20), nullable=False, default="news")
     image_urls = Column(JSON, nullable=False, default=list)
     is_published = Column(Boolean, nullable=False, default=True)

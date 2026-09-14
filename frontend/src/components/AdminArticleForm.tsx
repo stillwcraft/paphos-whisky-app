@@ -1,9 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 
+type ArticleLocale = 'ru' | 'en' | 'uk';
+type ArticleTranslations = Partial<Record<ArticleLocale, string>>;
+type CompleteArticleTranslations = Record<ArticleLocale, string>;
+const articleLocales: ArticleLocale[] = ['ru', 'en', 'uk'];
+
 export type AdminArticle = {
   id: number;
-  title: string;
-  content: string;
+  title: ArticleTranslations;
+  content: ArticleTranslations;
   type: 'article' | 'news';
   image_urls: string[];
   is_published: boolean;
@@ -11,10 +16,18 @@ export type AdminArticle = {
   updated_at: string;
 };
 
-export type ArticleFormValues = Pick<
-  AdminArticle,
-  'title' | 'content' | 'type' | 'image_urls' | 'is_published'
->;
+export type ArticleFormValues = {
+  title: ArticleTranslations;
+  content: ArticleTranslations;
+  type: AdminArticle['type'];
+  image_urls: string[];
+  is_published: boolean;
+};
+
+type ArticleFormState = Omit<ArticleFormValues, 'title' | 'content'> & {
+  title: CompleteArticleTranslations;
+  content: CompleteArticleTranslations;
+};
 
 type Props = {
   article: AdminArticle | null;
@@ -23,19 +36,27 @@ type Props = {
   onSubmit: (values: ArticleFormValues) => void;
 };
 
-const emptyArticle = (): ArticleFormValues => ({
-  title: '',
-  content: '',
+const emptyArticle = (): ArticleFormState => ({
+  title: { ru: '', en: '', uk: '' },
+  content: { ru: '', en: '', uk: '' },
   type: 'news',
   image_urls: [],
   is_published: true,
 });
 
-function formValuesFromArticle(article: AdminArticle | null): ArticleFormValues {
+function normalizeTranslations(translations: ArticleTranslations): CompleteArticleTranslations {
+  return {
+    ru: translations.ru ?? '',
+    en: translations.en ?? '',
+    uk: translations.uk ?? '',
+  };
+}
+
+function formValuesFromArticle(article: AdminArticle | null): ArticleFormState {
   return article
     ? {
-      title: article.title,
-      content: article.content,
+      title: normalizeTranslations(article.title),
+      content: normalizeTranslations(article.content),
       type: article.type,
       image_urls: article.image_urls,
       is_published: article.is_published,
@@ -44,14 +65,18 @@ function formValuesFromArticle(article: AdminArticle | null): ArticleFormValues 
 }
 
 export function AdminArticleForm({ article, isSaving, onClose, onSubmit }: Props) {
-  const [form, setForm] = useState<ArticleFormValues>(() => formValuesFromArticle(article));
+  const [form, setForm] = useState<ArticleFormState>(() => formValuesFromArticle(article));
+  const [locale, setLocale] = useState<ArticleLocale>('ru');
   const [imageUrl, setImageUrl] = useState('');
   const [imageUrlError, setImageUrlError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(formValuesFromArticle(article));
+    setLocale('ru');
     setImageUrl('');
     setImageUrlError(null);
+    setFormError(null);
   }, [article]);
 
   const addImageUrl = () => {
@@ -80,10 +105,25 @@ export function AdminArticleForm({ article, isSaving, onClose, onSubmit }: Props
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    const title: ArticleTranslations = {};
+    const content: ArticleTranslations = {};
+    for (const language of articleLocales) {
+      const localizedTitle = form.title[language].trim();
+      const localizedContent = form.content[language].trim();
+      if (localizedTitle && localizedContent) {
+        title[language] = localizedTitle;
+        content[language] = localizedContent;
+      }
+    }
+    if (Object.keys(title).length === 0) {
+      setFormError('Заповніть заголовок і текст хоча б однією мовою.');
+      return;
+    }
+    setFormError(null);
     onSubmit({
       ...form,
-      title: form.title.trim(),
-      content: form.content.trim(),
+      title,
+      content,
     });
   };
 
@@ -95,9 +135,31 @@ export function AdminArticleForm({ article, isSaving, onClose, onSubmit }: Props
           <button aria-label="Закрити форму статті" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-lg text-[#9E9D9A] transition-colors hover:bg-white/5 hover:text-[#F4F4F5]" onClick={onClose} type="button">x</button>
         </div>
 
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-medium text-[#CBC9C5]">Мова публікації</p>
+          <div className="flex gap-2" role="group" aria-label="Мова публікації">
+            {articleLocales.map((language) => {
+              const isComplete = Boolean(
+                form.title[language].trim() && form.content[language].trim(),
+              );
+              return (
+                <button
+                  className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors ${locale === language ? 'border-[#C5A059] bg-[#C5A059]/15 text-[#C5A059]' : 'border-[#4A4847] text-[#9E9D9A] hover:border-[#C5A059]/50'}`}
+                  key={language}
+                  onClick={() => setLocale(language)}
+                  type="button"
+                >
+                  {language.toUpperCase()}
+                  {isComplete && <span aria-label="Заполнено" className="h-1.5 w-1.5 rounded-full bg-emerald-400" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-[#CBC9C5]">
-          Title
-          <input className="rounded-xl border border-[#4A4847] bg-[#0D0D0E] px-3 py-2.5 text-[#F4F4F5] outline-none transition-colors focus:border-[#C5A059]" onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required value={form.title} />
+          Title ({locale.toUpperCase()})
+          <input className="rounded-xl border border-[#4A4847] bg-[#0D0D0E] px-3 py-2.5 text-[#F4F4F5] outline-none transition-colors focus:border-[#C5A059]" onChange={(event) => setForm((current) => ({ ...current, title: { ...current.title, [locale]: event.target.value } }))} value={form.title[locale]} />
         </label>
 
         <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-[#CBC9C5]">
@@ -109,9 +171,10 @@ export function AdminArticleForm({ article, isSaving, onClose, onSubmit }: Props
         </label>
 
         <label className="mb-4 flex flex-col gap-1.5 text-sm font-medium text-[#CBC9C5]">
-          Content
-          <textarea className="min-h-40 resize-y rounded-xl border border-[#4A4847] bg-[#0D0D0E] px-3 py-2.5 leading-6 text-[#F4F4F5] outline-none transition-colors focus:border-[#C5A059]" onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} required value={form.content} />
+          Content ({locale.toUpperCase()})
+          <textarea className="min-h-40 resize-y rounded-xl border border-[#4A4847] bg-[#0D0D0E] px-3 py-2.5 leading-6 text-[#F4F4F5] outline-none transition-colors focus:border-[#C5A059]" onChange={(event) => setForm((current) => ({ ...current, content: { ...current.content, [locale]: event.target.value } }))} value={form.content[locale]} />
         </label>
+        {formError && <p className="mb-4 rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">{formError}</p>}
 
         <fieldset className="mb-4 rounded-xl border border-[#4A4847] p-3">
           <legend className="px-1 text-sm font-medium text-[#CBC9C5]">Image URLs</legend>
