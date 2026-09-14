@@ -1706,7 +1706,16 @@ def update_article(
     if not article:
         raise HTTPException(status_code=404, detail="Article not found")
 
-    for field, value in article_data.model_dump(exclude_unset=True).items():
+    updates = article_data.model_dump(exclude_unset=True)
+    for field in ("title", "content"):
+        if field in updates:
+            existing_translations = getattr(article, field)
+            updates[field] = {
+                **(existing_translations if isinstance(existing_translations, dict) else {}),
+                **updates[field],
+            }
+
+    for field, value in updates.items():
         setattr(article, field, value)
     db.commit()
     db.refresh(article)

@@ -79,11 +79,18 @@ class ArticlesTest(unittest.TestCase):
 
         updated = update_article(
             article.id,
-            ArticleUpdate(is_published=True, title={"ru": "Обновленный релиз"}),
+            ArticleUpdate(is_published=True, title={"uk": "Оновлений реліз"}),
             db=self.db,
         )
         self.assertTrue(updated.is_published)
-        self.assertEqual(updated.title, {"ru": "Обновленный релиз"})
+        self.assertEqual(
+            updated.title,
+            {
+                "ru": "Новый релиз",
+                "en": "New release",
+                "uk": "Оновлений реліз",
+            },
+        )
         self.assertEqual(updated.content["en"], "A new bottle is available.")
 
         delete_article(article.id, db=self.db)
