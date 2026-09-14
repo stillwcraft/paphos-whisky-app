@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 import { useAnalytics } from '@/hooks/useAnalytics.ts';
+import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -118,34 +119,51 @@ export function ArticlesTab() {
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+
+  const loadArticles = useCallback(async (offset: number, replace = false) => {
+    if (replace) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+    try {
+      const response = await fetch(localizedApiUrl(
+        paginatedUrl(`${API_URL}/api/articles`, 3, offset),
+        i18n.language,
+      ));
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+      const page = normalizePaginatedResponse(
+        await response.json() as PaginatedResponse<Article> | Article[],
+      );
+      setArticles((current) => replace ? page.items : [...current, ...page.items]);
+      setHasMore(page.has_more);
+      setError(null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : 'Could not load articles.');
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [i18n.language]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    const loadArticles = async () => {
-      try {
-        const response = await fetch(
-          localizedApiUrl(`${API_URL}/api/articles`, i18n.language),
-          { signal: controller.signal },
-        );
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-        setArticles(await response.json() as Article[]);
-      } catch (loadError) {
-        if (loadError instanceof DOMException && loadError.name === 'AbortError') {
-          return;
-        }
-        setError(loadError instanceof Error ? loadError.message : 'Could not load articles.');
-      } finally {
-        if (!controller.signal.aborted) {
-          setIsLoading(false);
-        }
-      }
-    };
+    setSelectedArticle(null);
+    void loadArticles(0, true);
+  }, [loadArticles]);
 
-    void loadArticles();
-    return () => controller.abort();
-  }, [i18n.language]);
+  const loadMoreArticles = useCallback(() => {
+    if (hasMore && !isLoadingMore) {
+      void loadArticles(articles.length);
+    }
+  }, [articles.length, hasMore, isLoadingMore, loadArticles]);
+  const articlesSentinelRef = useInfiniteScroll(
+    loadMoreArticles,
+    hasMore && !isLoading && !isLoadingMore,
+  );
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-[calc(env(safe-area-inset-top)+1rem)]">
@@ -186,6 +204,8 @@ export function ArticlesTab() {
               </button>
             </article>
           ))}
+          {hasMore && <div ref={articlesSentinelRef} className="h-px" aria-hidden="true" />}
+          {isLoadingMore && <p className="text-center text-sm text-slate-400">Завантаження...</p>}
         </div>
       )}
       {selectedArticle && <ArticleReader article={selectedArticle} onClose={() => setSelectedArticle(null)} />}

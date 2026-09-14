@@ -46,11 +46,18 @@ class ArticlesTest(unittest.TestCase):
         self.db.add_all([old_article, newest_article, draft])
         self.db.commit()
 
-        articles = get_articles(db=self.db)
+        page = get_articles(limit=3, offset=0, db=self.db)
+        articles = page["items"]
 
         self.assertEqual([article.id for article in articles], [newest_article.id, old_article.id])
         self.assertEqual(articles[0].title, "Новая")
-        self.assertEqual(get_articles(lang="en", db=self.db), [get_article(old_article.id, lang="en", db=self.db)])
+        self.assertEqual(page["total"], 2)
+        self.assertFalse(page["has_more"])
+        english_page = get_articles(lang="en", limit=3, offset=0, db=self.db)
+        self.assertEqual(
+            english_page["items"],
+            [get_article(old_article.id, lang="en", db=self.db)],
+        )
         with self.assertRaises(HTTPException) as context:
             get_article(draft.id, db=self.db)
         self.assertEqual(context.exception.status_code, 404)
@@ -97,3 +104,26 @@ class ArticlesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as context:
             get_article(article.id, db=self.db)
         self.assertEqual(context.exception.status_code, 404)
+
+    def test_public_articles_are_paginated(self):
+        now = datetime.now(timezone.utc)
+        self.db.add_all(
+            [
+                models.Article(
+                    title={"ru": f"Статья {index}"},
+                    content={"ru": f"Текст {index}"},
+                    created_at=now - timedelta(minutes=index),
+                )
+                for index in range(4)
+            ]
+        )
+        self.db.commit()
+
+        first_page = get_articles(limit=2, offset=0, db=self.db)
+        second_page = get_articles(limit=2, offset=2, db=self.db)
+
+        self.assertEqual(first_page["total"], 4)
+        self.assertEqual(len(first_page["items"]), 2)
+        self.assertTrue(first_page["has_more"])
+        self.assertEqual(len(second_page["items"]), 2)
+        self.assertFalse(second_page["has_more"])

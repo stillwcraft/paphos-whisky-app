@@ -1087,6 +1087,10 @@ class PaginationMetadata(BaseModel):
     has_more: bool
 
 
+class ArticlePageResponse(PaginationMetadata):
+    items: List[ArticleClientResponse]
+
+
 class EventPageResponse(PaginationMetadata):
     items: List[EventSummaryResponse]
 
@@ -1637,17 +1641,28 @@ def articles_with_translation(
     return query
 
 
-@app.get("/api/articles", response_model=List[ArticleClientResponse])
+@app.get("/api/articles", response_model=ArticlePageResponse)
 def get_articles(
     lang: ArticleLanguage = "ru",
+    limit: int = Query(default=3, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
 ):
+    query = articles_with_translation(db, lang, published_only=True)
+    total = query.count()
     articles = (
-        articles_with_translation(db, lang, published_only=True)
+        query
         .order_by(models.Article.created_at.desc(), models.Article.id.desc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    return [article_translation(article, lang) for article in articles]
+    return build_paginated_response(
+        [article_translation(article, lang) for article in articles],
+        total,
+        limit,
+        offset,
+    )
 
 
 @app.get("/api/admin/articles", response_model=List[ArticleResponse])
