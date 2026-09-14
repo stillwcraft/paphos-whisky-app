@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
+import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 
@@ -112,6 +113,7 @@ function ArticleReader({ article, onClose }: { article: Article; onClose: () => 
 
 export function ArticlesTab() {
   const { i18n, t } = useTranslation();
+  const { trackEvent } = useAnalytics();
   const [articles, setArticles] = useState<Article[]>([]);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,7 +159,19 @@ export function ArticlesTab() {
         <div className="space-y-4">
           {articles.map((article) => (
             <article className="overflow-hidden rounded-2xl border border-[#C5A059]/20 bg-[#141417] shadow-lg shadow-black/20" key={article.id}>
-              <button aria-label={`Відкрити ${article.title}`} className="block w-full text-left" onClick={() => setSelectedArticle(article)} type="button">
+              <button
+                aria-label={`Відкрити ${article.title}`}
+                className="block w-full text-left"
+                onClick={() => {
+                  trackEvent('news_article_opened', {
+                    article_id: article.id,
+                    article_type: article.type,
+                    image_count: article.image_urls.length,
+                  });
+                  setSelectedArticle(article);
+                }}
+                type="button"
+              >
                 <div className={`relative ${article.image_urls.length === 0 ? 'min-h-20 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#C5A059]/15 via-[#141417] to-[#141417]' : ''}`}>
                   <ArticleImages article={article} />
                   <span className={`absolute left-3 top-3 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${article.type === 'article' ? 'border-[#C5A059]/50 bg-gradient-to-r from-[#8D6A28] to-[#C5A059] text-black' : 'border-slate-400/30 bg-slate-500/20 text-slate-200'}`}>
