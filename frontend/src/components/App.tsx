@@ -92,9 +92,7 @@ export function App() {
   const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
-  const showMapTab = isAdmin || (
-    import.meta.env.DEV && window.location.hostname === '127.0.0.1'
-  );
+  const showMapTab = true;
   const activeScreen = t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);

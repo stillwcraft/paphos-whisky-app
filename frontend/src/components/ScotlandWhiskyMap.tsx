@@ -451,11 +451,11 @@ export function ScotlandWhiskyMap({
       ) : activeDistillery && (
         <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/95 px-3 py-2 shadow-xl">
           <p className="font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</p>
-          <p className="mt-1 text-xs text-[#9E9D9A]">
-            {activeDistillery.tasted
-              ? `★ Tasted${activeDistillery.rating ? ` · ${activeDistillery.rating}` : ''}`
-              : 'Not tasted yet'}
-          </p>
+          {activeDistillery.tasted && (
+            <p className="mt-1 text-xs text-[#9E9D9A]">
+              {`★ Tasted${activeDistillery.rating ? ` · ${activeDistillery.rating}` : ''}`}
+            </p>
+          )}
         </div>
       )}
       {mapLoadError && (
