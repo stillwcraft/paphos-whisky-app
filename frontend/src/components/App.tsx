@@ -9,10 +9,11 @@ import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
+import { ArticlesTab } from '@/components/ArticlesTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 
-type TabId = 'events' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
+type TabId = 'events' | 'articles' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
@@ -30,19 +31,22 @@ const tabs: Tab[] = [
   { id: 'profile', labelKey: 'tabs.profile', iconSrc: '/assets/nav/Profile.webp' },
 ];
 const mapTab: Tab = { id: 'map', labelKey: 'tabs.map', iconSrc: '/assets/nav/Globe.webp' };
+const articlesTab: Tab = { id: 'articles', labelKey: 'tabs.articles', iconSrc: '/assets/nav/News.webp' };
 const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', iconSrc: '/assets/nav/Admin.webp' };
 
 type FooterProps = {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
+  showArticlesTab: boolean;
   showMapTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showMapTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showMapTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
+    ...(showArticlesTab ? [articlesTab] : []),
     ...(showMapTab ? [mapTab] : []),
     ...tabs.slice(1),
     ...(isAdmin ? [adminTab] : []),
@@ -93,6 +97,7 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showMapTab = true;
+  const showArticlesTab = import.meta.env.DEV || isAdmin;
   const activeScreen = t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
@@ -143,7 +148,7 @@ export function App() {
       return;
     }
 
-    const matchingTab = tabs.find((tab) => tab.id === startParam);
+    const matchingTab = [...tabs, articlesTab, mapTab].find((tab) => tab.id === startParam);
     if (matchingTab) {
       setActiveTab(matchingTab.id);
     }
@@ -164,6 +169,12 @@ export function App() {
               selectedDistilleryId={selectedDistilleryId}
               onSelectedDistilleryHandled={clearSelectedDistillery}
             />
+          ) : activeTab === 'articles' ? (
+            showArticlesTab ? <ArticlesTab /> : (
+              <div className="flex min-h-screen items-center justify-center text-center">
+                <p className="text-lg font-semibold text-[#F4F4F5]">Доступ ограничен</p>
+              </div>
+            )
           ) : activeTab === 'bottles' ? (
             <BottlesSamplesTab />
           ) : activeTab === 'favorites' ? (
@@ -191,6 +202,7 @@ export function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isAdmin={isAdmin}
+        showArticlesTab={showArticlesTab}
         showMapTab={showMapTab}
       />
     </div>

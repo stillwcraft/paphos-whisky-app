@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, t
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
+import { AdminArticles } from '@/components/AdminArticles.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const DEEP_LINK_BASE_URL = 'https://t.me/CyprusWhiskyClubBot/NoMoreDram';
@@ -483,6 +484,9 @@ export function AdminTab() {
         <div style={buttonRow}><button style={buttonStyle} type="submit">{editingEventId === null ? 'Create Event' : 'Save Changes'}</button>{editingEventId !== null && <button style={secondaryButtonStyle} type="button" onClick={resetEvent}>Cancel</button>}</div>
       </form>
       <div style={listStyle}>{events.map((item) => <div key={item.id} style={rowStyle}><span>{item.title}</span><span style={actionRow}><button aria-label="Copy event link" title="Copy event link" style={smallButtonStyle} type="button" onClick={() => void copyDeepLink('event', item.id)}>🔗</button><button aria-label="Edit event" title="Edit event" style={smallButtonStyle} type="button" onClick={() => { setEditingEventId(item.id); setEventForm(eventFormFromItem(item)); }}>✏️</button><button aria-label="Delete event" title="Delete event" style={dangerButtonStyle} type="button" onClick={() => setDeletion({ kind: 'event', item })}>🗑️</button></span></div>)}</div>
+    </Accordion>
+    <Accordion title="📰 Статті та новини">
+      <AdminArticles initDataRaw={initDataRaw} />
     </Accordion>
     <Accordion title="📁 Manage Distilleries">
       <form onSubmit={saveDistillery} style={formStyle}>

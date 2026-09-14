@@ -23,6 +23,7 @@ models.Base.metadata.create_all(bind=engine)
 
 
 BottleLabel = Literal["bottle", "samples", "event"]
+ArticleType = Literal["article", "news"]
 CardLanguage = Literal["en", "ru", "uk"]
 I18nString = Dict[str, str]
 TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
@@ -838,6 +839,36 @@ class EventCreate(BaseModel):
 class EventUpdate(EventCreate):
     pass
 
+
+class ArticleBase(BaseModel):
+    title: str = Field(min_length=1, max_length=255)
+    content: str = Field(min_length=1)
+    type: ArticleType = "news"
+    image_urls: List[str] = Field(default_factory=list)
+    is_published: bool = True
+
+
+class ArticleCreate(ArticleBase):
+    pass
+
+
+class ArticleUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    content: Optional[str] = Field(default=None, min_length=1)
+    type: Optional[ArticleType] = None
+    image_urls: Optional[List[str]] = None
+    is_published: Optional[bool] = None
+
+
+class ArticleResponse(ArticleBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class DistilleryCreate(BaseModel):
     name: str
     name_i18n: Optional[I18nString] = None
@@ -1486,6 +1517,92 @@ def get_event_bottle_counts_subquery(db: Session):
 
 
 # --- ЭНДПОИНТЫ ДЛЯ СОБЫТИЙ (EVENTS) ---
+
+@app.get("/api/articles", response_model=List[ArticleResponse])
+def get_articles(db: Session = Depends(get_db)):
+    return (
+        db.query(models.Article)
+        .filter(models.Article.is_published.is_(True))
+        .order_by(models.Article.created_at.desc(), models.Article.id.desc())
+        .all()
+    )
+
+
+@app.get("/api/admin/articles", response_model=List[ArticleResponse])
+def get_admin_articles(
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    return (
+        db.query(models.Article)
+        .order_by(models.Article.created_at.desc(), models.Article.id.desc())
+        .all()
+    )
+
+
+@app.get("/api/articles/{article_id}", response_model=ArticleResponse)
+def get_article(article_id: int, db: Session = Depends(get_db)):
+    article = (
+        db.query(models.Article)
+        .filter(
+            models.Article.id == article_id,
+            models.Article.is_published.is_(True),
+        )
+        .first()
+    )
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return article
+
+
+@app.post(
+    "/api/admin/articles",
+    response_model=ArticleResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_article(
+    article_data: ArticleCreate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    article = models.Article(**article_data.model_dump())
+    db.add(article)
+    db.commit()
+    db.refresh(article)
+    return article
+
+
+@app.put("/api/admin/articles/{article_id}", response_model=ArticleResponse)
+def update_article(
+    article_id: int,
+    article_data: ArticleUpdate,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    article = db.query(models.Article).filter(models.Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    for field, value in article_data.model_dump(exclude_unset=True).items():
+        setattr(article, field, value)
+    db.commit()
+    db.refresh(article)
+    return article
+
+
+@app.delete("/api/admin/articles/{article_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_article(
+    article_id: int,
+    db: Session = Depends(get_db),
+    _: TelegramAuthContext = Depends(require_admin),
+):
+    article = db.query(models.Article).filter(models.Article.id == article_id).first()
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    db.delete(article)
+    db.commit()
+    return
+
 
 @app.get("/api/events", response_model=EventPageResponse)
 def get_events(
