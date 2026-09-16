@@ -275,12 +275,18 @@ function EventGalleryCard({
   onOpen,
   onOpenLineup,
   resetToCenterRevision,
+  isInitialEvent,
+  loadDeferredImages,
+  onInitialImageSettled,
 }: {
   event: EventSummary;
   isFocused: boolean;
   onOpen: () => void;
   onOpenLineup: () => void;
   resetToCenterRevision: number;
+  isInitialEvent: boolean;
+  loadDeferredImages: boolean;
+  onInitialImageSettled: () => void;
 }) {
   const { i18n } = useTranslation();
   const cardRef = useRef<HTMLElement>(null);
@@ -294,6 +300,12 @@ function EventGalleryCard({
     event.image_url_right ?? event.image_url,
   ];
   const bannerDate = formatEventBannerDate(event.date, i18n.language);
+
+  useEffect(() => {
+    if (isInitialEvent && !event.image_url) {
+      onInitialImageSettled();
+    }
+  }, [event.image_url, isInitialEvent, onInitialImageSettled]);
 
   useEffect(() => {
     const gallery = galleryRef.current;
@@ -370,21 +382,32 @@ function EventGalleryCard({
         onScroll={updateActiveImage}
         style={{ scrollbarWidth: 'none' }}
       >
-        {imageUrls.map((imageUrl, index) => (
-          <button
-            key={index}
-            aria-label={`Open ${event.title}`}
-            className="min-w-full snap-center bg-slate-800"
-            onClick={onOpen}
-            type="button"
-          >
-            {imageUrl ? (
-              <img alt="" className="h-full w-full object-cover" src={imageUrl} />
-            ) : (
-              <div aria-hidden="true" className="h-full w-full bg-gradient-to-br from-amber-700/70 to-slate-950" />
-            )}
-          </button>
-        ))}
+        {imageUrls.map((imageUrl, index) => {
+          const isInitialImage = isInitialEvent && index === 1;
+          const shouldLoadImage = loadDeferredImages || isInitialImage;
+
+          return (
+            <button
+              key={index}
+              aria-label={`Open ${event.title}`}
+              className="min-w-full snap-center bg-slate-800"
+              onClick={onOpen}
+              type="button"
+            >
+              {imageUrl && shouldLoadImage ? (
+                <img
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={isInitialImage ? onInitialImageSettled : undefined}
+                  onLoad={isInitialImage ? onInitialImageSettled : undefined}
+                  src={imageUrl}
+                />
+              ) : (
+                <div aria-hidden="true" className="h-full w-full bg-gradient-to-br from-amber-700/70 to-slate-950" />
+              )}
+            </button>
+          );
+        })}
       </div>
       {isCardVisible && isCenterImageReady && activeImageIndex === 1 && (event.distillery_logo_url || bannerDate.dayAndTime) && (
         <>
@@ -601,6 +624,7 @@ export function EventsTab({
   const timelineScrollTimerRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
+  const [loadDeferredGalleryImages, setLoadDeferredGalleryImages] = useState(false);
   const [lineupInspectorEvent, setLineupInspectorEvent] = useState<EventDetail | null>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
   const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
@@ -664,6 +688,10 @@ export function EventsTab({
 
     return nextEventIndex === -1 ? orderedEvents.length - 1 : nextEventIndex;
   }, [orderedEvents]);
+  const initialEventId = orderedEvents[centeredEventIndex]?.id;
+  const enableDeferredGalleryImages = useCallback(() => {
+    setLoadDeferredGalleryImages(true);
+  }, []);
 
   useEffect(() => {
     const timeline = timelineRef.current;
@@ -1021,6 +1049,9 @@ export function EventsTab({
                   onOpen={() => void openEventDetails(event.id)}
                   onOpenLineup={() => void openLineup(event.id)}
                   resetToCenterRevision={galleryResetRevision}
+                  isInitialEvent={event.id === initialEventId}
+                  loadDeferredImages={loadDeferredGalleryImages}
+                  onInitialImageSettled={enableDeferredGalleryImages}
                 />
               </li>
             ))}
