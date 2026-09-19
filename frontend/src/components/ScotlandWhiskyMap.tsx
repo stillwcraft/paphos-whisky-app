@@ -50,9 +50,6 @@ const initialPosition = {
   zoom: 1,
 };
 
-// Only programmatic navigation may change the map's viewport.
-const filterMapGestures = () => false;
-
 const whiskyRegions: WhiskyRegion[] = [
   {
     sourceName: 'Speyside',
@@ -115,6 +112,14 @@ export function ScotlandWhiskyMap({
   const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
+
+  const filterMapGestures = useCallback(
+    () => position.zoom > initialPosition.zoom,
+    [position.zoom],
+  );
+  const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
+    setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -268,7 +273,9 @@ export function ScotlandWhiskyMap({
           zoom={position.zoom}
           minZoom={1}
           maxZoom={16}
+          translateExtent={[[0, 0], [390, 640]]}
           filterZoomEvent={filterMapGestures}
+          onMoveEnd={handleMoveEnd}
         >
           <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
             <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
