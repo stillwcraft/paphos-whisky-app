@@ -257,7 +257,7 @@ export function ScotlandWhiskyMap({
         height={640}
         projection="geoMercator"
         projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
-        className="h-full w-full touch-pan-y"
+        className="h-full w-full touch-none"
         onClick={resetMap}
       >
         <ZoomableGroup
@@ -265,7 +265,8 @@ export function ScotlandWhiskyMap({
           zoom={position.zoom}
           minZoom={1}
           maxZoom={16}
-          disablePanning={position.zoom <= initialPosition.zoom}
+          disablePanning
+          disableZooming
           onMoveEnd={setPosition}
         >
           <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
