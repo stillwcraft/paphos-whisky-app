@@ -265,6 +265,7 @@ export function ScotlandWhiskyMap({
           zoom={position.zoom}
           minZoom={1}
           maxZoom={16}
+          disablePanning={position.zoom <= initialPosition.zoom}
           onMoveEnd={setPosition}
         >
           <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
