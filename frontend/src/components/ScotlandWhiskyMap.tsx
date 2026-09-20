@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -10,6 +10,8 @@ import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+// Match d3-zoom's double-tap window before treating a tap as a selection.
+const MAP_TAP_DELAY = 500;
 
 export type MapDistillery = {
   id: number;
@@ -113,10 +115,28 @@ export function ScotlandWhiskyMap({
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
 
-  const filterMapGestures = useCallback(
-    () => position.zoom > initialPosition.zoom,
-    [position.zoom],
-  );
+  const pendingMapClick = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ignoreClicksUntil = useRef(0);
+  const cancelMapClick = useCallback(() => {
+    if (pendingMapClick.current !== null) {
+      clearTimeout(pendingMapClick.current);
+      pendingMapClick.current = null;
+    }
+  }, []);
+  useEffect(() => cancelMapClick, [cancelMapClick]);
+
+  const handleMapMove = useCallback(() => {
+    cancelMapClick();
+    ignoreClicksUntil.current = Date.now() + MAP_TAP_DELAY;
+  }, [cancelMapClick]);
+  const scheduleMapClick = (action: () => void) => {
+    cancelMapClick();
+    if (Date.now() < ignoreClicksUntil.current) return;
+    pendingMapClick.current = setTimeout(() => {
+      pendingMapClick.current = null;
+      action();
+    }, MAP_TAP_DELAY);
+  };
   const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
     setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
   }, []);
@@ -150,6 +170,7 @@ export function ScotlandWhiskyMap({
   }, []);
 
   const changeZoom = (amount: number) => {
+    cancelMapClick();
     setPosition((current) => {
       const zoom = Math.min(8, Math.max(initialPosition.zoom, current.zoom + amount));
       return zoom === initialPosition.zoom ? initialPosition : { ...current, zoom };
@@ -266,7 +287,8 @@ export function ScotlandWhiskyMap({
         projection="geoMercator"
         projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
         className="h-full w-full touch-none"
-        onClick={resetMap}
+        onClick={() => scheduleMapClick(resetMap)}
+        onDoubleClickCapture={handleMapMove}
       >
         <ZoomableGroup
           center={position.coordinates}
@@ -274,7 +296,8 @@ export function ScotlandWhiskyMap({
           minZoom={1}
           maxZoom={16}
           translateExtent={[[0, 0], [390, 640]]}
-          filterZoomEvent={filterMapGestures}
+          onMoveStart={cancelMapClick}
+          onMove={handleMapMove}
           onMoveEnd={handleMoveEnd}
         >
           <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
@@ -295,7 +318,7 @@ export function ScotlandWhiskyMap({
                     onMouseLeave={() => setHoveredRegion(null)}
                     onClick={(event) => {
                       event.stopPropagation();
-                      selectRegion(region);
+                      scheduleMapClick(() => selectRegion(region));
                     }}
                     style={{
                       default: {
@@ -365,7 +388,7 @@ export function ScotlandWhiskyMap({
                   onFocus={() => setActiveDistillery(distillery)}
                 onClick={(event) => {
                   event.stopPropagation();
-                  void selectDistillery(distillery);
+                  scheduleMapClick(() => { void selectDistillery(distillery); });
                 }}
                 >
                   {selectedDistillery?.id === distillery.id ? (
