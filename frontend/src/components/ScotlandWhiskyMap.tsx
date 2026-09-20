@@ -129,6 +129,19 @@ export function ScotlandWhiskyMap({
     cancelMapClick();
     ignoreClicksUntil.current = Date.now() + MAP_TAP_DELAY;
   }, [cancelMapClick]);
+  const filterMapGestures = useCallback((event: unknown) => {
+    if (!(event instanceof Event)) return false;
+    // d3-zoom passes touchend to its double-tap zoom handler.
+    if (event.type === 'dblclick' || event.type === 'touchend') {
+      handleMapMove();
+      return false;
+    }
+    return event.type === 'touchstart'
+      || (event instanceof MouseEvent
+        && event.type === 'mousedown'
+        && !event.ctrlKey
+        && event.button === 0);
+  }, [handleMapMove]);
   const scheduleMapClick = (action: () => void) => {
     cancelMapClick();
     if (Date.now() < ignoreClicksUntil.current) return;
@@ -288,7 +301,6 @@ export function ScotlandWhiskyMap({
         projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
         className="h-full w-full touch-none"
         onClick={() => scheduleMapClick(resetMap)}
-        onDoubleClickCapture={handleMapMove}
       >
         <ZoomableGroup
           center={position.coordinates}
@@ -296,6 +308,7 @@ export function ScotlandWhiskyMap({
           minZoom={1}
           maxZoom={16}
           translateExtent={[[0, 0], [390, 640]]}
+          filterZoomEvent={filterMapGestures}
           onMoveStart={cancelMapClick}
           onMove={handleMapMove}
           onMoveEnd={handleMoveEnd}
