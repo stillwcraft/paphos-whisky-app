@@ -295,25 +295,95 @@ export function ScotlandWhiskyMap({
           : 'h-full'
       }`}>
         <ComposableMap
-        width={390}
-        height={640}
-        projection="geoMercator"
-        projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
-        className="h-full w-full touch-none"
-        onClick={() => scheduleMapClick(resetMap)}
-      >
-        <ZoomableGroup
-          center={position.coordinates}
-          zoom={position.zoom}
-          minZoom={1}
-          maxZoom={16}
-          translateExtent={[[0, 0], [390, 640]]}
-          filterZoomEvent={filterMapGestures}
-          onMoveStart={cancelMapClick}
-          onMove={handleMapMove}
-          onMoveEnd={handleMoveEnd}
+          width={390}
+          height={640}
+          projection="geoMercator"
+          projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
+          className="h-full w-full touch-none"
+          onClick={() => scheduleMapClick(resetMap)}
         >
-          <g style={{ filter: 'drop-shadow(0px 10px 25px rgba(0, 0, 0, 0.9))' }}>
+          <defs>
+            <linearGradient id="dark-region-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1A1A1E" />
+              <stop offset="100%" stopColor="#0D0D0F" />
+            </linearGradient>
+            <linearGradient id="gold-region-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FFE28A" />
+              <stop offset="100%" stopColor="#C5A059" />
+            </linearGradient>
+            <radialGradient id="distillery-gold-sphere" cx="32%" cy="28%" r="70%">
+              <stop offset="0%" stopColor="#FFF8D5" />
+              <stop offset="35%" stopColor="#FFE28A" />
+              <stop offset="72%" stopColor="#C5A059" />
+              <stop offset="100%" stopColor="#6F501E" />
+            </radialGradient>
+            <filter id="3d-shadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow
+                dx="3"
+                dy="8"
+                stdDeviation="6"
+                floodColor="#000000"
+                floodOpacity="0.85"
+              />
+              <feDropShadow
+                dx="1"
+                dy="2"
+                stdDeviation="2"
+                floodColor="#C5A059"
+                floodOpacity="0.2"
+              />
+            </filter>
+            <filter id="intense-gold-glow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="12" result="blur1" />
+              <feGaussianBlur stdDeviation="25" result="blur2" />
+              <feGaussianBlur stdDeviation="50" result="blur3" />
+              <feMerge>
+                <feMergeNode in="blur3" />
+                <feMergeNode in="blur2" />
+                <feMergeNode in="blur1" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="distillery-marker-shadow" x="-150%" y="-150%" width="400%" height="400%">
+              <feDropShadow
+                dx="0"
+                dy="1.5"
+                stdDeviation="1.5"
+                floodColor="#000000"
+                floodOpacity="0.9"
+              />
+              <feDropShadow
+                dx="0"
+                dy="0"
+                stdDeviation="2"
+                floodColor="#FFE28A"
+                floodOpacity="0.9"
+              />
+            </filter>
+            <style>{`
+              @keyframes whisky-marker-pulse {
+                0%, 100% { opacity: 0.2; transform: scale(0.82); }
+                50% { opacity: 0.7; transform: scale(1.25); }
+              }
+
+              .whisky-distillery-pulse {
+                animation: whisky-marker-pulse 1.8s ease-in-out infinite;
+                transform-box: fill-box;
+                transform-origin: center;
+              }
+            `}</style>
+          </defs>
+          <ZoomableGroup
+            center={position.coordinates}
+            zoom={position.zoom}
+            minZoom={1}
+            maxZoom={16}
+            translateExtent={[[0, 0], [390, 640]]}
+            filterZoomEvent={filterMapGestures}
+            onMoveStart={cancelMapClick}
+            onMove={handleMapMove}
+            onMoveEnd={handleMoveEnd}
+          >
             <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
               {({ geographies }) => geographies.map((geography) => {
                 const region = whiskyRegions.find(
@@ -321,7 +391,20 @@ export function ScotlandWhiskyMap({
                 );
                 if (!region) return null;
                 const isSelected = selectedRegion?.sourceName === region.sourceName;
-                const isHighlighted = isSelected || hoveredRegion === region.sourceName;
+                const isHovered = hoveredRegion === region.sourceName;
+                const regionStyle = {
+                  fill: isSelected ? 'url(#gold-region-grad)' : 'url(#dark-region-grad)',
+                  stroke: isSelected ? '#FFF2C2' : '#5A482A',
+                  strokeWidth: isSelected ? 2.5 : 1,
+                  filter: isSelected ? 'url(#intense-gold-glow)' : 'url(#3d-shadow)',
+                  opacity: isSelected ? 1 : 0.75,
+                  cursor: 'pointer',
+                  outline: 'none',
+                  transition: 'all 0.4s ease',
+                  transform: isSelected ? 'translateY(-3px) scale(1.01)' : undefined,
+                  transformBox: 'fill-box' as const,
+                  transformOrigin: 'center',
+                };
 
                 return (
                   <Geography
@@ -335,59 +418,47 @@ export function ScotlandWhiskyMap({
                     }}
                     style={{
                       default: {
-                        fill: isHighlighted ? '#1E1E24' : '#141417',
-                        stroke: 'rgba(197, 160, 89, 0.3)',
-                        strokeWidth: 0.8,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        transition: 'fill 0.3s ease',
+                        ...regionStyle,
+                        opacity: isSelected ? 1 : isHovered ? 0.9 : 0.75,
                       },
                       hover: {
-                        fill: '#1E1E24',
-                        stroke: 'rgba(197, 160, 89, 0.3)',
-                        strokeWidth: 0.8,
-                        cursor: 'pointer',
-                        outline: 'none',
-                        transition: 'fill 0.3s ease',
+                        ...regionStyle,
+                        opacity: isSelected ? 1 : 0.9,
                       },
                       pressed: {
-                        fill: '#24242C',
-                        outline: 'none',
+                        ...regionStyle,
+                        opacity: 1,
                       },
                     }}
                   />
                 );
               })}
             </Geographies>
-          </g>
 
-          {whiskyRegions.map((region) => (
-            <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
-              <text
-                fill="#C5A059"
-                fillOpacity={
-                  selectedRegion?.sourceName === region.sourceName
-                  || hoveredRegion === region.sourceName
-                    ? 0.85
-                    : 0.25
-                }
-                fontSize={5}
-                fontFamily="'Cinzel', 'Playfair Display', serif"
-                fontWeight={600}
-                pointerEvents="none"
-                textAnchor="middle"
-                style={{
-                  filter: selectedRegion?.sourceName === region.sourceName
+            {whiskyRegions.map((region) => (
+              <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
+                <text
+                  fill="#D4AF37"
+                  fillOpacity={
+                    selectedRegion?.sourceName === region.sourceName
                     || hoveredRegion === region.sourceName
-                    ? 'drop-shadow(0 0 8px rgba(197, 160, 89, 0.6))'
-                    : undefined,
-                  letterSpacing: '0.3em',
-                }}
-              >
-                {region.label.toUpperCase()}
-              </text>
-            </Marker>
-          ))}
+                      ? 0.95
+                      : 0.48
+                  }
+                  fontSize={5}
+                  fontFamily="'Cinzel', 'Playfair Display', serif"
+                  fontWeight={600}
+                  pointerEvents="none"
+                  textAnchor="middle"
+                  style={{
+                    filter: 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.9))',
+                    letterSpacing: '0.3em',
+                  }}
+                >
+                  {region.label.toUpperCase()}
+                </text>
+              </Marker>
+            ))}
 
           {mapDistilleries
             .filter(hasCoordinates)
@@ -452,24 +523,25 @@ export function ScotlandWhiskyMap({
                     </>
                   ) : (
                     <>
-                      {distillery.tasted && (
-                        <circle r={markerRadius * 2} fill="#C5A059" fillOpacity={0.12} />
-                      )}
+                      <circle
+                        className="whisky-distillery-pulse"
+                        r={markerRadius * 2.2}
+                        fill="#FFE28A"
+                        fillOpacity={distillery.tasted ? 0.26 : 0.16}
+                      />
                       <circle
                         r={markerRadius}
-                        fill={distillery.tasted ? '#C5A059' : '#3A3935'}
-                        stroke={distillery.tasted ? '#FFF' : 'rgba(197, 160, 89, 0.4)'}
+                        fill="url(#distillery-gold-sphere)"
+                        stroke={distillery.tasted ? '#FFF2C2' : '#A77E35'}
                         strokeWidth={1}
-                        style={distillery.tasted
-                          ? { filter: 'drop-shadow(0 0 6px rgba(197, 160, 89, 0.8))' }
-                          : undefined}
+                        filter="url(#distillery-marker-shadow)"
                       />
                     </>
                   )}
                 </Marker>
               );
             })}
-        </ZoomableGroup>
+          </ZoomableGroup>
         </ComposableMap>
 
         <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/80 p-1 text-[#C5A059] shadow-2xl backdrop-blur-md">
