@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
@@ -9,6 +10,8 @@ import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
+const EVENTS_PAGE_SIZE = 8;
+const EVENTS_CACHE_STALE_TIME = 5 * 60 * 1000;
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type EventLineupBottle = {
@@ -68,6 +71,15 @@ type EventDetail = EventSummary & {
   bottles: EventLineupBottle[];
 };
 
+type EventListPage = {
+  items: EventSummary[];
+  hasMore: boolean;
+};
+
+type EventListCache = EventListPage & {
+  updatedAt: number;
+};
+
 type Member = {
   id: number;
   registered: boolean;
@@ -89,6 +101,62 @@ async function getErrorMessage(response: Response): Promise<string> {
   }
 
   return `Ошибка сервера: ${response.status}`;
+}
+
+function eventsCacheKey(languageCode: string) {
+  return `paphos-whisky:events:${languageCode}`;
+}
+
+function readEventsCache(languageCode: string): EventListCache | null {
+  try {
+    const value = window.sessionStorage.getItem(eventsCacheKey(languageCode));
+    if (!value) return null;
+    const cached: unknown = JSON.parse(value);
+    if (
+      typeof cached !== 'object'
+      || cached === null
+      || !('items' in cached)
+      || !Array.isArray(cached.items)
+      || !('hasMore' in cached)
+      || typeof cached.hasMore !== 'boolean'
+      || !('updatedAt' in cached)
+      || typeof cached.updatedAt !== 'number'
+    ) {
+      return null;
+    }
+    return cached as EventListCache;
+  } catch {
+    return null;
+  }
+}
+
+function writeEventsCache(languageCode: string, page: EventListPage) {
+  try {
+    window.sessionStorage.setItem(eventsCacheKey(languageCode), JSON.stringify({
+      ...page,
+      updatedAt: Date.now(),
+    }));
+  } catch {
+    // The in-memory TanStack cache remains available if session storage is unavailable.
+  }
+}
+
+async function fetchEventsPage(
+  languageCode: string,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<EventListPage> {
+  const response = await fetch(localizedApiUrl(
+    paginatedUrl(`${API_BASE_URL}/api/events`, EVENTS_PAGE_SIZE, offset),
+    languageCode,
+  ), { signal });
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+  const page = normalizePaginatedResponse(
+    await response.json() as PaginatedResponse<EventSummary> | EventSummary[],
+  );
+  return { items: page.items, hasMore: page.has_more };
 }
 
 function formatDate(date: string) {
@@ -656,12 +724,15 @@ export function EventsTab({
   const initDataRaw = useSignal(initData.raw);
   const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
-  const [events, setEvents] = useState<EventSummary[]>([]);
+  const [events, setEvents] = useState<EventSummary[]>(
+    () => readEventsCache(languageCode)?.items ?? [],
+  );
   const [eventDetails, setEventDetails] = useState<Record<number, EventDetail>>({});
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false);
+  const [hasMore, setHasMore] = useState(
+    () => readEventsCache(languageCode)?.hasMore ?? false,
+  );
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
   const [sheetEvent, setSheetEvent] = useState<EventSummary | null>(null);
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
@@ -686,40 +757,71 @@ export function EventsTab({
   const [lineupUserStates, setLineupUserStates] = useState<Record<number, LineupBottleActionState>>({});
   const [isUpdatingLineupBottle, setIsUpdatingLineupBottle] = useState<number | null>(null);
 
-  const loadEvents = useCallback(async (offset: number, replace = false) => {
-    if (replace) setIsLoading(true);
-    else setIsLoadingMore(true);
+  const eventsQuery = useQuery({
+    queryKey: ['events', languageCode, EVENTS_PAGE_SIZE],
+    queryFn: ({ signal }) => fetchEventsPage(languageCode, 0, signal),
+    staleTime: EVENTS_CACHE_STALE_TIME,
+    initialData: () => readEventsCache(languageCode) ?? undefined,
+    initialDataUpdatedAt: () => readEventsCache(languageCode)?.updatedAt,
+  });
+  const isLoading = eventsQuery.isPending && events.length === 0;
+
+  const loadEvents = useCallback(async (offset: number) => {
+    setIsLoadingMore(true);
     try {
-      const response = await fetch(localizedApiUrl(
-        paginatedUrl(`${API_BASE_URL}/api/events`, 24, offset),
-        languageCode,
-      ));
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<EventSummary> | EventSummary[]);
-      setEvents((current) => replace ? page.items : [...current, ...page.items]);
-      setHasMore(page.has_more);
+      const page = await fetchEventsPage(languageCode, offset);
+      setEvents((current) => {
+        const nextEvents = [...current, ...page.items];
+        writeEventsCache(languageCode, { items: nextEvents, hasMore: page.hasMore });
+        return nextEvents;
+      });
+      setHasMore(page.hasMore);
     } catch (error) {
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'Не удалось загрузить события.',
       });
     } finally {
-      setIsLoading(false);
       setIsLoadingMore(false);
     }
   }, [languageCode]);
 
   useEffect(() => {
-    setEventDetails({});
-    void loadEvents(0, true);
-  }, [loadEvents]);
-
-  useEffect(() => {
+    const cachedEvents = readEventsCache(languageCode);
+    setEvents(cachedEvents?.items ?? []);
+    setHasMore(cachedEvents?.hasMore ?? false);
     setEventDetails({});
     setExpandedEventId(null);
   }, [languageCode]);
+
+  useEffect(() => {
+    const page = eventsQuery.data;
+    if (!page) {
+      return;
+    }
+    setEvents((current) => {
+      const refreshedEventIds = new Set(page.items.map((event) => event.id));
+      const nextEvents = [
+        ...page.items,
+        ...current.filter((event) => !refreshedEventIds.has(event.id)),
+      ];
+      writeEventsCache(languageCode, { items: nextEvents, hasMore: page.hasMore });
+      return nextEvents;
+    });
+    setHasMore(page.hasMore);
+  }, [eventsQuery.data, languageCode]);
+
+  useEffect(() => {
+    if (!eventsQuery.error) {
+      return;
+    }
+    setFeedback({
+      kind: 'error',
+      message: eventsQuery.error instanceof Error
+        ? eventsQuery.error.message
+        : 'Не удалось загрузить события.',
+    });
+  }, [eventsQuery.error]);
 
   const upcomingEvent = useMemo(() => {
     const now = Date.now();
