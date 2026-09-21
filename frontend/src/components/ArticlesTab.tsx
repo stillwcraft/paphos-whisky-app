@@ -27,8 +27,27 @@ function formatArticleDate(value: string, language: string) {
   }).format(date);
 }
 
-function ArticleImages({ article, expanded = false }: { article: Article; expanded?: boolean }) {
+function ArticleImages({
+  article,
+  expanded = false,
+  isImageExpanded = false,
+  onImageClick,
+}: {
+  article: Article;
+  expanded?: boolean;
+  isImageExpanded?: boolean;
+  onImageClick?: () => void;
+}) {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const imageHeightClassName = expanded
+    ? isImageExpanded
+      ? 'h-[55dvh] max-h-[60dvh]'
+      : 'h-72'
+    : 'h-44';
+  const imageFitClassName = isImageExpanded ? 'object-contain' : 'object-cover';
+  const imageInteractionClassName = onImageClick
+    ? isImageExpanded ? 'cursor-zoom-out' : 'cursor-zoom-in'
+    : '';
 
   if (article.image_urls.length === 0) {
     return null;
@@ -38,14 +57,18 @@ function ArticleImages({ article, expanded = false }: { article: Article; expand
     return (
       <img
         alt=""
-        className={expanded ? 'h-72 w-full object-cover' : 'h-44 w-full object-cover'}
+        className={`${imageHeightClassName} w-full transition-all duration-300 ease-in-out ${imageFitClassName} ${imageInteractionClassName}`}
+        onClick={onImageClick}
         src={article.image_urls[0]}
       />
     );
   }
 
   return (
-    <div className={`relative ${expanded ? 'h-72' : 'h-44'}`}>
+    <div
+      className={`relative ${imageHeightClassName} transition-all duration-300 ease-in-out ${imageInteractionClassName}`}
+      onClick={onImageClick}
+    >
       <div
         className="flex h-full snap-x snap-mandatory overflow-x-auto"
         onScroll={(event) => {
@@ -71,7 +94,7 @@ function ArticleImages({ article, expanded = false }: { article: Article; expand
         {article.image_urls.map((imageUrl, index) => (
           <img
             alt=""
-            className="h-full w-[88%] shrink-0 snap-center object-cover first:w-full"
+            className={`h-full w-[88%] shrink-0 snap-center ${imageFitClassName} first:w-full`}
             key={`${imageUrl}-${index}`}
             src={imageUrl}
           />
@@ -90,9 +113,20 @@ function ArticleImages({ article, expanded = false }: { article: Article; expand
 
 function ArticleReader({ article, onClose }: { article: Article; onClose: () => void }) {
   const { i18n, t } = useTranslation();
+  const [isImageExpanded, setIsImageExpanded] = useState(false);
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/95 p-4 backdrop-blur-sm">
-      <article className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-[#C5A059]/20 bg-[#141417] shadow-2xl shadow-black/60">
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/95 p-4 backdrop-blur-sm"
+      onClick={() => {
+        if (isImageExpanded) {
+          setIsImageExpanded(false);
+        }
+      }}
+    >
+      <article
+        className="mx-auto flex h-full w-full max-w-md flex-col overflow-hidden rounded-3xl border border-[#C5A059]/20 bg-[#141417] shadow-2xl shadow-black/60"
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="flex items-center justify-between px-5 py-4">
           <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold ${article.type === 'article' ? 'border-[#C5A059]/50 bg-gradient-to-r from-[#8D6A28] to-[#C5A059] text-black' : 'border-slate-400/30 bg-slate-500/20 text-slate-200'}`}>
             {article.type === 'article' ? t('articles.article') : t('articles.news')}
@@ -100,7 +134,12 @@ function ArticleReader({ article, onClose }: { article: Article; onClose: () => 
           <button aria-label="Закрыть публикацию" className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-xl text-[#F4F4F5] transition-colors hover:bg-white/10" onClick={onClose} type="button">x</button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ArticleImages article={article} expanded />
+          <ArticleImages
+            article={article}
+            expanded
+            isImageExpanded={isImageExpanded}
+            onImageClick={() => setIsImageExpanded((current) => !current)}
+          />
           <div className="p-6">
             <p className="text-xs font-medium uppercase tracking-wider text-[#C5A059]">{formatArticleDate(article.created_at, i18n.language)}</p>
             <h1 className="mt-3 font-serif text-2xl font-bold leading-tight text-[#F4F4F5]">{article.title}</h1>
