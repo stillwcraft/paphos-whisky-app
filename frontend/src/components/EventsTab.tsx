@@ -305,8 +305,7 @@ function EventGalleryCard({
   onOpenLineup,
   resetToCenterRevision,
   isInitialEvent,
-  loadDeferredImages,
-  onInitialImageSettled,
+  timelineRootRef,
 }: {
   event: EventSummary;
   isFocused: boolean;
@@ -314,8 +313,7 @@ function EventGalleryCard({
   onOpenLineup: () => void;
   resetToCenterRevision: number;
   isInitialEvent: boolean;
-  loadDeferredImages: boolean;
-  onInitialImageSettled: () => void;
+  timelineRootRef: React.RefObject<HTMLDivElement>;
 }) {
   const { i18n } = useTranslation();
   const cardRef = useRef<HTMLElement>(null);
@@ -323,18 +321,15 @@ function EventGalleryCard({
   const [activeImageIndex, setActiveImageIndex] = useState(1);
   const [isCardVisible, setIsCardVisible] = useState(false);
   const [isCenterImageReady, setIsCenterImageReady] = useState(false);
+  const [loadedImageIndexes, setLoadedImageIndexes] = useState<number[]>(
+    isInitialEvent ? [1] : [],
+  );
   const imageUrls = [
     event.image_url_left ?? event.image_url,
     event.image_url,
     event.image_url_right ?? event.image_url,
   ];
   const bannerDate = formatEventBannerDate(event.date, i18n.language);
-
-  useEffect(() => {
-    if (isInitialEvent && !event.image_url) {
-      onInitialImageSettled();
-    }
-  }, [event.image_url, isInitialEvent, onInitialImageSettled]);
 
   useEffect(() => {
     const gallery = galleryRef.current;
@@ -348,10 +343,8 @@ function EventGalleryCard({
       behavior: 'auto',
     });
     const frame = requestAnimationFrame(scrollToCenter);
-    const revealTimer = window.setTimeout(() => setIsCenterImageReady(true), 250);
     return () => {
       cancelAnimationFrame(frame);
-      window.clearTimeout(revealTimer);
     };
   }, []);
 
@@ -373,18 +366,36 @@ function EventGalleryCard({
 
     const observer = new IntersectionObserver(
       ([entry]) => setIsCardVisible(entry.isIntersecting),
-      { threshold: 0.8 },
+      { root: timelineRootRef.current, rootMargin: '100% 0px', threshold: 0 },
     );
     observer.observe(card);
     return () => observer.disconnect();
-  }, []);
+  }, [timelineRootRef]);
+
+  useEffect(() => {
+    if (isCardVisible || isInitialEvent) {
+      setLoadedImageIndexes((current) => (
+        current.includes(1) ? current : [...current, 1]
+      ));
+    }
+  }, [isCardVisible, isInitialEvent]);
+
+  useEffect(() => {
+    if (!event.image_url) {
+      setIsCenterImageReady(true);
+    }
+  }, [event.image_url]);
 
   const updateActiveImage = () => {
     const gallery = galleryRef.current;
     if (!gallery || gallery.clientWidth === 0) {
       return;
     }
-    setActiveImageIndex(Math.min(2, Math.max(0, Math.round(gallery.scrollLeft / gallery.clientWidth))));
+    const nextIndex = Math.min(2, Math.max(0, Math.round(gallery.scrollLeft / gallery.clientWidth)));
+    setActiveImageIndex(nextIndex);
+    setLoadedImageIndexes((current) => (
+      current.includes(nextIndex) ? current : [...current, nextIndex]
+    ));
   };
 
   const selectImage = (index: number) => {
@@ -392,6 +403,9 @@ function EventGalleryCard({
     if (!gallery) {
       return;
     }
+    setLoadedImageIndexes((current) => (
+      current.includes(index) ? current : [...current, index]
+    ));
     gallery.scrollTo({
       left: gallery.clientWidth * index,
       behavior: 'smooth',
@@ -414,7 +428,7 @@ function EventGalleryCard({
       >
         {imageUrls.map((imageUrl, index) => {
           const isInitialImage = isInitialEvent && index === 1;
-          const shouldLoadImage = loadDeferredImages || isInitialImage;
+          const shouldLoadImage = loadedImageIndexes.includes(index);
 
           return (
             <button
@@ -428,8 +442,11 @@ function EventGalleryCard({
                 <img
                   alt=""
                   className="h-full w-full object-cover"
-                  onError={isInitialImage ? onInitialImageSettled : undefined}
-                  onLoad={isInitialImage ? onInitialImageSettled : undefined}
+                  decoding="async"
+                  fetchPriority={isInitialImage ? 'high' : 'auto'}
+                  loading={isInitialImage ? 'eager' : 'lazy'}
+                  onError={index === 1 ? () => setIsCenterImageReady(true) : undefined}
+                  onLoad={index === 1 ? () => setIsCenterImageReady(true) : undefined}
                   src={imageUrl}
                 />
               ) : (
@@ -446,6 +463,8 @@ function EventGalleryCard({
               <img
                 alt=""
                 className="h-full w-[70%] scale-125 object-contain"
+                decoding="async"
+                loading="lazy"
                 src={event.distillery_logo_url}
                 style={{ animation: 'event-banner-logo 400ms ease-out both' }}
               />
@@ -655,9 +674,10 @@ export function EventsTab({
   const timelineRef = useRef<HTMLDivElement>(null);
   const memberScrollRef = useRef<HTMLDivElement>(null);
   const timelineScrollTimerRef = useRef<number | null>(null);
+  const virtualWindowFrameRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
+  const [virtualCenterIndex, setVirtualCenterIndex] = useState(0);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
-  const [loadDeferredGalleryImages, setLoadDeferredGalleryImages] = useState(false);
   const [lineupInspectorEvent, setLineupInspectorEvent] = useState<EventDetail | null>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
   const [isLineupPhotoExpanded, setIsLineupPhotoExpanded] = useState(false);
@@ -722,11 +742,11 @@ export function EventsTab({
     return nextEventIndex === -1 ? orderedEvents.length - 1 : nextEventIndex;
   }, [orderedEvents]);
   const initialEventId = orderedEvents[centeredEventIndex]?.id;
-  const enableDeferredGalleryImages = useCallback(() => {
-    setLoadDeferredGalleryImages(true);
-  }, []);
+  const virtualWindowStart = Math.max(0, virtualCenterIndex - 2);
+  const virtualWindowEnd = Math.min(orderedEvents.length - 1, virtualCenterIndex + 2);
 
   useEffect(() => {
+    setVirtualCenterIndex(centeredEventIndex);
     const timeline = timelineRef.current;
     const centeredCard = timeline?.querySelector<HTMLElement>(
       `[data-event-index="${centeredEventIndex}"]`,
@@ -745,6 +765,9 @@ export function EventsTab({
   useEffect(() => () => {
     if (timelineScrollTimerRef.current !== null) {
       window.clearTimeout(timelineScrollTimerRef.current);
+    }
+    if (virtualWindowFrameRef.current !== null) {
+      window.cancelAnimationFrame(virtualWindowFrameRef.current);
     }
   }, []);
 
@@ -779,6 +802,33 @@ export function EventsTab({
   };
 
   const handleTimelineScroll = () => {
+    if (virtualWindowFrameRef.current === null) {
+      virtualWindowFrameRef.current = window.requestAnimationFrame(() => {
+        virtualWindowFrameRef.current = null;
+        const timeline = timelineRef.current;
+        if (!timeline) {
+          return;
+        }
+
+        const viewportCenter = timeline.scrollTop + timeline.clientHeight / 2;
+        const focusedCard = Array.from(
+          timeline.querySelectorAll<HTMLElement>('[data-event-index]'),
+        ).reduce<HTMLElement | null>((closestCard, card) => {
+          if (!closestCard) {
+            return card;
+          }
+          const cardCenter = card.offsetTop + card.clientHeight / 2;
+          const closestCardCenter = closestCard.offsetTop + closestCard.clientHeight / 2;
+          return Math.abs(cardCenter - viewportCenter) < Math.abs(closestCardCenter - viewportCenter)
+            ? card
+            : closestCard;
+        }, null);
+        const index = Number(focusedCard?.dataset.eventIndex);
+        if (Number.isInteger(index)) {
+          setVirtualCenterIndex((current) => current === index ? current : index);
+        }
+      });
+    }
     if (timelineScrollTimerRef.current !== null) {
       window.clearTimeout(timelineScrollTimerRef.current);
     }
@@ -1089,16 +1139,19 @@ export function EventsTab({
           <ol className="h-full space-y-4">
             {orderedEvents.map((event, index) => (
               <li key={event.id} data-event-index={index} className="snap-center" style={{ scrollSnapStop: 'always' }}>
-                <EventGalleryCard
-                  event={{ ...event, bottles: eventDetails[event.id]?.bottles }}
-                  isFocused={focusedEventId === event.id}
-                  onOpen={() => void openEventDetails(event.id)}
-                  onOpenLineup={() => void openLineup(event.id)}
-                  resetToCenterRevision={galleryResetRevision}
-                  isInitialEvent={event.id === initialEventId}
-                  loadDeferredImages={loadDeferredGalleryImages}
-                  onInitialImageSettled={enableDeferredGalleryImages}
-                />
+                {index >= virtualWindowStart && index <= virtualWindowEnd ? (
+                  <EventGalleryCard
+                    event={{ ...event, bottles: eventDetails[event.id]?.bottles }}
+                    isFocused={focusedEventId === event.id}
+                    onOpen={() => void openEventDetails(event.id)}
+                    onOpenLineup={() => void openLineup(event.id)}
+                    resetToCenterRevision={galleryResetRevision}
+                    isInitialEvent={event.id === initialEventId}
+                    timelineRootRef={timelineRef}
+                  />
+                ) : (
+                  <div aria-hidden="true" className="h-[calc(100dvh-7rem)] min-h-[24rem] w-full" />
+                )}
               </li>
             ))}
             {hasMore && <li ref={eventSentinelRef} className="h-px" aria-hidden="true" />}
