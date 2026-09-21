@@ -375,6 +375,7 @@ function EventGalleryCard({
         .event-gallery::-webkit-scrollbar { display: none; }
         @keyframes event-banner-logo { from { opacity: 0; transform: translateX(-0.75rem); } to { opacity: 1; transform: translateX(0); } }
         @keyframes event-banner-date { from { opacity: 0; transform: translateX(0.75rem); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes event-lineup-pulse { 0%, 100% { filter: drop-shadow(0 0 0 rgba(197, 160, 89, 0)); transform: scale(1); } 50% { filter: drop-shadow(0 0 0.5rem rgba(197, 160, 89, 0.8)); transform: scale(1.1); } }
       `}</style>
       <div
         ref={galleryRef}
@@ -453,17 +454,20 @@ function EventGalleryCard({
       {activeImageIndex === 1 && event.bottle_count > 0 && (
        <button
          aria-label="Open tasting lineup"
-         className="absolute bottom-4 right-4 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-[#C5A059]/30 bg-black/45 text-[#C5A059] backdrop-blur transition-colors hover:bg-black/65"
+         className="absolute bottom-3 right-3 z-20 flex h-12 w-12 items-center justify-center"
          onClick={(clickEvent) => {
            clickEvent.stopPropagation();
            onOpenLineup();
          }}
          type="button"
        >
-         <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-          <path d="M9 2h6v5l1 1.5V10l3 3v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7l3-3V8.5L9 7V2Z" fill="currentColor" stroke="none" />
-          <path d="M8.5 15h7M8.5 17.5h7" stroke="#16161A" />
-         </svg>
+         <img
+           alt=""
+           aria-hidden="true"
+           className="h-10 w-10 object-contain"
+           src="/assets/nav/Bottles.webp"
+           style={{ animation: 'event-lineup-pulse 1.8s ease-in-out infinite' }}
+         />
        </button>
       )}
     </article>
