@@ -108,6 +108,7 @@ export function ScotlandWhiskyMap({
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
   const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
+  const isDistantZoom = position.zoom <= 1.5;
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const [selectedDistillery, setSelectedDistillery] = useState<MapDistillery | null>(null);
@@ -333,25 +334,6 @@ export function ScotlandWhiskyMap({
                 floodOpacity="0.2"
               />
             </filter>
-            <filter
-              id="intense-gold-glow"
-              filterUnits="userSpaceOnUse"
-              x="-500"
-              y="-500"
-              width="1400"
-              height="1700"
-              colorInterpolationFilters="sRGB"
-            >
-              <feGaussianBlur stdDeviation="8" result="blur1" />
-              <feGaussianBlur stdDeviation="20" result="blur2" />
-              <feGaussianBlur stdDeviation="42" result="blur3" />
-              <feMerge>
-                <feMergeNode in="blur3" />
-                <feMergeNode in="blur2" />
-                <feMergeNode in="blur1" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
             <filter id="distillery-marker-shadow" x="-150%" y="-150%" width="400%" height="400%">
               <feDropShadow
                 dx="0"
@@ -404,7 +386,9 @@ export function ScotlandWhiskyMap({
                   fill: isSelected ? 'url(#gold-region-grad)' : 'url(#dark-region-grad)',
                   stroke: isSelected ? '#FFF2C2' : '#5A482A',
                   strokeWidth: isSelected ? 2.5 : 1,
-                  filter: isSelected ? 'url(#intense-gold-glow)' : 'url(#3d-shadow)',
+                  filter: isSelected
+                    ? 'drop-shadow(0 0 16px #FFD700) drop-shadow(0 0 38px rgba(197, 160, 89, 0.85))'
+                    : 'url(#3d-shadow)',
                   opacity: isSelected ? 1 : 0.75,
                   cursor: 'pointer',
                   outline: 'none',
@@ -470,6 +454,12 @@ export function ScotlandWhiskyMap({
 
           {mapDistilleries
             .filter(hasCoordinates)
+            .filter((distillery, index) => (
+              !isDistantZoom
+              || distillery.tasted
+              || distillery.id === selectedDistillery?.id
+              || index % 3 === 0
+            ))
             .map((distillery) => {
               const isInSelectedRegion = selectedRegion?.sourceName === distillery.region;
               return (
@@ -531,18 +521,20 @@ export function ScotlandWhiskyMap({
                     </>
                   ) : (
                     <>
-                      <circle
-                        className="whisky-distillery-pulse"
-                        r={markerRadius * 2.2}
-                        fill="#FFE28A"
-                        fillOpacity={distillery.tasted ? 0.26 : 0.16}
-                      />
+                      {!isDistantZoom && (
+                        <circle
+                          className="whisky-distillery-pulse"
+                          r={markerRadius * 2.2}
+                          fill="#FFE28A"
+                          fillOpacity={distillery.tasted ? 0.26 : 0.16}
+                        />
+                      )}
                       <circle
                         r={markerRadius}
                         fill="url(#distillery-gold-sphere)"
                         stroke={distillery.tasted ? '#FFF2C2' : '#A77E35'}
                         strokeWidth={1}
-                        filter="url(#distillery-marker-shadow)"
+                        filter={isDistantZoom ? undefined : 'url(#distillery-marker-shadow)'}
                       />
                     </>
                   )}
