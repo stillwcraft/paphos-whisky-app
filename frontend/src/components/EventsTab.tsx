@@ -127,9 +127,11 @@ function formatEventBannerDate(
 function LineupInspectorOverlay({
   bottles,
   onClose,
+  onOpenReview,
 }: {
   bottles: EventLineupBottle[];
   onClose: () => void;
+  onOpenReview: (bottle: EventLineupBottle) => void;
 }) {
   const [activeBottleIndex, setActiveBottleIndex] = useState(0);
   const [areParametersVisible, setAreParametersVisible] = useState(false);
@@ -198,6 +200,10 @@ function LineupInspectorOverlay({
           0%, 100% { filter: drop-shadow(0 0 0 rgba(197, 160, 89, 0)); transform: scale(1); }
           50% { filter: drop-shadow(0 0 1.25rem rgba(197, 160, 89, 0.35)); transform: scale(1.015); }
         }
+        @keyframes lineup-inspector-action-pulse {
+          0%, 100% { filter: drop-shadow(0 0 0 rgba(197, 160, 89, 0)); transform: scale(1); }
+          50% { filter: drop-shadow(0 0 0.5rem rgba(197, 160, 89, 0.8)); transform: scale(1.1); }
+        }
       `}</style>
       <div className="relative mx-auto flex h-full w-full max-w-md items-center justify-center px-8 pb-20 pt-8">
         <div key={bottle.id} className="flex h-full w-full items-center justify-center">
@@ -255,6 +261,23 @@ function LineupInspectorOverlay({
         ))}
       </div>
       <button
+        aria-label="Open bottle review"
+        className="absolute bottom-16 right-3 flex h-12 w-12 items-center justify-center"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpenReview(bottle);
+        }}
+        type="button"
+      >
+        <img
+          alt=""
+          aria-hidden="true"
+          className="h-10 w-10 object-contain"
+          src="/assets/nav/Review.webp"
+          style={{ animation: 'lineup-inspector-action-pulse 1.8s ease-in-out infinite' }}
+        />
+      </button>
+      <button
         aria-label="Close lineup inspector"
         className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center"
         onClick={(event) => {
@@ -268,7 +291,7 @@ function LineupInspectorOverlay({
           aria-hidden="true"
           className="h-10 w-10 object-contain"
           src="/assets/nav/Close.webp"
-          style={{ animation: 'event-lineup-pulse 1.8s ease-in-out infinite' }}
+          style={{ animation: 'lineup-inspector-action-pulse 1.8s ease-in-out infinite' }}
         />
       </button>
     </div>
@@ -984,6 +1007,19 @@ export function EventsTab({
     setIsLineupPhotoExpanded(false);
     setIsLineupReviewOpen(false);
   };
+  const closeLineupInspector = () => {
+    setLineupInspectorEvent(null);
+    closeLineupBottle();
+  };
+  const openLineupReview = (bottle: EventLineupBottle) => {
+    if (!telegramId) {
+      setFeedback({ kind: 'error', message: t('bottle.open_telegram_to_write_review') });
+      return;
+    }
+    setLineupBottle(bottle);
+    setIsLineupPhotoExpanded(false);
+    setIsLineupReviewOpen(true);
+  };
 
   const toggleLineupBottleAction = async (bottle: EventLineupBottle, actionType: 'favorite' | 'tried') => {
     if (!telegramId) {
@@ -1189,7 +1225,7 @@ export function EventsTab({
         </div>
       )}
 
-      {lineupBottle && (
+      {lineupBottle && !lineupInspectorEvent && (
         <div
           className="fixed inset-x-0 bottom-0 top-10 z-50 bg-slate-950/95 p-4 backdrop-blur-sm"
           onClick={() => { if (isLineupPhotoExpanded) setIsLineupPhotoExpanded(false); }}
@@ -1241,13 +1277,7 @@ export function EventsTab({
               </button>
               <button
                 className="flex-1 rounded-xl bg-[#C5A059] py-3.5 text-sm font-semibold uppercase tracking-wider text-black shadow-[0_0_15px_rgba(197,160,89,0.3)] transition-all hover:bg-[#b59049]"
-                onClick={() => {
-                  if (!telegramId) {
-                    setFeedback({ kind: 'error', message: t('bottle.open_telegram_to_write_review') });
-                    return;
-                  }
-                  setIsLineupReviewOpen(true);
-                }}
+                onClick={() => openLineupReview(lineupBottle)}
                 type="button"
               >
                 {t('bottle.review')}
@@ -1260,7 +1290,8 @@ export function EventsTab({
       {lineupInspectorEvent && (
         <LineupInspectorOverlay
           bottles={lineupInspectorEvent.bottles}
-          onClose={() => setLineupInspectorEvent(null)}
+          onClose={closeLineupInspector}
+          onOpenReview={openLineupReview}
         />
       )}
 
