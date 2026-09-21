@@ -256,14 +256,20 @@ function LineupInspectorOverlay({
       </div>
       <button
         aria-label="Close lineup inspector"
-        className="absolute bottom-5 right-5 flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-black/35 text-2xl text-[#F4F4F5] backdrop-blur transition-colors hover:bg-black/60"
+        className="absolute bottom-3 right-3 flex h-12 w-12 items-center justify-center"
         onClick={(event) => {
           event.stopPropagation();
           onClose();
         }}
         type="button"
       >
-        ✕
+        <img
+          alt=""
+          aria-hidden="true"
+          className="h-10 w-10 object-contain"
+          src="/assets/nav/Close.webp"
+          style={{ animation: 'event-lineup-pulse 1.8s ease-in-out infinite' }}
+        />
       </button>
     </div>
   );
