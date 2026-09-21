@@ -333,10 +333,18 @@ export function ScotlandWhiskyMap({
                 floodOpacity="0.2"
               />
             </filter>
-            <filter id="intense-gold-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="12" result="blur1" />
-              <feGaussianBlur stdDeviation="25" result="blur2" />
-              <feGaussianBlur stdDeviation="50" result="blur3" />
+            <filter
+              id="intense-gold-glow"
+              filterUnits="userSpaceOnUse"
+              x="-500"
+              y="-500"
+              width="1400"
+              height="1700"
+              colorInterpolationFilters="sRGB"
+            >
+              <feGaussianBlur stdDeviation="8" result="blur1" />
+              <feGaussianBlur stdDeviation="20" result="blur2" />
+              <feGaussianBlur stdDeviation="42" result="blur3" />
               <feMerge>
                 <feMergeNode in="blur3" />
                 <feMergeNode in="blur2" />
