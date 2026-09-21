@@ -10,8 +10,6 @@ import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
-// Match d3-zoom's double-tap window before treating a tap as a selection.
-const MAP_TAP_DELAY = 500;
 
 export type MapDistillery = {
   id: number;
@@ -23,6 +21,11 @@ export type MapDistillery = {
   region?: string | null;
   tasted?: boolean;
   rating?: number;
+};
+
+type PositionedMapDistillery = MapDistillery & {
+  latitude: number;
+  longitude: number;
 };
 
 type BottlePreview = {
@@ -115,26 +118,23 @@ export function ScotlandWhiskyMap({
   const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
+  const visibleMapDistilleries = mapDistilleries
+    .filter(hasCoordinates)
+    .filter((distillery, index) => (
+      !isDistantZoom
+      || distillery.tasted
+      || distillery.id === selectedDistillery?.id
+      || index % 3 === 0
+    ));
+  const canvasDistilleries = visibleMapDistilleries.filter((distillery) => (
+    distillery.id !== selectedDistillery?.id
+    && (selectedRegion === null || distillery.region !== selectedRegion.sourceName)
+  ));
 
-  const pendingMapClick = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const ignoreClicksUntil = useRef(0);
-  const cancelMapClick = useCallback(() => {
-    if (pendingMapClick.current !== null) {
-      clearTimeout(pendingMapClick.current);
-      pendingMapClick.current = null;
-    }
-  }, []);
-  useEffect(() => cancelMapClick, [cancelMapClick]);
-
-  const handleMapMove = useCallback(() => {
-    cancelMapClick();
-    ignoreClicksUntil.current = Date.now() + MAP_TAP_DELAY;
-  }, [cancelMapClick]);
   const filterMapGestures = useCallback((event: unknown) => {
     if (!(event instanceof Event)) return false;
     // d3-zoom passes touchend to its double-tap zoom handler.
     if (event.type === 'dblclick' || event.type === 'touchend') {
-      handleMapMove();
       return false;
     }
     return event.type === 'touchstart'
@@ -142,14 +142,9 @@ export function ScotlandWhiskyMap({
         && event.type === 'mousedown'
         && !event.ctrlKey
         && event.button === 0);
-  }, [handleMapMove]);
+  }, []);
   const scheduleMapClick = (action: () => void) => {
-    cancelMapClick();
-    if (Date.now() < ignoreClicksUntil.current) return;
-    pendingMapClick.current = setTimeout(() => {
-      pendingMapClick.current = null;
-      action();
-    }, MAP_TAP_DELAY);
+    action();
   };
   const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
     setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
@@ -184,7 +179,6 @@ export function ScotlandWhiskyMap({
   }, []);
 
   const changeZoom = (amount: number) => {
-    cancelMapClick();
     setPosition((current) => {
       const zoom = Math.min(8, Math.max(initialPosition.zoom, current.zoom + amount));
       return zoom === initialPosition.zoom ? initialPosition : { ...current, zoom };
@@ -312,12 +306,6 @@ export function ScotlandWhiskyMap({
               <stop offset="0%" stopColor="#FFE28A" />
               <stop offset="100%" stopColor="#C5A059" />
             </linearGradient>
-            <radialGradient id="distillery-gold-sphere" cx="32%" cy="28%" r="70%">
-              <stop offset="0%" stopColor="#FFF8D5" />
-              <stop offset="35%" stopColor="#FFE28A" />
-              <stop offset="72%" stopColor="#C5A059" />
-              <stop offset="100%" stopColor="#6F501E" />
-            </radialGradient>
             <filter id="3d-shadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow
                 dx="3"
@@ -334,34 +322,6 @@ export function ScotlandWhiskyMap({
                 floodOpacity="0.2"
               />
             </filter>
-            <filter id="distillery-marker-shadow" x="-150%" y="-150%" width="400%" height="400%">
-              <feDropShadow
-                dx="0"
-                dy="1.5"
-                stdDeviation="1.5"
-                floodColor="#000000"
-                floodOpacity="0.9"
-              />
-              <feDropShadow
-                dx="0"
-                dy="0"
-                stdDeviation="2"
-                floodColor="#FFE28A"
-                floodOpacity="0.9"
-              />
-            </filter>
-            <style>{`
-              @keyframes whisky-marker-pulse {
-                0%, 100% { opacity: 0.2; transform: scale(0.82); }
-                50% { opacity: 0.7; transform: scale(1.25); }
-              }
-
-              .whisky-distillery-pulse {
-                animation: whisky-marker-pulse 1.8s ease-in-out infinite;
-                transform-box: fill-box;
-                transform-origin: center;
-              }
-            `}</style>
           </defs>
           <ZoomableGroup
             center={position.coordinates}
@@ -370,8 +330,6 @@ export function ScotlandWhiskyMap({
             maxZoom={16}
             translateExtent={[[0, 0], [390, 640]]}
             filterZoomEvent={filterMapGestures}
-            onMoveStart={cancelMapClick}
-            onMove={handleMapMove}
             onMoveEnd={handleMoveEnd}
           >
             <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
@@ -452,92 +410,74 @@ export function ScotlandWhiskyMap({
               </Marker>
             ))}
 
-          {mapDistilleries
-            .filter(hasCoordinates)
-            .filter((distillery, index) => (
-              !isDistantZoom
-              || distillery.tasted
-              || distillery.id === selectedDistillery?.id
-              || index % 3 === 0
-            ))
-            .map((distillery) => {
-              const isInSelectedRegion = selectedRegion?.sourceName === distillery.region;
+            <foreignObject x={0} y={0} width={390} height={640} pointerEvents="none">
+              <DistilleryMarkersCanvas
+                distilleries={canvasDistilleries}
+                markerRadius={markerRadius}
+                isDistantZoom={isDistantZoom}
+              />
+            </foreignObject>
+            {visibleMapDistilleries.map((distillery) => {
+              const isSelected = selectedDistillery?.id === distillery.id;
+              const isInSelectedRegion = selectedRegion !== null
+                && selectedRegion.sourceName === distillery.region;
+              const imageUrl = isSelected
+                ? selectedDistillery?.image_url
+                : isInSelectedRegion
+                  ? distillery.image_url
+                  : null;
+              const imageRadius = isSelected ? 9 : 5;
+              const hitRadius = isSelected
+                ? 12
+                : isInSelectedRegion
+                  ? 7
+                  : Math.max(markerRadius * 3, 5);
+
               return (
                 <Marker
                   key={distillery.id}
                   coordinates={[distillery.longitude, distillery.latitude]}
                   onMouseEnter={() => setActiveDistillery(distillery)}
                   onFocus={() => setActiveDistillery(distillery)}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  scheduleMapClick(() => { void selectDistillery(distillery); });
-                }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    scheduleMapClick(() => { void selectDistillery(distillery); });
+                  }}
                 >
-                  {selectedDistillery?.id === distillery.id ? (
+                  {(isSelected || isInSelectedRegion) && (
                     <>
                       <defs>
                         <clipPath id={`distillery-image-${distillery.id}`}>
-                          <circle r={9} />
+                          <circle r={imageRadius} />
                         </clipPath>
                       </defs>
-                      <circle r={11} fill="#C5A059" fillOpacity={0.28} />
-                      {selectedDistillery.image_url ? (
+                      <circle
+                        r={isSelected ? 11 : 6.5}
+                        fill="#C5A059"
+                        fillOpacity={0.28}
+                      />
+                      {imageUrl ? (
                         <image
-                          href={selectedDistillery.image_url}
-                          x={-9}
-                          y={-9}
-                          width={18}
-                          height={18}
+                          href={imageUrl}
+                          x={-imageRadius}
+                          y={-imageRadius}
+                          width={imageRadius * 2}
+                          height={imageRadius * 2}
                           clipPath={`url(#distillery-image-${distillery.id})`}
                           preserveAspectRatio="xMidYMid slice"
                         />
                       ) : (
-                        <circle r={9} fill="#C5A059" />
-                      )}
-                      <circle r={9} fill="none" stroke="#F4F4F5" strokeWidth={1} />
-                    </>
-                  ) : isInSelectedRegion ? (
-                    <>
-                      <defs>
-                        <clipPath id={`region-distillery-image-${distillery.id}`}>
-                          <circle r={5} />
-                        </clipPath>
-                      </defs>
-                      <circle r={6.5} fill="#C5A059" fillOpacity={0.28} />
-                      {distillery.image_url ? (
-                        <image
-                          href={distillery.image_url}
-                          x={-5}
-                          y={-5}
-                          width={10}
-                          height={10}
-                          clipPath={`url(#region-distillery-image-${distillery.id})`}
-                          preserveAspectRatio="xMidYMid slice"
-                        />
-                      ) : (
-                        <circle r={5} fill="#C5A059" />
-                      )}
-                      <circle r={5} fill="none" stroke="#F4F4F5" strokeWidth={0.75} />
-                    </>
-                  ) : (
-                    <>
-                      {!isDistantZoom && (
-                        <circle
-                          className="whisky-distillery-pulse"
-                          r={markerRadius * 2.2}
-                          fill="#FFE28A"
-                          fillOpacity={distillery.tasted ? 0.26 : 0.16}
-                        />
+                        <circle r={imageRadius} fill="#C5A059" />
                       )}
                       <circle
-                        r={markerRadius}
-                        fill="url(#distillery-gold-sphere)"
-                        stroke={distillery.tasted ? '#FFF2C2' : '#A77E35'}
-                        strokeWidth={1}
-                        filter={isDistantZoom ? undefined : 'url(#distillery-marker-shadow)'}
+                        r={imageRadius}
+                        fill="none"
+                        stroke="#F4F4F5"
+                        strokeWidth={isSelected ? 1 : 0.75}
                       />
                     </>
                   )}
+                  <circle r={hitRadius} fill="transparent" pointerEvents="all" />
                 </Marker>
               );
             })}
@@ -604,6 +544,117 @@ export function ScotlandWhiskyMap({
       )}
     </section>
   );
+}
+
+type DistilleryMarkersCanvasProps = {
+  distilleries: PositionedMapDistillery[];
+  markerRadius: number;
+  isDistantZoom: boolean;
+};
+
+function DistilleryMarkersCanvas({
+  distilleries,
+  markerRadius,
+  isDistantZoom,
+}: DistilleryMarkersCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const pixelRatio = window.devicePixelRatio || 1;
+    canvas.width = 390 * pixelRatio;
+    canvas.height = 640 * pixelRatio;
+    canvas.style.width = '390px';
+    canvas.style.height = '640px';
+    let animationFrame = 0;
+
+    const draw = (timestamp: number) => {
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.clearRect(0, 0, 390, 640);
+
+      distilleries.forEach((distillery) => {
+        const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
+        const radius = markerRadius;
+
+        if (!isDistantZoom) {
+          const pulseScale = 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
+          context.beginPath();
+          context.arc(x, y, radius * 2.2 * pulseScale, 0, Math.PI * 2);
+          context.fillStyle = distillery.tasted
+            ? 'rgba(255, 226, 138, 0.26)'
+            : 'rgba(255, 226, 138, 0.16)';
+          context.fill();
+        }
+
+        context.save();
+        if (!isDistantZoom) {
+          context.shadowColor = 'rgba(255, 226, 138, 0.7)';
+          context.shadowBlur = 4;
+          context.shadowOffsetY = 1.5;
+        }
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fillStyle = 'rgba(197, 160, 89, 0.38)';
+        context.fill();
+        context.restore();
+
+        const markerGradient = context.createRadialGradient(
+          x - radius * 0.35,
+          y - radius * 0.4,
+          radius * 0.1,
+          x,
+          y,
+          radius,
+        );
+        markerGradient.addColorStop(0, '#FFF8D5');
+        markerGradient.addColorStop(0.35, '#FFE28A');
+        markerGradient.addColorStop(0.72, '#C5A059');
+        markerGradient.addColorStop(1, '#6F501E');
+
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fillStyle = markerGradient;
+        context.fill();
+
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.lineWidth = 0.75;
+        context.strokeStyle = distillery.tasted ? '#FFF2C2' : '#A77E35';
+        context.stroke();
+      });
+
+      if (!isDistantZoom) {
+        animationFrame = requestAnimationFrame(draw);
+      }
+    };
+
+    draw(performance.now());
+    return () => cancelAnimationFrame(animationFrame);
+  }, [distilleries, isDistantZoom, markerRadius]);
+
+  return <canvas ref={canvasRef} aria-hidden="true" style={{ display: 'block', pointerEvents: 'none' }} />;
+}
+
+function projectMapCoordinates(longitude: number, latitude: number): [number, number] {
+  const degreesToRadians = Math.PI / 180;
+  const centerLongitude = -4.2 * degreesToRadians;
+  const centerLatitude = mercatorLatitude(57.3);
+  const projectedLongitude = longitude * degreesToRadians;
+
+  return [
+    195 + (projectedLongitude - centerLongitude) * 2200,
+    320 - (mercatorLatitude(latitude) - centerLatitude) * 2200,
+  ];
+}
+
+function mercatorLatitude(latitude: number) {
+  const clampedLatitude = Math.max(-89.999, Math.min(89.999, latitude));
+  return Math.log(Math.tan(Math.PI / 4 + (clampedLatitude * Math.PI) / 360));
 }
 
 function isBottlePage(value: unknown): value is { items: unknown[] } {
