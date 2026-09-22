@@ -7,6 +7,7 @@ const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CARD_WIDTH = 360;
 const CARD_HEIGHT = 520;
 const NODE_SPACING = 120;
+const TRAIL_EXTENSION = 60;
 const CENTER_X = CARD_WIDTH / 2;
 
 type EventNode = {
@@ -193,19 +194,28 @@ export function WhiskyTrail({
 
   const points = useMemo(() => trail?.nodes.map((node, index) => ({
     x: node.type === 'milestone' ? CENTER_X : CENTER_X + (index % 2 === 0 ? 60 : -60),
-    y: index * NODE_SPACING,
+    y: TRAIL_EXTENSION + index * NODE_SPACING,
   })) ?? [], [trail?.nodes]);
-  const canvasHeight = Math.max(1, Math.max(0, points.length - 1) * NODE_SPACING);
+  const canvasHeight = Math.max(1, Math.max(0, points.length - 1) * NODE_SPACING + TRAIL_EXTENSION * 2);
   const focusedPoint = useMemo(() => {
     const index = trail?.nodes.findIndex((node) => node.id === trail.focused_node_id) ?? -1;
     return index >= 0 ? points[index] : undefined;
   }, [points, trail?.focused_node_id, trail?.nodes]);
-  const path = useMemo(() => points.reduce((result, point, index) => {
+  const path = useMemo(() => {
+    if (points.length === 0) return '';
+
+    const linePoints = [
+      { x: points[0].x, y: 0 },
+      ...points,
+      { x: points[points.length - 1].x, y: canvasHeight },
+    ];
+    return linePoints.reduce((result, point, index) => {
     if (index === 0) return `M ${point.x} ${point.y}`;
-    const previous = points[index - 1];
+    const previous = linePoints[index - 1];
     const middleY = (previous.y + point.y) / 2;
     return `${result} C ${previous.x} ${middleY}, ${point.x} ${middleY}, ${point.x} ${point.y}`;
-  }, ''), [points]);
+    }, '');
+  }, [canvasHeight, points]);
 
   useEffect(() => {
     if (!focusedPoint || !transformRef.current) {
@@ -214,7 +224,7 @@ export function WhiskyTrail({
 
     const frame = window.requestAnimationFrame(() => {
       transformRef.current?.setTransform(
-        CARD_WIDTH / 2 - focusedPoint.x,
+        CARD_WIDTH / 2 - CENTER_X,
         CARD_HEIGHT / 2 - focusedPoint.y,
         1,
         0,
