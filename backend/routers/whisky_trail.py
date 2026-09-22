@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal, Optional, Union
 
 from fastapi import APIRouter, Depends, Query
@@ -74,6 +74,18 @@ def parse_event_date(date_value: Optional[str]) -> Optional[datetime]:
     return parsed_date.astimezone(timezone.utc)
 
 
+def get_event_calendar_date(
+    date_value: Optional[str],
+    parsed_date: Optional[datetime],
+) -> Optional[date]:
+    if date_value:
+        try:
+            return date.fromisoformat(date_value[:10])
+        except ValueError:
+            pass
+    return parsed_date.date() if parsed_date else None
+
+
 @router.get("/whisky-trail", response_model=WhiskyTrailResponse)
 def get_whisky_trail(
     telegram_id: int,
@@ -121,20 +133,27 @@ def get_whisky_trail(
 
     now = datetime.now(timezone.utc)
     parsed_dates = [parse_event_date(event.date) for event in events]
+    event_calendar_dates = [
+        get_event_calendar_date(event.date, parsed_date)
+        for event, parsed_date in zip(events, parsed_dates)
+    ]
     upcoming_index = next(
         (
             index
-            for index, event_date in enumerate(parsed_dates)
-            if event_date is not None and event_date >= now
+            for index, event_date in enumerate(event_calendar_dates)
+            if event_date is not None and event_date >= now.date()
         ),
         None,
     )
 
     nodes: list[Union[EventTrailNode, MilestoneTrailNode]] = []
     last_past_node_id: Optional[str] = None
-    for index, (event, event_date) in enumerate(zip(events, parsed_dates), start=1):
+    for index, (event, event_date) in enumerate(
+        zip(events, event_calendar_dates),
+        start=1,
+    ):
         node_id = f"event_{event.id}"
-        is_past = event_date is not None and event_date < now
+        is_past = event_date is not None and event_date < now.date()
         event_status: Literal["attended", "missed", "upcoming"]
         if is_past:
             event_status = "attended" if event.id in registered_event_ids else "missed"

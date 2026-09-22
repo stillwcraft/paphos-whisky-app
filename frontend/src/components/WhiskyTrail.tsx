@@ -9,6 +9,11 @@ const CARD_HEIGHT = 520;
 const NODE_SPACING = 120;
 const TRAIL_EXTENSION = 60;
 const CENTER_X = CARD_WIDTH / 2;
+const trailTranslations = {
+  en: { attended: 'Attended', missed: 'Missed', reserve: 'Reserve' },
+  ru: { attended: 'Был', missed: 'Пропущено', reserve: 'Забронировать' },
+  uk: { attended: 'Був', missed: 'Пропущено', reserve: 'Забронювати' },
+} as const;
 
 type EventNode = {
   id: string;
@@ -64,6 +69,11 @@ function formatEventDate(date: string, language: string) {
 function eventIdFromNodeId(nodeId: string) {
   const eventId = Number(nodeId.replace('event_', ''));
   return Number.isSafeInteger(eventId) ? eventId : null;
+}
+
+function getTrailTranslations(language: string) {
+  const languageCode = language.toLowerCase().split(/[-_]/, 1)[0];
+  return trailTranslations[languageCode as keyof typeof trailTranslations] ?? trailTranslations.en;
 }
 
 function TrailModal({
@@ -201,6 +211,7 @@ export function WhiskyTrail({
     const index = trail?.nodes.findIndex((node) => node.id === trail.focused_node_id) ?? -1;
     return index >= 0 ? points[index] : undefined;
   }, [points, trail?.focused_node_id, trail?.nodes]);
+  const trailText = getTrailTranslations(language);
   const path = useMemo(() => {
     if (points.length === 0) return '';
 
@@ -333,14 +344,14 @@ export function WhiskyTrail({
                   <div key={node.id} className="absolute z-10" style={{ left: point.x, top: point.y }}>
                     <button aria-label={node.title} className="group absolute -translate-x-1/2 -translate-y-1/2" onClick={() => void openNode(node)} type="button">
                       {isUpcoming && <span className="absolute inset-0 rounded-full border-2 border-[#C5A059] animate-ping" />}
-                      <span className={`relative flex h-12 w-12 overflow-hidden rounded-full border-2 bg-[#2a251f] ${isMissed ? 'border-slate-500 opacity-40 grayscale' : 'border-[#C5A059] shadow-[0_0_16px_rgba(197,160,89,0.7)]'}`}>
-                        {node.image_url ? <img alt="" className="h-full w-full object-cover" src={node.image_url} /> : <span className="m-auto text-lg text-[#C5A059]">🥃</span>}
+                      <span className={`relative flex h-12 w-12 overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] ${isMissed ? '' : 'shadow-[0_0_16px_rgba(197,160,89,0.7)]'}`}>
+                        {node.image_url ? <img alt="" className={`h-full w-full object-cover ${isMissed ? 'grayscale opacity-40' : ''}`} src={node.image_url} /> : <span className={`m-auto text-lg text-[#C5A059] ${isMissed ? 'opacity-40 grayscale' : ''}`}>🥃</span>}
                       </span>
                     </button>
                     <div className={`pointer-events-none absolute top-1/2 w-36 -translate-y-1/2 ${labelOnLeft ? 'right-9 text-right' : 'left-9 text-left'}`}>
                       <p className={`text-sm font-semibold leading-tight ${isMissed ? 'text-slate-500' : 'text-white'}`}>{node.title}</p>
                       <p className="mt-1 text-[11px] text-slate-400">{formatEventDate(node.date, language)}</p>
-                      {isMissed ? <span className="mt-1 inline-block rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">Пропущено</span> : isUpcoming ? <span className="mt-1 inline-block rounded-full bg-[#C5A059]/20 px-2 py-0.5 text-[10px] text-[#e4c47f]">Забронировать место</span> : <span className="mt-1 inline-block rounded-full bg-[#C5A059]/15 px-2 py-0.5 text-[10px] text-[#C5A059]">Был · {node.bottles_count}</span>}
+                      {isMissed ? <span className="mt-1 inline-block rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">{trailText.missed}</span> : isUpcoming ? <span className="mt-1 inline-block rounded-full bg-[#C5A059]/20 px-2 py-0.5 text-[10px] text-[#e4c47f]">{trailText.reserve}</span> : <span className="mt-1 inline-block rounded-full bg-[#C5A059]/15 px-2 py-0.5 text-[10px] text-[#C5A059]">{trailText.attended} · {node.bottles_count}</span>}
                     </div>
                   </div>
                 );

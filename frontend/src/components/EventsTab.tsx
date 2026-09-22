@@ -169,6 +169,21 @@ function formatDate(date: string) {
     }).format(parsedDate);
 }
 
+function isEventTodayOrFuture(date: string, now = new Date()) {
+  const eventDate = new Date(date);
+  if (Number.isNaN(eventDate.valueOf())) {
+    return false;
+  }
+
+  const eventDay = new Date(
+    eventDate.getFullYear(),
+    eventDate.getMonth(),
+    eventDate.getDate(),
+  );
+  const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return eventDay >= currentDay;
+}
+
 function formatEventBannerDate(
   date: string,
   language: string,
@@ -824,9 +839,8 @@ export function EventsTab({
   }, [eventsQuery.error]);
 
   const upcomingEvent = useMemo(() => {
-    const now = Date.now();
     return [...events]
-      .filter((event) => new Date(event.date).valueOf() >= now)
+      .filter((event) => isEventTodayOrFuture(event.date))
       .sort((first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf())[0];
   }, [events]);
   const orderedEvents = useMemo(
@@ -836,9 +850,8 @@ export function EventsTab({
     [events],
   );
   const centeredEventIndex = useMemo(() => {
-    const now = new Date();
     const nextEventIndex = orderedEvents.findIndex(
-      (event) => new Date(event.date).valueOf() >= now.valueOf(),
+      (event) => isEventTodayOrFuture(event.date),
     );
 
     return nextEventIndex === -1 ? orderedEvents.length - 1 : nextEventIndex;
@@ -1336,7 +1349,7 @@ export function EventsTab({
             </div>
             <div className="border-t border-white/10 bg-slate-900 p-4">
               {(() => {
-                const isPast = new Date(expandedEvent.date).valueOf() < new Date().valueOf();
+                const isPast = !isEventTodayOrFuture(expandedEvent.date);
                 const isDisabled = isPast || isSubmitting === expandedEvent.id;
 
                 return (
