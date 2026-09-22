@@ -96,11 +96,13 @@ function TrailModal({
 }
 
 function EventModal({
+  canRegister,
   detail,
   isRegistering,
   onClose,
   onRegister,
 }: {
+  canRegister: boolean;
   detail: EventDetail;
   isRegistering: boolean;
   onClose: () => void;
@@ -108,17 +110,22 @@ function EventModal({
 }) {
   return (
     <TrailModal onClose={onClose} title={detail.title}>
-      {detail.image_url && <img alt="" className="mb-5 h-44 w-full rounded-2xl object-cover" src={detail.image_url} />}
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#C5A059]">{formatEventDate(detail.date, 'ru-RU')}</p>
-      <h2 className="mt-2 text-2xl font-semibold text-white">{detail.title}</h2>
-      <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-300">{detail.description}</p>
-      <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-sm">
-        <span className="text-slate-400">{detail.bottles.length} бутылок</span>
-        <span className="font-semibold text-[#C5A059]">€{detail.price}</span>
-      </div>
-      <button className="mt-5 w-full rounded-xl bg-[#C5A059] px-4 py-3 text-sm font-bold text-[#17120B] transition-colors hover:bg-[#dfbd76] disabled:cursor-wait disabled:opacity-70" disabled={isRegistering} onClick={onRegister} type="button">
-        {isRegistering ? 'Регистрация…' : 'Забронировать место'}
-      </button>
+      <h2 className="pr-10 text-2xl font-semibold text-white">{detail.title}</h2>
+      <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.16em] text-[#C5A059]">Лайнап</h3>
+      <ul className="mt-3 space-y-2">
+        {detail.bottles.map((bottle) => (
+          <li key={bottle.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-2.5 text-sm text-slate-200">
+            {bottle.image_url ? <img alt="" className="h-10 w-10 rounded-lg object-cover" src={bottle.image_url} /> : <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C5A059]/15 text-[#C5A059]">🥃</span>}
+            {bottle.name}
+          </li>
+        ))}
+      </ul>
+      {detail.bottles.length === 0 && <p className="mt-3 text-sm text-slate-400">Лайнап пока недоступен.</p>}
+      {canRegister && (
+        <button className="mt-5 w-full rounded-xl bg-[#C5A059] px-4 py-3 text-sm font-bold text-[#17120B] transition-colors hover:bg-[#dfbd76] disabled:cursor-wait disabled:opacity-70" disabled={isRegistering} onClick={onRegister} type="button">
+          {isRegistering ? 'Регистрация…' : 'Забронировать место'}
+        </button>
+      )}
     </TrailModal>
   );
 }
@@ -369,7 +376,7 @@ export function WhiskyTrail({
         ) : selectedDetail && selectedNode.status === 'missed' ? (
           <RecapModal detail={selectedDetail} onClose={closeModal} />
         ) : selectedDetail ? (
-          <EventModal detail={selectedDetail} isRegistering={isRegistering} onClose={closeModal} onRegister={() => void registerForEvent()} />
+          <EventModal canRegister={selectedNode.status === 'upcoming'} detail={selectedDetail} isRegistering={isRegistering} onClose={closeModal} onRegister={() => void registerForEvent()} />
         ) : null
       )}
       {feedback && selectedDetail && <p className="fixed inset-x-4 bottom-6 z-[60] mx-auto max-w-sm rounded-xl bg-[#1b1815] p-3 text-center text-sm text-[#e4c47f] shadow-xl">{feedback}</p>}
