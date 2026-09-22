@@ -40,7 +40,7 @@ class WhiskyTrailTest(unittest.TestCase):
                 description="Test event",
                 price=10,
             )
-            for index, offset in enumerate((-3, -2, -1, 1), start=1)
+            for index, offset in enumerate((-6, -5, -4, -3, 1, 2), start=1)
         ]
         bottles = [
             models.Bottle(name=f"Bottle {index}", favorites_count=0, tried_count=0)
@@ -63,6 +63,11 @@ class WhiskyTrailTest(unittest.TestCase):
                     telegram_id=7,
                     registered=True,
                 ),
+                models.Registration(
+                    event_id=events[3].id,
+                    telegram_id=7,
+                    registered=True,
+                ),
                 models.UserBottleAction(
                     telegram_id=7,
                     bottle_id=bottles[0].id,
@@ -75,17 +80,34 @@ class WhiskyTrailTest(unittest.TestCase):
         trail = get_whisky_trail(telegram_id=7, lang="ru", db=self.db)
 
         self.assertEqual(trail.status, "success")
-        self.assertEqual(trail.focused_node_id, f"event_{events[3].id}")
+        self.assertEqual(trail.focused_node_id, f"event_{events[4].id}")
         self.assertEqual([node.id for node in trail.nodes], [
             f"event_{events[0].id}",
             f"event_{events[1].id}",
             f"event_{events[2].id}",
             "milestone_3",
             f"event_{events[3].id}",
+            f"event_{events[4].id}",
+            f"event_{events[5].id}",
+            "milestone_6",
         ])
         self.assertEqual(trail.nodes[0].status, "attended")
         self.assertEqual(trail.nodes[1].status, "missed")
         self.assertEqual(trail.nodes[0].bottles_count, 2)
-        self.assertEqual(trail.nodes[3].tried_bottles_count, 1)
-        self.assertEqual(trail.nodes[4].status, "upcoming")
+        self.assertEqual(trail.nodes[3].tried_bottles_count, 2)
+        self.assertEqual(trail.nodes[4].status, "attended")
+        self.assertEqual(trail.nodes[7].tried_bottles_count, 3)
         self.assertEqual(trail.nodes[0].title, "Событие 1")
+        tried_bottle_ids = {
+            action.bottle_id
+            for action in self.db.query(models.UserBottleAction)
+            .filter(
+                models.UserBottleAction.telegram_id == 7,
+                models.UserBottleAction.is_tried.is_(True),
+            )
+            .all()
+        }
+        self.assertEqual(
+            tried_bottle_ids,
+            {bottles[0].id, bottles[1].id, bottles[2].id},
+        )

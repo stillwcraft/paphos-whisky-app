@@ -113,23 +113,15 @@ def get_whisky_trail(
             .all()
         )
     }
-    tried_bottles_count = (
-        db.query(func.count(models.UserBottleAction.id))
-        .filter(
-            models.UserBottleAction.telegram_id == telegram_id,
-            models.UserBottleAction.is_tried.is_(True),
-        )
-        .scalar()
-        or 0
-    )
-    bottle_counts = dict(
+    event_bottles = {}
+    for event_id, bottle_id in (
         db.query(
             models.event_bottles_table.c.event_id,
-            func.count(models.event_bottles_table.c.bottle_id),
+            models.event_bottles_table.c.bottle_id,
         )
-        .group_by(models.event_bottles_table.c.event_id)
         .all()
-    )
+    ):
+        event_bottles.setdefault(event_id, []).append(bottle_id)
 
     now = datetime.now(timezone.utc)
     parsed_dates = [parse_event_date(event.date) for event in events]
@@ -137,6 +129,44 @@ def get_whisky_trail(
         get_event_calendar_date(event.date, parsed_date)
         for event, parsed_date in zip(events, parsed_dates)
     ]
+    attended_event_ids = {
+        event.id
+        for event, event_date in zip(events, event_calendar_dates)
+        if event_date is not None
+        and event_date < now.date()
+        and event.id in registered_event_ids
+    }
+    attended_bottle_ids = {
+        bottle_id
+        for event_id in attended_event_ids
+        for bottle_id in event_bottles.get(event_id, [])
+    }
+    if attended_bottle_ids:
+        bottle_actions = (
+            db.query(models.UserBottleAction)
+            .filter(
+                models.UserBottleAction.telegram_id == telegram_id,
+                models.UserBottleAction.bottle_id.in_(attended_bottle_ids),
+            )
+            .all()
+        )
+        actions_by_bottle_id = {
+            action.bottle_id: action for action in bottle_actions
+        }
+        for bottle_id in attended_bottle_ids:
+            action = actions_by_bottle_id.get(bottle_id)
+            if action:
+                action.is_tried = True
+            else:
+                db.add(
+                    models.UserBottleAction(
+                        telegram_id=telegram_id,
+                        bottle_id=bottle_id,
+                        is_tried=True,
+                    )
+                )
+        db.commit()
+
     upcoming_index = next(
         (
             index
@@ -148,6 +178,7 @@ def get_whisky_trail(
 
     nodes: list[Union[EventTrailNode, MilestoneTrailNode]] = []
     last_past_node_id: Optional[str] = None
+    cumulative_tried_bottles_count = 0
     for index, (event, event_date) in enumerate(
         zip(events, event_calendar_dates),
         start=1,
@@ -158,6 +189,8 @@ def get_whisky_trail(
         if is_past:
             event_status = "attended" if event.id in registered_event_ids else "missed"
             last_past_node_id = node_id
+            if event_status == "attended":
+                cumulative_tried_bottles_count += len(event_bottles.get(event.id, []))
         else:
             event_status = "upcoming"
 
@@ -169,7 +202,7 @@ def get_whisky_trail(
                 date=event.date,
                 image_url=event.image_url,
                 status=event_status,
-                bottles_count=bottle_counts.get(event.id, 0),
+                bottles_count=len(event_bottles.get(event.id, [])),
             )
         )
         if index % 3 == 0:
@@ -177,7 +210,7 @@ def get_whisky_trail(
                 MilestoneTrailNode(
                     id=f"milestone_{index}",
                     type="milestone",
-                    tried_bottles_count=tried_bottles_count,
+                    tried_bottles_count=cumulative_tried_bottles_count,
                 )
             )
 
