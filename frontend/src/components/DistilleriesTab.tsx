@@ -70,16 +70,15 @@ function LocationPinIcon() {
   return (
     <svg
       aria-hidden="true"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
+      className="h-6 w-6"
+      fill="currentColor"
+      stroke="none"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="1.8"
       viewBox="0 0 24 24"
     >
       <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" />
-      <circle cx="12" cy="10" r="2.5" />
+      <circle cx="12" cy="10" r="2.5" fill="#16161A" />
     </svg>
   );
 }
@@ -430,7 +429,7 @@ export function DistilleriesTab({
                   />
                   <button
                     aria-label={t('bottle.open_distillery_on_map', { name: distillery.name })}
-                    className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[#C5A059]/45 bg-[#16161A]/90 text-[#C5A059] shadow-lg backdrop-blur-sm transition-colors hover:bg-[#25242A]"
+                    className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center text-[#C5A059] transition-transform hover:scale-110"
                     onClick={() => onOpenOnMap?.(distillery.id)}
                     type="button"
                   >
