@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 import models
 from card_generator import CardGenerationError, ReviewCardData, render_review_card
 from database import engine, get_db
+from routers.whisky_trail import router as whisky_trail_router
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
 models.Base.metadata.create_all(bind=engine)
@@ -648,6 +649,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(whisky_trail_router)
 
 
 class TelegramAuthContext(BaseModel):
