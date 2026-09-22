@@ -416,52 +416,48 @@ export function DistilleriesTab({
 
             return (
               <article key={distillery.id} className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70 shadow-lg shadow-black/20">
-                <button
-                  aria-label={t('bottle.open_distillery_details', { name: distillery.name })}
-                  className="relative block h-44 w-full overflow-hidden text-left"
-                  onClick={() => setSelectedDistillery(distillery)}
-                  type="button"
-                >
+                <div className="relative h-44 overflow-hidden">
                   <CatalogImage
                     alt={distillery.name}
-                    className="h-full w-full object-cover transition-transform duration-300 hover:scale-105"
+                    className="h-full w-full object-cover"
                     source={distillery.image_url}
                   />
-                  {distillery.region && (
-                    <span className="absolute left-3 top-3 inline-flex h-10 items-center rounded-xl border border-[#C5A059]/30 bg-black/60 px-4 text-sm font-semibold text-[#C5A059]">
-                      {distillery.region}
+                  <button
+                    aria-label={t('bottle.open_distillery_details', { name: distillery.name })}
+                    className="absolute inset-x-0 top-0 bottom-11 transition-opacity hover:bg-black/10"
+                    onClick={() => setSelectedDistillery(distillery)}
+                    type="button"
+                  />
+                  <button
+                    aria-label={t('bottle.open_distillery_on_map', { name: distillery.name })}
+                    className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[#C5A059]/45 bg-[#16161A]/90 text-[#C5A059] shadow-lg backdrop-blur-sm transition-colors hover:bg-[#25242A]"
+                    onClick={() => onOpenOnMap?.(distillery.id)}
+                    type="button"
+                  >
+                    <LocationPinIcon />
+                  </button>
+                  <button
+                    aria-controls={panelId}
+                    aria-expanded={isOpen}
+                    aria-label={t(isOpen ? 'bottle.hide_bottles' : 'bottle.show_bottles', { name: distillery.name })}
+                    className="absolute inset-x-0 bottom-0 flex h-11 items-end justify-between gap-3 bg-gradient-to-t from-black/75 via-black/35 to-transparent px-4 pb-3 text-left transition-colors hover:from-black/90"
+                    onClick={() => {
+                      setOpenDistilleryId((current) => {
+                        const next = current === distillery.id ? null : distillery.id;
+                        if (next !== null && !distilleryBottles[next] && !bottlePages[next]?.loading) {
+                          void loadDistilleryBottles(next);
+                        }
+                        return next;
+                      });
+                    }}
+                    type="button"
+                  >
+                    <h2 className="min-w-0 truncate font-serif text-lg font-semibold leading-none text-[#C5A059] drop-shadow">{distillery.name}</h2>
+                    <span className="shrink-0 text-[#C5A059]">
+                      <ChevronIcon isOpen={isOpen} />
                     </span>
-                  )}
-                </button>
-                <button
-                  aria-label={t('bottle.open_distillery_on_map', { name: distillery.name })}
-                  className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-[#C5A059]/45 bg-[#16161A]/90 text-[#C5A059] shadow-lg backdrop-blur-sm transition-colors hover:bg-[#25242A]"
-                  onClick={() => onOpenOnMap?.(distillery.id)}
-                  type="button"
-                >
-                  <LocationPinIcon />
-                </button>
-                <button
-                  aria-controls={panelId}
-                  aria-expanded={isOpen}
-                  aria-label={t(isOpen ? 'bottle.hide_bottles' : 'bottle.show_bottles', { name: distillery.name })}
-                  className="flex h-8 w-full items-center justify-between gap-3 px-4 text-left transition-colors hover:bg-white/5"
-                  onClick={() => {
-                    setOpenDistilleryId((current) => {
-                      const next = current === distillery.id ? null : distillery.id;
-                      if (next !== null && !distilleryBottles[next] && !bottlePages[next]?.loading) {
-                        void loadDistilleryBottles(next);
-                      }
-                      return next;
-                    });
-                  }}
-                  type="button"
-                >
-                  <h2 className="min-w-0 truncate text-sm font-semibold text-white">{distillery.name}</h2>
-                  <span className="shrink-0 text-amber-400">
-                    <ChevronIcon isOpen={isOpen} />
-                  </span>
-                </button>
+                  </button>
+                </div>
                 <div
                   className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}
                   id={panelId}
