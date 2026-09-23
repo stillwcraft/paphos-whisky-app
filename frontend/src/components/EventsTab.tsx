@@ -49,6 +49,7 @@ type EventSummary = {
   title_i18n?: I18nString;
   name_i18n?: I18nString;
   date: string;
+  location: string | null;
   price: number;
   samples_price: number | null;
   distillery_id: number | null;
@@ -80,14 +81,7 @@ type EventListCache = EventListPage & {
   updatedAt: number;
 };
 
-type Member = {
-  id: number;
-  registered: boolean;
-  samples: boolean;
-};
-
 type SheetMode = 'registration' | 'samples';
-type SheetTab = 'main' | 'events' | 'members';
 type Feedback = { kind: 'error'; message: string } | null;
 
 async function getErrorMessage(response: Response): Promise<string> {
@@ -205,6 +199,20 @@ function formatEventBannerDate(
     minute: '2-digit',
   }).format(parsedDate);
   return { month, dayAndTime: `${day} | ${timePart}` };
+}
+
+function calendarUrl(event: EventSummary): string | null {
+  const start = new Date(event.date);
+  if (Number.isNaN(start.valueOf())) return null;
+  const end = new Date(start.valueOf() + 2 * 60 * 60 * 1000);
+  const calendarDate = (date: Date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: event.title,
+    dates: `${calendarDate(start)}/${calendarDate(end)}`,
+  });
+  if (event.location) params.set('location', event.location);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
 function LineupInspectorOverlay({
@@ -606,122 +614,101 @@ function EventGalleryCard({
 }
 
 function BottomSheet({
-  activeTab,
   event,
-  members,
   mode,
   onClose,
   onCancel,
-  onSelectTab,
-  upcomingEvent,
-  hasMoreMembers,
-  isLoadingMoreMembers,
-  memberScrollRef,
-  memberSentinelRef,
+  isCancelling,
+  error,
 }: {
-  activeTab: SheetTab;
   event: EventSummary;
-  members: Member[];
   mode: SheetMode;
   onClose: () => void;
   onCancel: () => void;
-  onSelectTab: (tab: SheetTab) => void;
-  upcomingEvent: EventSummary | undefined;
-  hasMoreMembers: boolean;
-  isLoadingMoreMembers: boolean;
-  memberScrollRef: React.RefObject<HTMLDivElement>;
-  memberSentinelRef: (node: Element | null) => void;
+  isCancelling: boolean;
+  error: string | null;
 }) {
-  const visibleMembers = members.filter((member) => (
-    mode === 'registration' ? member.registered : member.samples
-  ));
+  const { i18n, t } = useTranslation();
   const isRegistration = mode === 'registration';
+  const date = new Date(event.date);
+  const hasDate = !Number.isNaN(date.valueOf());
+  const dateLabel = hasDate
+    ? new Intl.DateTimeFormat(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' }).format(date)
+    : event.date;
+  const timeLabel = hasDate
+    ? new Intl.DateTimeFormat(i18n.language, { hour: '2-digit', minute: '2-digit' }).format(date)
+    : null;
+  const calendarLink = calendarUrl(event);
 
   return (
     <div className="fixed inset-0 z-30 flex items-end bg-slate-950/75 p-3 backdrop-blur-sm" role="presentation">
       <style>{'@keyframes bottomsheet-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }'}</style>
       <section
-        aria-label="Панель события"
+        aria-label={t('event.registration_panel')}
         aria-modal="true"
         role="dialog"
-        className="relative mx-auto w-full max-w-md rounded-t-3xl border border-amber-100/10 bg-slate-900 p-5 shadow-2xl shadow-black/50"
+        className="relative mx-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-t-3xl border border-[#C5A059]/20 bg-[#111113] p-6 shadow-2xl shadow-black/50"
         style={{ animation: 'bottomsheet-slide-up 220ms ease-out' }}
       >
         <button
-          aria-label="Close event panel"
-          className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-xl text-slate-100 transition-colors hover:bg-slate-700"
+          aria-label={t('event.close_panel')}
+          className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full text-xl text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
           onClick={onClose}
           type="button"
         >
           ✕
         </button>
-        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-slate-600" />
+        <div className="text-center">
+          <svg aria-hidden="true" className="mx-auto mt-4 h-14 w-14 text-[#C5A059] drop-shadow-[0_0_12px_rgba(197,160,89,0.5)]" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="19" />
+            <path d="m15 24 6 6 12-13" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <p className="mt-5 text-xs font-semibold uppercase tracking-[0.2em] text-[#C5A059]">{event.title}</p>
+          <h2 className="mt-3 text-2xl font-semibold text-white">
+            {t(isRegistration ? 'event.registered' : 'event.samples_reserved')}
+          </h2>
+          <p className="mt-2 text-sm text-slate-400">
+            {t(isRegistration ? 'event.registration_message' : 'event.samples_message')}
+          </p>
+        </div>
 
-        {activeTab === 'main' && (
-          <div className="text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-400">{event.title}</p>
-            <h2 className="mt-3 text-xl font-semibold text-white">
-              {isRegistration ? 'Вы зарегистрированы' : 'Сэмплы зарезервированы'}
-            </h2>
-            <p className="mt-2 text-sm text-slate-400">
-              {isRegistration ? 'Ждём вас на дегустации.' : 'Ваш сет будет подготовлен к событию.'}
-            </p>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="mt-6 w-full rounded-xl bg-red-500/90 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-red-400"
-            >
-              {isRegistration ? 'Cancel registration' : 'Cancel reservation'}
-            </button>
+        <div className="mt-6 space-y-3 rounded-2xl border border-[#C5A059]/20 bg-[#1A1A1E] p-4 text-sm text-slate-200">
+          <div className="flex items-center gap-3">
+            <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-[#C5A059]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24">
+              <rect x="3" y="5" width="18" height="16" rx="2" /><path d="M7 3v4m10-4v4M3 10h18" />
+            </svg>
+            <span>{dateLabel}{timeLabel && ` · ${timeLabel}`}</span>
           </div>
-        )}
+          {event.location && (
+            <div className="flex items-center gap-3">
+              <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-[#C5A059]" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" viewBox="0 0 24 24">
+                <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10" r="2.5" />
+              </svg>
+              <span>{event.location}</span>
+            </div>
+          )}
+        </div>
 
-        {activeTab === 'events' && (
-          <div>
-            <h2 className="text-xl font-semibold text-white">Ближайший релиз клуба</h2>
-            {upcomingEvent ? (
-              <article className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-slate-800/70">
-                {upcomingEvent.image_url && <img src={upcomingEvent.image_url} alt="" className="h-36 w-full object-cover" />}
-                <div className="p-4">
-                  <p className="text-xs font-semibold text-amber-400">{formatDate(upcomingEvent.date)}</p>
-                  <h3 className="mt-2 text-lg font-semibold text-white">{upcomingEvent.title}</h3>
-                  <p className="mt-4 text-sm font-semibold text-amber-400">€{upcomingEvent.price}</p>
-                </div>
-              </article>
-            ) : (
-              <p className="mt-4 text-sm text-slate-400">Следующий релиз скоро появится.</p>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'members' && (
-          <div>
-            <h2 className="text-xl font-semibold text-white">
-              {isRegistration ? 'Участники дегустации' : 'Зарезервировали сэмплы'}
-            </h2>
-            {visibleMembers.length === 0 ? (
-              <p className="mt-4 text-sm text-slate-400">Пока никого нет.</p>
-            ) : (
-              <div ref={memberScrollRef} className="mt-4 max-h-64 overflow-y-auto">
-              <ul className="space-y-2">
-                {visibleMembers.map((member, index) => (
-                  <li key={member.id} className="rounded-xl border border-white/10 bg-slate-800 px-4 py-3 text-sm text-slate-200">
-                    Member {index + 1}
-                  </li>
-                ))}
-                {hasMoreMembers && <li ref={memberSentinelRef} className="h-px" aria-hidden="true" />}
-                {isLoadingMoreMembers && <li className="py-2 text-center text-sm text-slate-400">Loading…</li>}
-              </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        <nav aria-label="Навигация шторки" className="mt-6 flex justify-between gap-3 border-t border-white/10 pt-4">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">🏠 Home</button>
-          <button type="button" onClick={() => onSelectTab('events')} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">📅 Events</button>
-          <button type="button" onClick={() => onSelectTab('members')} className="flex-1 rounded-lg border border-slate-600 px-2 py-3 text-sm font-medium text-slate-300 hover:bg-white/5">👥 Members</button>
-        </nav>
+        <div className="mt-6 flex flex-col items-center gap-3">
+          {calendarLink ? (
+            <a className="block w-full rounded-xl bg-gradient-to-r from-[#C5A059] to-[#8A5A2B] px-4 py-3.5 text-center text-sm font-semibold text-[#111113] transition-opacity hover:opacity-90" href={calendarLink} rel="noopener noreferrer" target="_blank">
+              {t('event.add_to_calendar')}
+            </a>
+          ) : (
+            <span className="w-full rounded-xl border border-[#C5A059]/20 px-4 py-3.5 text-center text-sm text-slate-400">
+              {t('event.calendar_date_unavailable')}
+            </span>
+          )}
+          <button
+            type="button"
+            disabled={isCancelling}
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2 text-sm text-red-400/70 transition-colors hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t(isRegistration ? 'event.cancel_registration' : 'event.cancel_reservation')}
+          </button>
+          {error && <p role="alert" className="text-center text-sm text-red-400">{error}</p>}
+        </div>
       </section>
     </div>
   );
@@ -751,14 +738,9 @@ export function EventsTab({
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
   const [sheetEvent, setSheetEvent] = useState<EventSummary | null>(null);
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
-  const [activeTab, setActiveTab] = useState<SheetTab>('main');
-  const [members, setMembers] = useState<Member[]>([]);
-  const [hasMoreMembers, setHasMoreMembers] = useState(false);
-  const [isLoadingMoreMembers, setIsLoadingMoreMembers] = useState(false);
   const [expandedEventId, setExpandedEventId] = useState<number | null>(null);
   const [loadingEventDetailId, setLoadingEventDetailId] = useState<number | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const memberScrollRef = useRef<HTMLDivElement>(null);
   const timelineScrollTimerRef = useRef<number | null>(null);
   const virtualWindowFrameRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
@@ -838,11 +820,6 @@ export function EventsTab({
     });
   }, [eventsQuery.error]);
 
-  const upcomingEvent = useMemo(() => {
-    return [...events]
-      .filter((event) => isEventTodayOrFuture(event.date))
-      .sort((first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf())[0];
-  }, [events]);
   const orderedEvents = useMemo(
     () => [...events].sort(
       (first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf(),
@@ -1090,8 +1067,6 @@ export function EventsTab({
         setExpandedEventId(null);
         setSheetEvent(event);
         setSheetMode(mode);
-        setActiveTab('main');
-        setMembers([]);
       } else {
         setSheetEvent(null);
         void refreshEventCounts(event.id);
@@ -1106,39 +1081,6 @@ export function EventsTab({
     }
   };
 
-  const loadMembers = useCallback(async (offset = 0) => {
-    if (!sheetEvent) {
-      return;
-    }
-    setIsLoadingMoreMembers(true);
-    try {
-      const response = await fetch(paginatedUrl(`${API_BASE_URL}/api/events/${sheetEvent.id}/members`, 24, offset), {
-        headers: telegramAuthHeaders(initDataRaw),
-      });
-      if (!response.ok) {
-        throw new Error(await getErrorMessage(response));
-      }
-      const page = normalizePaginatedResponse(await response.json() as PaginatedResponse<Member> | Member[]);
-      setMembers((current) => offset === 0 ? page.items : [...current, ...page.items]);
-      setHasMoreMembers(page.has_more);
-    } catch (error) {
-      setFeedback({
-        kind: 'error',
-        message: error instanceof Error ? error.message : 'Не удалось загрузить участников.',
-      });
-    } finally {
-      setIsLoadingMoreMembers(false);
-    }
-  }, [initDataRaw, sheetEvent]);
-
-  const loadMoreMembers = useCallback(() => {
-    if (hasMoreMembers && !isLoadingMoreMembers) void loadMembers(members.length);
-  }, [hasMoreMembers, isLoadingMoreMembers, loadMembers, members.length]);
-  const memberSentinelRef = useInfiniteScroll(
-    loadMoreMembers,
-    hasMoreMembers && !isLoadingMoreMembers,
-    memberScrollRef,
-  );
   const loadMoreEvents = useCallback(() => {
     if (hasMore && !isLoadingMore) void loadEvents(events.length);
   }, [events.length, hasMore, isLoadingMore, loadEvents]);
@@ -1148,23 +1090,11 @@ export function EventsTab({
     timelineRef,
   );
 
-  const selectSheetTab = (tab: SheetTab) => {
-    setActiveTab(tab);
-    if (tab === 'members') {
-      setMembers([]);
-      setHasMoreMembers(false);
-      void loadMembers(0);
-    }
-  };
-
   const closeSheet = () => {
     if (sheetEvent) {
       void refreshEventCounts(sheetEvent.id);
     }
     setSheetEvent(null);
-    setActiveTab('main');
-    setMembers([]);
-    setHasMoreMembers(false);
   };
 
   const closeLineupBottle = () => {
@@ -1475,18 +1405,12 @@ export function EventsTab({
 
       {sheetEvent && (
         <BottomSheet
-          activeTab={activeTab}
           event={sheetEvent}
-          hasMoreMembers={hasMoreMembers}
-          isLoadingMoreMembers={isLoadingMoreMembers}
-          memberScrollRef={memberScrollRef}
-          memberSentinelRef={memberSentinelRef}
-          members={members}
           mode={sheetMode}
           onClose={closeSheet}
           onCancel={() => void updateParticipation(sheetEvent, sheetMode, false, false)}
-          onSelectTab={selectSheetTab}
-          upcomingEvent={upcomingEvent}
+          isCancelling={isSubmitting === sheetEvent.id}
+          error={feedback?.message ?? null}
         />
       )}
     </section>

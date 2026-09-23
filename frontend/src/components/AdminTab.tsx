@@ -13,7 +13,7 @@ type I18nResponse = Partial<I18nString>;
 
 type EventItem = {
   id: number; title: string; title_i18n?: I18nResponse; name_i18n?: I18nResponse;
-  date: string; description: string; description_i18n?: I18nResponse; price: number;
+  date: string; location: string | null; description: string; description_i18n?: I18nResponse; price: number;
   samples_price: number | null; image_url_left: string | null; image_url: string | null;
   image_url_right: string | null; has_samples: boolean;
   distillery_id: number | null; distillery_logo_url: string | null; event_date_formatted: string;
@@ -39,7 +39,7 @@ type BottleBackground = {
   id: number; name: string; image_url: string;
 };
 type EventForm = {
-  title: string; title_i18n: I18nString; date: string; description: string;
+  title: string; title_i18n: I18nString; date: string; location: string | null; description: string;
   description_i18n: I18nString; price: number; samples_price: number | null;
   distillery_id: number | null;
   image_url_left: string | null; image_url: string | null; image_url_right: string | null;
@@ -73,7 +73,7 @@ function toI18n(translations: I18nResponse | undefined, fallback: string | null 
 }
 
 const emptyEvent = (): EventForm => ({
-  title: '', title_i18n: emptyI18n(), date: '', description: '',
+  title: '', title_i18n: emptyI18n(), date: '', location: null, description: '',
   description_i18n: emptyI18n(), price: 0, samples_price: null, image_url_left: null,
   image_url: null, image_url_right: null, distillery_id: null,
   has_samples: false, show_participants: true, bottle_ids: [],
@@ -94,7 +94,7 @@ const emptyBottle = (): BottleForm => ({
 function eventFormFromItem(item: EventItem): EventForm {
   return {
     title: item.title, title_i18n: toI18n(item.title_i18n ?? item.name_i18n, item.title),
-    date: item.date, description: item.description,
+    date: item.date, location: item.location ?? null, description: item.description,
     description_i18n: toI18n(item.description_i18n, item.description), price: item.price,
     samples_price: item.samples_price, image_url_left: item.image_url_left,
     image_url: item.image_url, image_url_right: item.image_url_right, distillery_id: item.distillery_id,
@@ -438,6 +438,7 @@ export function AdminTab() {
       <form onSubmit={saveEvent} style={formStyle}>
         <I18nTextEditor label="Title" required translations={eventForm.title_i18n} onChange={(title_i18n) => setEventForm({ ...eventForm, title: title_i18n.en, title_i18n })} />
         <input required style={inputStyle} type="datetime-local" value={eventForm.date} onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })} />
+        <input aria-label="Event location" placeholder="Event location (optional)" style={inputStyle} value={eventForm.location ?? ''} onChange={(event) => setEventForm({ ...eventForm, location: event.target.value || null })} />
         <label style={fieldGroupStyle}>
           <span style={fieldLabelStyle}>Main Distillery for Event Banner</span>
           <select style={inputStyle} value={eventForm.distillery_id ?? ''} onChange={(event) => setEventForm({ ...eventForm, distillery_id: event.target.value ? Number(event.target.value) : null })}>

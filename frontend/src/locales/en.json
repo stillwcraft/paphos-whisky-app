@@ -91,7 +91,17 @@
     "empty_description": "Add bottles from the Distilleries tab to see them here."
   },
   "event": {
-    "tasting_lineup": "Tasting Lineup"
+    "tasting_lineup": "Tasting Lineup",
+    "registration_panel": "Event registration",
+    "close_panel": "Close event panel",
+    "registered": "You're registered!",
+    "samples_reserved": "Samples reserved!",
+    "registration_message": "We look forward to seeing you at the tasting.",
+    "samples_message": "Your set will be ready at the event.",
+    "add_to_calendar": "Add to calendar",
+    "calendar_date_unavailable": "Event date is unavailable for the calendar",
+    "cancel_registration": "Cancel registration",
+    "cancel_reservation": "Cancel reservation"
   },
   "profile": {
     "default_name": "Whisky Club Member",

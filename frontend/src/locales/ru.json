@@ -93,7 +93,17 @@
     "empty_description": "Добавьте бутылки на вкладке «Дистиллерии», чтобы увидеть их здесь."
   },
   "event": {
-    "tasting_lineup": "Линейка дегустации"
+    "tasting_lineup": "Линейка дегустации",
+    "registration_panel": "Регистрация на событие",
+    "close_panel": "Закрыть панель события",
+    "registered": "Вы зарегистрированы!",
+    "samples_reserved": "Сэмплы зарезервированы!",
+    "registration_message": "Ждём вас на дегустации.",
+    "samples_message": "Ваш сет будет подготовлен к событию.",
+    "add_to_calendar": "Добавить в календарь",
+    "calendar_date_unavailable": "Дата события недоступна для календаря",
+    "cancel_registration": "Отменить регистрацию",
+    "cancel_reservation": "Отменить резервирование"
   },
   "profile": {
     "default_name": "Участник Whisky Club",

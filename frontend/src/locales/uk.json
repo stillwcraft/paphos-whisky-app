@@ -93,7 +93,17 @@
     "empty_description": "Додайте пляшки на вкладці «Дистилерії», щоб побачити їх тут."
   },
   "event": {
-    "tasting_lineup": "Лінійка дегустації"
+    "tasting_lineup": "Лінійка дегустації",
+    "registration_panel": "Реєстрація на подію",
+    "close_panel": "Закрити панель події",
+    "registered": "Ви зареєстровані!",
+    "samples_reserved": "Семпли зарезервовано!",
+    "registration_message": "Чекаємо на вас на дегустації.",
+    "samples_message": "Ваш набір буде підготовлено до події.",
+    "add_to_calendar": "Додати до календаря",
+    "calendar_date_unavailable": "Дата події недоступна для календаря",
+    "cancel_registration": "Скасувати реєстрацію",
+    "cancel_reservation": "Скасувати резервування"
   },
   "profile": {
     "default_name": "Учасник Whisky Club",

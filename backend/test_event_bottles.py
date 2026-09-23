@@ -238,6 +238,17 @@ class EventBottleTest(unittest.TestCase):
         self.assertEqual(response.distillery_logo_url, self.distillery.logo_url)
         self.assertEqual(response.event_date_formatted, "20.07.2026")
 
+    def test_event_location_is_in_detail_and_summary(self):
+        self.event.location = "Paphos Whisky Club"
+        self.db.commit()
+
+        self.assertEqual(build_event_response(self.event).location, "Paphos Whisky Club")
+        self.assertEqual(build_event_summary_response(self.event).location, "Paphos Whisky Club")
+
+    def test_event_location_defaults_to_none_for_existing_events(self):
+        self.assertIsNone(build_event_response(self.event).location)
+        self.assertIsNone(build_event_summary_response(self.event).location)
+
     def test_event_list_returns_lightweight_summary_with_bottle_count(self):
         self.db.execute(
             models.event_bottles_table.insert(),
@@ -288,6 +299,7 @@ class EventBottleTest(unittest.TestCase):
             EventCreate(
                 title="Created tasting",
                 date="2026-09-01T19:00:00Z",
+                location="Paphos Whisky Club",
                 description="Created event",
                 price=25,
                 bottle_ids=[self.bottle1.id, self.bottle2.id, self.bottle1.id],
@@ -304,6 +316,7 @@ class EventBottleTest(unittest.TestCase):
             [bottle.id for bottle in load_event_bottles(created.id, self.db)],
             [self.bottle1.id, self.bottle2.id],
         )
+        self.assertEqual(created.location, "Paphos Whisky Club")
 
     def test_update_event_replaces_lineup(self):
         self.db.execute(

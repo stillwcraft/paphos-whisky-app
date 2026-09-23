@@ -89,6 +89,8 @@ def rebuild_sqlite_bottles_table(
 def ensure_event_schema() -> None:
     event_columns = get_table_columns(engine, "events")
     with engine.begin() as connection:
+        if "location" not in event_columns:
+            connection.execute(text("ALTER TABLE events ADD COLUMN location VARCHAR"))
         if "distillery_id" not in event_columns:
             connection.execute(
                 text("ALTER TABLE events ADD COLUMN distillery_id INTEGER")
@@ -887,6 +889,7 @@ class EventCreate(BaseModel):
     title_i18n: Optional[I18nString] = None
     name_i18n: Optional[I18nString] = None
     date: str
+    location: Optional[str] = None
     description: str
     description_i18n: Optional[I18nString] = None
     price: float
@@ -1038,6 +1041,7 @@ class EventDetailResponse(BaseModel):
     title_i18n: Optional[I18nString] = None
     name_i18n: Optional[I18nString] = None
     date: str
+    location: Optional[str] = None
     description: str
     description_i18n: Optional[I18nString] = None
     price: float
@@ -1067,6 +1071,7 @@ class EventSummaryResponse(BaseModel):
     title_i18n: Optional[I18nString] = None
     name_i18n: Optional[I18nString] = None
     date: str
+    location: Optional[str] = None
     price: float
     samples_price: Optional[float] = None
     distillery_id: Optional[int] = None
@@ -1332,6 +1337,7 @@ def build_event_response(
         title_i18n=title_i18n,
         name_i18n=title_i18n,
         date=event.date,
+        location=event.location,
         description=get_localized_string(
             event.description_i18n,
             lang,
@@ -1371,6 +1377,7 @@ def build_event_summary_response(
         title_i18n=title_i18n,
         name_i18n=title_i18n,
         date=event.date,
+        location=event.location,
         price=event.price,
         samples_price=event.samples_price,
         distillery_id=event.distillery_id,
