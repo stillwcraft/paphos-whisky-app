@@ -309,8 +309,8 @@ export function AdminTab() {
 
   const saveEvent = async (event: FormEvent) => {
     event.preventDefault();
-    if (!eventForm.title.trim() || !eventForm.description.trim()) {
-      setMessage('English title and description are required.');
+    if (!eventForm.title.trim()) {
+      setMessage('English title is required.');
       return;
     }
     const editing = editingEventId !== null;
@@ -446,7 +446,7 @@ export function AdminTab() {
             {distilleries.map((distillery) => <option key={distillery.id} value={distillery.id}>{distillery.name}</option>)}
           </select>
         </label>
-        <I18nTextEditor label="Description" multiline required translations={eventForm.description_i18n} onChange={(description_i18n) => setEventForm({ ...eventForm, description: description_i18n.en, description_i18n })} />
+        <I18nTextEditor label="Description" multiline translations={eventForm.description_i18n} onChange={(description_i18n) => setEventForm({ ...eventForm, description: description_i18n.en, description_i18n })} />
         <fieldset style={{ ...fieldGroupStyle, border: 0, margin: 0, padding: 0 }}>
           <legend style={fieldLabelStyle}>Tasting Bottles</legend>
           <div style={{ ...listStyle, marginTop: 0, maxHeight: 240, overflowY: 'auto' }}>

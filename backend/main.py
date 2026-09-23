@@ -890,7 +890,7 @@ class EventCreate(BaseModel):
     name_i18n: Optional[I18nString] = None
     date: str
     location: Optional[str] = None
-    description: str
+    description: str = ""
     description_i18n: Optional[I18nString] = None
     price: float
     samples_price: Optional[float] = None

@@ -318,6 +318,35 @@ class EventBottleTest(unittest.TestCase):
         )
         self.assertEqual(created.location, "Paphos Whisky Club")
 
+    def test_create_event_without_description(self):
+        created = create_event(
+            EventCreate(
+                title="Tasting without description",
+                date="2026-09-01T19:00:00Z",
+                price=25,
+            ),
+            self.db,
+            None,
+        )
+
+        self.assertEqual(created.description, "")
+        self.assertEqual(build_event_response(self.db.get(models.Event, created.id)).description, "")
+
+    def test_update_event_can_clear_description(self):
+        updated = update_event(
+            self.event.id,
+            EventUpdate(
+                title=self.event.title,
+                date=self.event.date,
+                description="",
+                price=self.event.price,
+            ),
+            self.db,
+            None,
+        )
+
+        self.assertEqual(updated.description, "")
+
     def test_update_event_replaces_lineup(self):
         self.db.execute(
             models.event_bottles_table.insert(),

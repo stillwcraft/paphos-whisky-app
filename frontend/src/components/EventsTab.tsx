@@ -1224,11 +1224,13 @@ export function EventsTab({
             <div className="min-h-0 flex-1 overflow-y-auto p-6 pb-28">
               <p className="text-xs font-semibold text-amber-400">{formatDate(expandedEvent.date)}</p>
               <h2 className="mt-3 text-2xl font-semibold text-white">{expandedEvent.title}</h2>
-              <div className="mt-5 text-sm leading-7 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-semibold [&_ul]:my-3">
-                <div className="markdown-content">
-                  <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
+              {expandedEvent.description && (
+                <div className="mt-5 text-sm leading-7 text-slate-300 [&_em]:italic [&_li]:ml-5 [&_li]:list-disc [&_ol]:my-3 [&_ol]:list-decimal [&_p]:mb-4 [&_strong]:font-semibold [&_ul]:my-3">
+                  <div className="markdown-content">
+                    <ReactMarkdown>{expandedEvent.description}</ReactMarkdown>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {expandedEvent.bottles && expandedEvent.bottles.length > 0 && (
                 <section className="mt-6">
