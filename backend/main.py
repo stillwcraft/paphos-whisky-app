@@ -1013,7 +1013,7 @@ class BottleCreate(BaseModel):
     cask: Optional[str] = None
     bottles: Optional[str] = None
     price_per_sample: float
-    description: str
+    description: str = ""
     description_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
     background_url: Optional[str] = None

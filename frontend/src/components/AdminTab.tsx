@@ -223,7 +223,6 @@ function BottleFields({ backgrounds, form, setForm, includeLabel }: { background
     <I18nTextEditor
       label="Description"
       multiline
-      required
       translations={form.description_i18n}
       onChange={(description_i18n) => setForm({ ...form, description: description_i18n.en, description_i18n })}
     />
@@ -355,8 +354,8 @@ export function AdminTab() {
   };
   const saveBottle = async (event: FormEvent, form: BottleForm, distilleryId: number | null, editingId: number | null, reset: () => void) => {
     event.preventDefault();
-    if (!form.name.trim() || !form.description.trim()) {
-      setMessage('English name and description are required.');
+    if (!form.name.trim()) {
+      setMessage('English name is required.');
       return;
     }
     const editing = editingId !== null;

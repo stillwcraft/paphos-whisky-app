@@ -528,7 +528,7 @@ export function AdminTab() {
         <input required value={bottleForm.name} onChange={(event) => setBottleForm({ ...bottleForm, name: event.target.value })} placeholder="Name" className={inputClassName} />
         <input min="0" type="number" value={bottleForm.age} onChange={(event) => setBottleForm({ ...bottleForm, age: event.target.value })} placeholder="Age (optional)" className={inputClassName} />
         <input required min="0" step="0.01" type="number" value={bottleForm.price_per_sample} onChange={(event) => setBottleForm({ ...bottleForm, price_per_sample: event.target.value })} placeholder="Price per sample" className={inputClassName} />
-        <textarea required value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} placeholder="Description" rows={4} className={`${inputClassName} resize-none`} />
+        <textarea value={bottleForm.description} onChange={(event) => setBottleForm({ ...bottleForm, description: event.target.value })} placeholder="Description" rows={4} className={`${inputClassName} resize-none`} />
         <input type="url" value={bottleForm.image_url} onChange={(event) => setBottleForm({ ...bottleForm, image_url: event.target.value })} placeholder="Image URL" className={inputClassName} />
         <button disabled={isSaving || distilleries.length === 0} type="submit" className="w-full rounded-xl bg-amber-400 px-4 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
           Add bottle

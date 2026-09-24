@@ -7,8 +7,11 @@ import models
 from sqlalchemy import text
 from fastapi import HTTPException
 from main import (
+    BottleCreate,
+    BottleUpdate,
     build_event_response,
     build_event_summary_response,
+    create_bottle,
     create_event,
     delete_bottle,
     delete_event,
@@ -19,6 +22,7 @@ from main import (
     validate_bottle_ids,
     load_event_bottles,
     load_bottles_for_events,
+    update_bottle,
     update_event,
 )
 from database import SessionLocal
@@ -346,6 +350,44 @@ class EventBottleTest(unittest.TestCase):
         )
 
         self.assertEqual(updated.description, "")
+
+    def test_create_bottle_without_description(self):
+        created = create_bottle(
+            BottleCreate(name="No description", price_per_sample=12.0),
+            self.db,
+            None,
+        )
+
+        self.assertEqual(created.description, "")
+        self.assertEqual(self.db.get(models.Bottle, created.id).description, "")
+
+    def test_update_bottle_can_clear_description(self):
+        updated = update_bottle(
+            self.bottle2.id,
+            BottleUpdate(
+                name=self.bottle2.name,
+                price_per_sample=self.bottle2.price_per_sample,
+                description="",
+            ),
+            self.db,
+            None,
+        )
+
+        self.assertEqual(updated.description, "")
+        self.assertEqual(self.db.get(models.Bottle, self.bottle2.id).description, "")
+
+    def test_update_bottle_without_description_preserves_existing_text(self):
+        updated = update_bottle(
+            self.bottle2.id,
+            BottleUpdate(
+                name=self.bottle2.name,
+                price_per_sample=self.bottle2.price_per_sample,
+            ),
+            self.db,
+            None,
+        )
+
+        self.assertEqual(updated.description, "Peaty")
 
     def test_update_event_replaces_lineup(self):
         self.db.execute(
