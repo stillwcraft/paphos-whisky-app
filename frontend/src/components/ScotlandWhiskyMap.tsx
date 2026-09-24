@@ -267,7 +267,7 @@ export function ScotlandWhiskyMap({
   };
 
   return (
-    <section className={`relative w-full overflow-hidden bg-[#0D0D0E] ${
+    <section className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
       selectedDistillery ? 'flex h-full flex-col gap-3 px-4 py-3' : 'h-full'
     }`}>
       {selectedDistillery && (
@@ -284,7 +284,7 @@ export function ScotlandWhiskyMap({
         </div>
       )}
 
-      <div className={`relative w-full overflow-hidden ${
+      <div className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
         selectedDistillery
           ? 'h-[42dvh] min-h-[250px] shrink-0 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
           : 'h-full'
@@ -298,30 +298,14 @@ export function ScotlandWhiskyMap({
           onClick={() => scheduleMapClick(resetMap)}
         >
           <defs>
-            <linearGradient id="dark-region-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#1A1A1E" />
-              <stop offset="100%" stopColor="#0D0D0F" />
+            <linearGradient id="land-obsidian" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#1c1c22" />
+              <stop offset="100%" stopColor="#16161a" />
             </linearGradient>
             <linearGradient id="gold-region-grad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#FFE28A" />
               <stop offset="100%" stopColor="#C5A059" />
             </linearGradient>
-            <filter id="3d-shadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow
-                dx="3"
-                dy="8"
-                stdDeviation="6"
-                floodColor="#000000"
-                floodOpacity="0.85"
-              />
-              <feDropShadow
-                dx="1"
-                dy="2"
-                stdDeviation="2"
-                floodColor="#C5A059"
-                floodOpacity="0.2"
-              />
-            </filter>
           </defs>
           <ZoomableGroup
             center={position.coordinates}
@@ -341,13 +325,13 @@ export function ScotlandWhiskyMap({
                 const isSelected = selectedRegion?.sourceName === region.sourceName;
                 const isHovered = hoveredRegion === region.sourceName;
                 const regionStyle = {
-                  fill: isSelected ? 'url(#gold-region-grad)' : 'url(#dark-region-grad)',
-                  stroke: isSelected ? '#FFF2C2' : '#5A482A',
+                  fill: isSelected ? 'url(#gold-region-grad)' : 'url(#land-obsidian)',
+                  stroke: isSelected ? '#FFF2C2' : isHovered ? '#C5A059' : '#5A482A',
                   strokeWidth: isSelected ? 2.5 : 1,
                   filter: isSelected
                     ? 'drop-shadow(0 0 16px #FFD700) drop-shadow(0 0 38px rgba(197, 160, 89, 0.85))'
-                    : 'url(#3d-shadow)',
-                  opacity: isSelected ? 1 : 0.75,
+                    : 'drop-shadow(0px 15px 25px rgba(0,0,0,0.9))',
+                  opacity: 1,
                   cursor: 'pointer',
                   outline: 'none',
                   transition: 'all 0.4s ease',
@@ -369,11 +353,11 @@ export function ScotlandWhiskyMap({
                     style={{
                       default: {
                         ...regionStyle,
-                        opacity: isSelected ? 1 : isHovered ? 0.9 : 0.75,
+                        opacity: 1,
                       },
                       hover: {
                         ...regionStyle,
-                        opacity: isSelected ? 1 : 0.9,
+                        opacity: 1,
                       },
                       pressed: {
                         ...regionStyle,
@@ -388,21 +372,21 @@ export function ScotlandWhiskyMap({
             {whiskyRegions.map((region) => (
               <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
                 <text
-                  fill="#D4AF37"
+                  fill="#FFE28A"
                   fillOpacity={
                     selectedRegion?.sourceName === region.sourceName
                     || hoveredRegion === region.sourceName
-                      ? 0.95
-                      : 0.48
+                      ? 1
+                      : 0.9
                   }
-                  fontSize={5}
-                  fontFamily="'Cinzel', 'Playfair Display', serif"
+                  fontSize={6.5}
+                  fontFamily="Georgia, 'Times New Roman', serif"
                   fontWeight={600}
                   pointerEvents="none"
                   textAnchor="middle"
                   style={{
-                    filter: 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.9))',
-                    letterSpacing: '0.3em',
+                    filter: 'drop-shadow(0px 2px 6px rgba(0,0,0,0.9))',
+                    letterSpacing: '0.1em',
                   }}
                 >
                   {region.label.toUpperCase()}
@@ -484,23 +468,23 @@ export function ScotlandWhiskyMap({
           </ZoomableGroup>
         </ComposableMap>
 
-        <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/80 p-1 text-[#C5A059] shadow-2xl backdrop-blur-md">
-        <button
-          aria-label="Zoom in"
-          className="flex h-8 w-8 items-center justify-center rounded-lg font-bold"
-          type="button"
-          onClick={() => changeZoom(1)}
-        >
-          +
-        </button>
-        <button
-          aria-label="Zoom out"
-          className="flex h-8 w-8 items-center justify-center rounded-lg font-bold"
-          type="button"
-          onClick={() => changeZoom(-1)}
-        >
-          -
-        </button>
+        <div className="absolute right-3 top-3 flex flex-col space-y-2">
+          <button
+            aria-label="Zoom in"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#C5A059]/30 bg-[#1a1a1e]/80 text-xl text-[#C5A059] shadow-lg backdrop-blur-md transition-all hover:border-[#C5A059]/70 active:scale-95"
+            type="button"
+            onClick={() => changeZoom(1)}
+          >
+            +
+          </button>
+          <button
+            aria-label="Zoom out"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#C5A059]/30 bg-[#1a1a1e]/80 text-xl text-[#C5A059] shadow-lg backdrop-blur-md transition-all hover:border-[#C5A059]/70 active:scale-95"
+            type="button"
+            onClick={() => changeZoom(-1)}
+          >
+            -
+          </button>
         </div>
       </div>
 
