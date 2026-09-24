@@ -323,48 +323,42 @@ export function ScotlandWhiskyMap({
                 );
                 if (!region) return null;
                 const isSelected = selectedRegion?.sourceName === region.sourceName;
-                const isHovered = hoveredRegion === region.sourceName;
                 const regionStyle = {
                   fill: isSelected ? 'url(#gold-region-grad)' : 'url(#land-obsidian)',
-                  stroke: isSelected ? '#FFF2C2' : isHovered ? '#C5A059' : '#5A482A',
-                  strokeWidth: isSelected ? 2.5 : 1,
-                  filter: isSelected
-                    ? 'drop-shadow(0 0 16px #FFD700) drop-shadow(0 0 38px rgba(197, 160, 89, 0.85))'
-                    : 'drop-shadow(0px 15px 25px rgba(0,0,0,0.9))',
+                  stroke: isSelected ? '#FFE28A' : '#5A482A',
+                  strokeWidth: 1.2,
+                  strokeLinejoin: 'round' as const,
+                  strokeLinecap: 'round' as const,
                   opacity: 1,
                   cursor: 'pointer',
                   outline: 'none',
                   transition: 'all 0.4s ease',
-                  transform: isSelected ? 'translateY(-3px) scale(1.01)' : undefined,
-                  transformBox: 'fill-box' as const,
-                  transformOrigin: 'center',
                 };
 
                 return (
-                  <Geography
+                  <g
                     key={geography.rsmKey}
-                    geography={geography}
-                    onMouseEnter={() => setHoveredRegion(region.sourceName)}
-                    onMouseLeave={() => setHoveredRegion(null)}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      scheduleMapClick(() => selectRegion(region));
-                    }}
                     style={{
-                      default: {
-                        ...regionStyle,
-                        opacity: 1,
-                      },
-                      hover: {
-                        ...regionStyle,
-                        opacity: 1,
-                      },
-                      pressed: {
-                        ...regionStyle,
-                        opacity: 1,
-                      },
+                      filter: isSelected
+                        ? 'drop-shadow(0 0 8px rgba(255, 226, 138, 0.7)) drop-shadow(0 0 20px rgba(197, 160, 89, 0.4))'
+                        : 'drop-shadow(0px 8px 16px rgba(0,0,0,0.9))',
                     }}
-                  />
+                  >
+                    <Geography
+                      geography={geography}
+                      onMouseEnter={() => setHoveredRegion(region.sourceName)}
+                      onMouseLeave={() => setHoveredRegion(null)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        scheduleMapClick(() => selectRegion(region));
+                      }}
+                      style={{
+                        default: regionStyle,
+                        hover: regionStyle,
+                        pressed: regionStyle,
+                      }}
+                    />
+                  </g>
                 );
               })}
             </Geographies>
@@ -436,9 +430,17 @@ export function ScotlandWhiskyMap({
                         </clipPath>
                       </defs>
                       <circle
-                        r={isSelected ? 11 : 6.5}
+                        r={imageRadius + 1.5}
+                        fill="#141417"
+                        style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))' }}
+                      />
+                      <circle
+                        r={isSelected ? 14 : 9.5}
                         fill="#C5A059"
-                        fillOpacity={0.28}
+                        fillOpacity={0.4}
+                        style={{
+                          filter: 'drop-shadow(0 0 5px rgba(255, 226, 138, 0.8)) drop-shadow(0 0 10px rgba(197, 160, 89, 0.5))',
+                        }}
                       />
                       {imageUrl ? (
                         <image
@@ -456,8 +458,8 @@ export function ScotlandWhiskyMap({
                       <circle
                         r={imageRadius}
                         fill="none"
-                        stroke="#F4F4F5"
-                        strokeWidth={isSelected ? 1 : 0.75}
+                        stroke="#141417"
+                        strokeWidth={2}
                       />
                     </>
                   )}
@@ -565,22 +567,19 @@ function DistilleryMarkersCanvas({
         const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
         const radius = markerRadius;
 
-        if (!isDistantZoom) {
-          const pulseScale = 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
-          context.beginPath();
-          context.arc(x, y, radius * 2.2 * pulseScale, 0, Math.PI * 2);
-          context.fillStyle = distillery.tasted
-            ? 'rgba(255, 226, 138, 0.26)'
-            : 'rgba(255, 226, 138, 0.16)';
-          context.fill();
-        }
+        const pulseScale = isDistantZoom
+          ? 1
+          : 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
+        context.beginPath();
+        context.arc(x, y, radius * 2.2 * pulseScale, 0, Math.PI * 2);
+        context.fillStyle = distillery.tasted
+          ? 'rgba(255, 226, 138, 0.26)'
+          : 'rgba(255, 226, 138, 0.16)';
+        context.fill();
 
         context.save();
-        if (!isDistantZoom) {
-          context.shadowColor = 'rgba(255, 226, 138, 0.7)';
-          context.shadowBlur = 4;
-          context.shadowOffsetY = 1.5;
-        }
+        context.shadowColor = 'rgba(255, 226, 138, 0.8)';
+        context.shadowBlur = isDistantZoom ? 6 : 4;
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
         context.fillStyle = 'rgba(197, 160, 89, 0.38)';
