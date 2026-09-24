@@ -73,6 +73,9 @@
     "item_samples": "Samples",
     "item_event": "Event",
     "no_items": "New bottles and samples will appear soon.",
+    "sample_price": "Sample price",
+    "tap_for_details": "Tap for details",
+    "tap_again_to_close": "Tap again to close",
     "votes_one": "{{count}} vote",
     "votes_other": "{{count}} votes"
   },
