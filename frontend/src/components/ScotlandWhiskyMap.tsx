@@ -10,6 +10,7 @@ import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const SMALL_ISLAND_MAX_SIZE = 12;
 
 export type MapDistillery = {
   id: number;
@@ -60,42 +61,42 @@ const whiskyRegions: WhiskyRegion[] = [
     sourceName: 'Speyside',
     label: 'Speyside',
     center: [-3.5, 57.25],
-    labelCoordinates: [-2.05, 57.78],
+    labelCoordinates: [-2.8, 57.85],
     zoom: 3.2,
   },
   {
     sourceName: 'Highlands',
     label: 'Highland',
     center: [-4.2, 57.55],
-    labelCoordinates: [-2.55, 58.5],
+    labelCoordinates: [-4.2, 58.85],
     zoom: 2.3,
   },
   {
     sourceName: 'Islands',
     label: 'Island',
     center: [-5.6, 57.8],
-    labelCoordinates: [-8.25, 57.25],
+    labelCoordinates: [-7.1, 57.45],
     zoom: 1.8,
   },
   {
     sourceName: 'Lowlands',
     label: 'Lowland',
     center: [-3.7, 55.45],
-    labelCoordinates: [-1.5, 55.2],
+    labelCoordinates: [-2.55, 55.2],
     zoom: 2.5,
   },
   {
     sourceName: 'Islay',
     label: 'Islay',
     center: [-6.27, 55.75],
-    labelCoordinates: [-7.05, 55.55],
+    labelCoordinates: [-6.75, 55.78],
     zoom: 5.5,
   },
   {
     sourceName: 'Campbeltown',
     label: 'Campbeltown',
     center: [-5.64, 55.42],
-    labelCoordinates: [-6.55, 54.95],
+    labelCoordinates: [-5.85, 55.2],
     zoom: 5.5,
   },
 ];
@@ -109,7 +110,6 @@ export function ScotlandWhiskyMap({
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
-  const [hoveredRegion, setHoveredRegion] = useState<string | null>(null);
   const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
   const isDistantZoom = position.zoom <= 1.5;
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
@@ -317,7 +317,7 @@ export function ScotlandWhiskyMap({
             onMoveEnd={handleMoveEnd}
           >
             <Geographies geography={SCOTLAND_TOPOLOGY_URL}>
-              {({ geographies }) => geographies.map((geography) => {
+              {({ geographies, path }) => geographies.map((geography) => {
                 const region = whiskyRegions.find(
                   (item) => item.sourceName === geography.properties.name,
                 );
@@ -334,30 +334,47 @@ export function ScotlandWhiskyMap({
                   outline: 'none',
                   transition: 'all 0.4s ease',
                 };
+                const shapes: { svgPath: string | null; isSmallIsland: boolean }[] =
+                  region.sourceName === 'Islands' && geography.geometry.type === 'MultiPolygon'
+                    ? geography.geometry.coordinates.map((coordinates: number[][][]) => {
+                      const polygon = { type: 'Polygon' as const, coordinates };
+                      const [[minX, minY], [maxX, maxY]] = path.bounds(polygon);
+                      return {
+                        svgPath: path(polygon),
+                        isSmallIsland: Math.max(maxX - minX, maxY - minY) < SMALL_ISLAND_MAX_SIZE,
+                      };
+                    })
+                    : [{ svgPath: geography.svgPath, isSmallIsland: false }];
+                const smallIslandShadow = isSelected
+                  ? 'drop-shadow(0 0 4px rgba(255, 226, 138, 0.6))'
+                  : 'drop-shadow(0px 4px 4px rgba(0,0,0,0.9))';
+                const regionShadow = isSelected
+                  ? 'drop-shadow(0 0 8px rgba(255, 226, 138, 0.7)) drop-shadow(0 0 20px rgba(197, 160, 89, 0.4))'
+                  : 'drop-shadow(0px 8px 16px rgba(0,0,0,0.9))';
 
                 return (
-                  <g
-                    key={geography.rsmKey}
-                    style={{
-                      filter: isSelected
-                        ? 'drop-shadow(0 0 8px rgba(255, 226, 138, 0.7)) drop-shadow(0 0 20px rgba(197, 160, 89, 0.4))'
-                        : 'drop-shadow(0px 8px 16px rgba(0,0,0,0.9))',
-                    }}
-                  >
-                    <Geography
-                      geography={geography}
-                      onMouseEnter={() => setHoveredRegion(region.sourceName)}
-                      onMouseLeave={() => setHoveredRegion(null)}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        scheduleMapClick(() => selectRegion(region));
-                      }}
-                      style={{
-                        default: regionStyle,
-                        hover: regionStyle,
-                        pressed: regionStyle,
-                      }}
-                    />
+                  <g key={geography.rsmKey}>
+                    {shapes.map((shape, index) => (
+                      <g
+                        key={index}
+                        style={{
+                          filter: shape.isSmallIsland ? smallIslandShadow : regionShadow,
+                        }}
+                      >
+                        <Geography
+                          geography={{ ...geography, svgPath: shape.svgPath }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            scheduleMapClick(() => selectRegion(region));
+                          }}
+                          style={{
+                            default: regionStyle,
+                            hover: regionStyle,
+                            pressed: regionStyle,
+                          }}
+                        />
+                      </g>
+                    ))}
                   </g>
                 );
               })}
@@ -365,26 +382,27 @@ export function ScotlandWhiskyMap({
 
             {whiskyRegions.map((region) => (
               <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
-                <text
-                  fill="#FFE28A"
-                  fillOpacity={
-                    selectedRegion?.sourceName === region.sourceName
-                    || hoveredRegion === region.sourceName
-                      ? 1
-                      : 0.9
-                  }
-                  fontSize={6.5}
-                  fontFamily="Georgia, 'Times New Roman', serif"
-                  fontWeight={600}
+                <foreignObject
+                  x={-70 / position.zoom}
+                  y={-16 / position.zoom}
+                  width={140 / position.zoom}
+                  height={32 / position.zoom}
                   pointerEvents="none"
-                  textAnchor="middle"
-                  style={{
-                    filter: 'drop-shadow(0px 2px 6px rgba(0,0,0,0.9))',
-                    letterSpacing: '0.1em',
-                  }}
+                  style={{ overflow: 'visible' }}
                 >
-                  {region.label.toUpperCase()}
-                </text>
+                  <div
+                    className="flex h-8 w-[140px] items-center justify-center"
+                    style={{ transform: `scale(${1 / position.zoom})`, transformOrigin: 'top left' }}
+                  >
+                    <span className={`pointer-events-none whitespace-nowrap rounded-full border px-2.5 py-1 font-serif text-[10px] uppercase tracking-widest backdrop-blur-md transition-all ${
+                      selectedRegion?.sourceName === region.sourceName
+                        ? 'border-[#FFE28A] bg-[#C5A059]/30 text-[#FFF2C2] ring-1 ring-[#FFE28A]/70 shadow-[0_0_18px_rgba(255,226,138,0.65)]'
+                        : 'border-[#C5A059]/40 bg-[#141417]/85 text-[#FFE28A] shadow-md'
+                    }`}>
+                      {region.label}
+                    </span>
+                  </div>
+                </foreignObject>
               </Marker>
             ))}
 
@@ -399,17 +417,10 @@ export function ScotlandWhiskyMap({
               const isSelected = selectedDistillery?.id === distillery.id;
               const isInSelectedRegion = selectedRegion !== null
                 && selectedRegion.sourceName === distillery.region;
-              const imageUrl = isSelected
-                ? selectedDistillery?.image_url
-                : isInSelectedRegion
-                  ? distillery.image_url
-                  : null;
-              const imageRadius = isSelected ? 9 : 5;
-              const hitRadius = isSelected
-                ? 12
-                : isInSelectedRegion
-                  ? 7
-                  : Math.max(markerRadius * 3, 5);
+              const imageUrl = (isSelected && selectedDistillery?.image_url) || distillery.image_url;
+              const hitRadius = isSelected || isInSelectedRegion
+                ? Math.max(18 / position.zoom, 5)
+                : Math.max(markerRadius * 3, 5);
 
               return (
                 <Marker
@@ -423,45 +434,23 @@ export function ScotlandWhiskyMap({
                   }}
                 >
                   {(isSelected || isInSelectedRegion) && (
-                    <>
-                      <defs>
-                        <clipPath id={`distillery-image-${distillery.id}`}>
-                          <circle r={imageRadius} />
-                        </clipPath>
-                      </defs>
-                      <circle
-                        r={imageRadius + 1.5}
-                        fill="#141417"
-                        style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.8))' }}
-                      />
-                      <circle
-                        r={isSelected ? 14 : 9.5}
-                        fill="#C5A059"
-                        fillOpacity={0.4}
-                        style={{
-                          filter: 'drop-shadow(0 0 5px rgba(255, 226, 138, 0.8)) drop-shadow(0 0 10px rgba(197, 160, 89, 0.5))',
-                        }}
-                      />
-                      {imageUrl ? (
-                        <image
-                          href={imageUrl}
-                          x={-imageRadius}
-                          y={-imageRadius}
-                          width={imageRadius * 2}
-                          height={imageRadius * 2}
-                          clipPath={`url(#distillery-image-${distillery.id})`}
-                          preserveAspectRatio="xMidYMid slice"
-                        />
-                      ) : (
-                        <circle r={imageRadius} fill="#C5A059" />
-                      )}
-                      <circle
-                        r={imageRadius}
-                        fill="none"
-                        stroke="#141417"
-                        strokeWidth={2}
-                      />
-                    </>
+                    <foreignObject
+                      x={-18 / position.zoom}
+                      y={-18 / position.zoom}
+                      width={36 / position.zoom}
+                      height={36 / position.zoom}
+                      pointerEvents="none"
+                      style={{ overflow: 'visible' }}
+                    >
+                      <div
+                        className="relative z-20 flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-[#141417] bg-[#141417] text-xs text-[#FFE28A] ring-2 ring-white/90 shadow-[0_6px_20px_rgba(0,0,0,0.95)]"
+                        style={{ transform: `scale(${1 / position.zoom})`, transformOrigin: 'top left' }}
+                      >
+                        {imageUrl ? (
+                          <img src={imageUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                        ) : distillery.name.charAt(0)}
+                      </div>
+                    </foreignObject>
                   )}
                   <circle r={hitRadius} fill="transparent" pointerEvents="all" />
                 </Marker>
@@ -516,14 +505,32 @@ export function ScotlandWhiskyMap({
           </div>
         </div>
       ) : activeDistillery && (
-        <div className="pointer-events-none absolute bottom-3 left-3 rounded-xl border border-[#C5A059]/30 bg-[#16161A]/95 px-3 py-2 shadow-xl">
-          <p className="font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</p>
-          {activeDistillery.tasted && (
-            <p className="mt-1 text-xs text-[#9E9D9A]">
-              {`★ Tasted${activeDistillery.rating ? ` · ${activeDistillery.rating}` : ''}`}
-            </p>
-          )}
-        </div>
+        <button
+          type="button"
+          aria-label={`Open ${activeDistillery.name}`}
+          onClick={() => { void selectDistillery(activeDistillery); }}
+          className="absolute bottom-4 left-1/2 flex w-[90%] max-w-xs -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#C5A059]/40 bg-[#1a1a1e]/80 p-3 text-left shadow-2xl backdrop-blur-md"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#C5A059] bg-[#141417] text-[#C5A059]">
+            {activeDistillery.logo_url || activeDistillery.image_url ? (
+              <img
+                src={activeDistillery.logo_url || activeDistillery.image_url || undefined}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : activeDistillery.name.charAt(0)}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</span>
+            {activeDistillery.region && (
+              <span className="block truncate text-xs text-[#C5A059]">
+                {whiskyRegions.find((region) => region.sourceName === activeDistillery.region)?.label
+                  ?? activeDistillery.region}
+              </span>
+            )}
+          </span>
+          <span aria-hidden="true" className="shrink-0 text-xl text-[#C5A059]">→</span>
+        </button>
       )}
       {mapLoadError && (
         <p className="absolute bottom-3 right-3 text-xs text-[#9E9D9A]">{mapLoadError}</p>
@@ -567,9 +574,7 @@ function DistilleryMarkersCanvas({
         const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
         const radius = markerRadius;
 
-        const pulseScale = isDistantZoom
-          ? 1
-          : 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
+        const pulseScale = 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
         context.beginPath();
         context.arc(x, y, radius * 2.2 * pulseScale, 0, Math.PI * 2);
         context.fillStyle = distillery.tasted
@@ -611,9 +616,7 @@ function DistilleryMarkersCanvas({
         context.stroke();
       });
 
-      if (!isDistantZoom) {
-        animationFrame = requestAnimationFrame(draw);
-      }
+      animationFrame = requestAnimationFrame(draw);
     };
 
     draw(performance.now());
