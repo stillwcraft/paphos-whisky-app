@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { TransformComponent, TransformWrapper, type ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
+import { publicUrl } from '@/helpers/publicUrl.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CARD_WIDTH = 360;
@@ -10,9 +11,9 @@ const NODE_SPACING = 120;
 const TRAIL_EXTENSION = 60;
 const CENTER_X = CARD_WIDTH / 2;
 const trailTranslations = {
-  en: { attended: 'Attended', missed: 'Missed', reserve: 'Reserve' },
-  ru: { attended: 'Был', missed: 'Пропущено', reserve: 'Забронировать' },
-  uk: { attended: 'Був', missed: 'Пропущено', reserve: 'Забронювати' },
+  en: { attended: 'Attended', missed: 'Missed', reserve: 'Reserve', tastedBottles: 'Tasted bottles' },
+  ru: { attended: 'Был', missed: 'Пропущено', reserve: 'Забронировать', tastedBottles: 'Продегустировано бутылок' },
+  uk: { attended: 'Був', missed: 'Пропущено', reserve: 'Забронювати', tastedBottles: 'Продегустовано пляшок' },
 } as const;
 
 type EventNode = {
@@ -337,9 +338,11 @@ export function WhiskyTrail({
                 const point = points[index];
                 if (node.type === 'milestone') {
                   return (
-                    <div key={node.id} className="absolute z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-2xl border border-[#C5A059] bg-[#1b1815] text-[#C5A059] shadow-[0_0_20px_rgba(197,160,89,0.35)]" style={{ left: point.x, top: point.y }}>
-                      <span aria-hidden="true" className="text-lg">◒</span>
-                      <span className="text-xs font-bold">{node.tried_bottles_count}</span>
+                    <div key={node.id} aria-label={`${trailText.tastedBottles}: ${node.tried_bottles_count}`} className="absolute z-10 h-14 w-14 -translate-x-1/2 -translate-y-1/2" role="img" style={{ left: point.x, top: point.y }}>
+                      <img alt="" aria-hidden="true" className="h-full w-full object-contain drop-shadow-[0_0_12px_rgba(197,160,89,0.35)]" src={publicUrl('assets/nav/BottleJourney.webp')} />
+                      <span aria-hidden="true" className="absolute -left-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#141417] bg-[#C5A059] px-1 text-[11px] font-bold leading-none text-[#141417] shadow-[0_0_12px_rgba(197,160,89,0.4)]">
+                        {node.tried_bottles_count}
+                      </span>
                     </div>
                   );
                 }
