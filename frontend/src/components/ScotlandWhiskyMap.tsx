@@ -306,6 +306,12 @@ export function ScotlandWhiskyMap({
               <stop offset="0%" stopColor="#FFE28A" />
               <stop offset="100%" stopColor="#C5A059" />
             </linearGradient>
+            <filter id="region-label-glow" x="-100%" y="-100%" width="300%" height="300%">
+              <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#FFE28A" floodOpacity={0.65} />
+            </filter>
+            <filter id="distillery-pin-shadow" x="-100%" y="-100%" width="300%" height="300%">
+              <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000" floodOpacity={0.95} />
+            </filter>
           </defs>
           <ZoomableGroup
             center={position.coordinates}
@@ -380,31 +386,39 @@ export function ScotlandWhiskyMap({
               })}
             </Geographies>
 
-            {whiskyRegions.map((region) => (
-              <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
-                <foreignObject
-                  x={-70 / position.zoom}
-                  y={-16 / position.zoom}
-                  width={140 / position.zoom}
-                  height={32 / position.zoom}
-                  pointerEvents="none"
-                  style={{ overflow: 'visible' }}
-                >
-                  <div
-                    className="flex h-8 w-[140px] items-center justify-center"
-                    style={{ transform: `scale(${1 / position.zoom})`, transformOrigin: 'top left' }}
-                  >
-                    <span className={`pointer-events-none whitespace-nowrap rounded-full border px-2.5 py-1 font-serif text-[10px] uppercase tracking-widest backdrop-blur-md transition-all ${
-                      selectedRegion?.sourceName === region.sourceName
-                        ? 'border-[#FFE28A] bg-[#C5A059]/30 text-[#FFF2C2] ring-1 ring-[#FFE28A]/70 shadow-[0_0_18px_rgba(255,226,138,0.65)]'
-                        : 'border-[#C5A059]/40 bg-[#141417]/85 text-[#FFE28A] shadow-md'
-                    }`}>
-                      {region.label}
-                    </span>
-                  </div>
-                </foreignObject>
-              </Marker>
-            ))}
+            {whiskyRegions.map((region) => {
+              const isActive = selectedRegion?.sourceName === region.sourceName;
+              const badgeWidth = region.label.length * 7 + 20;
+              return (
+                <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
+                  <g transform={`scale(${1 / position.zoom})`} pointerEvents="none">
+                    <rect
+                      x={-badgeWidth / 2}
+                      y={-12}
+                      width={badgeWidth}
+                      height={24}
+                      rx={12}
+                      fill={isActive ? '#3B3226' : '#141417'}
+                      fillOpacity={isActive ? 0.95 : 0.85}
+                      stroke="#C5A059"
+                      strokeOpacity={isActive ? 1 : 0.4}
+                      strokeWidth={isActive ? 1.5 : 1}
+                      filter={isActive ? 'url(#region-label-glow)' : undefined}
+                    />
+                    <text
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill={isActive ? '#FFF2C2' : '#FFE28A'}
+                      fontSize={10}
+                      fontFamily="Georgia, 'Times New Roman', serif"
+                      letterSpacing={1}
+                    >
+                      {region.label.toUpperCase()}
+                    </text>
+                  </g>
+                </Marker>
+              );
+            })}
 
             <foreignObject x={0} y={0} width={390} height={640} pointerEvents="none">
               <DistilleryMarkersCanvas
@@ -419,7 +433,7 @@ export function ScotlandWhiskyMap({
                 && selectedRegion.sourceName === distillery.region;
               const imageUrl = (isSelected && selectedDistillery?.image_url) || distillery.image_url;
               const hitRadius = isSelected || isInSelectedRegion
-                ? Math.max(18 / position.zoom, 5)
+                ? Math.max(20 / position.zoom, 5)
                 : Math.max(markerRadius * 3, 5);
 
               return (
@@ -434,23 +448,41 @@ export function ScotlandWhiskyMap({
                   }}
                 >
                   {(isSelected || isInSelectedRegion) && (
-                    <foreignObject
-                      x={-18 / position.zoom}
-                      y={-18 / position.zoom}
-                      width={36 / position.zoom}
-                      height={36 / position.zoom}
-                      pointerEvents="none"
-                      style={{ overflow: 'visible' }}
-                    >
-                      <div
-                        className="relative z-20 flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border-2 border-[#141417] bg-[#141417] text-xs text-[#FFE28A] ring-2 ring-white/90 shadow-[0_6px_20px_rgba(0,0,0,0.95)]"
-                        style={{ transform: `scale(${1 / position.zoom})`, transformOrigin: 'top left' }}
-                      >
-                        {imageUrl ? (
-                          <img src={imageUrl} alt="" className="h-full w-full rounded-full object-cover" />
-                        ) : distillery.name.charAt(0)}
-                      </div>
-                    </foreignObject>
+                    <g transform={`scale(${1 / position.zoom})`} pointerEvents="none">
+                      <defs>
+                        <clipPath id={`distillery-image-${distillery.id}`}>
+                          <circle r={14} />
+                        </clipPath>
+                      </defs>
+                      <circle
+                        r={18}
+                        fill="#141417"
+                        stroke="#FFF"
+                        strokeOpacity={0.9}
+                        strokeWidth={2}
+                        filter="url(#distillery-pin-shadow)"
+                      />
+                      {imageUrl ? (
+                        <image
+                          href={imageUrl}
+                          x={-14}
+                          y={-14}
+                          width={28}
+                          height={28}
+                          clipPath={`url(#distillery-image-${distillery.id})`}
+                          preserveAspectRatio="xMidYMid slice"
+                        />
+                      ) : (
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#FFE28A"
+                          fontSize={12}
+                        >
+                          {distillery.name.charAt(0)}
+                        </text>
+                      )}
+                    </g>
                   )}
                   <circle r={hitRadius} fill="transparent" pointerEvents="all" />
                 </Marker>
