@@ -9,14 +9,14 @@
   },
   "ardbeg_timeline": {
     "aria_label": "Ardbeg history",
-    "subtitle": "Distillery history",
-    "sources": "Sources:"
+    "subtitle": "Distillery history"
   },
   "infographic": {
     "load_error": "Could not load the distillery infographic.",
     "retry": "Try again",
     "history_aria": "{{name}} history",
-    "history_subtitle": "Distillery history"
+    "history_subtitle": "Distillery history",
+    "sources": "Sources:"
   },
   "review": {
     "title": "My review",

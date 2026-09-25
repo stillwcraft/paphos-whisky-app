@@ -2,6 +2,14 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { localizeTimelineText, type TimelineLanguage, type TimelineText } from '@/types/infographicSchemas.ts';
 
+const timelineSources = {
+  ardbeg: [
+    { label: 'Ardbeg', url: 'https://www.ardbeg.com/en-gb/pages/history' },
+    { label: 'Ardbeg Day 2026', url: 'https://www.ardbeg.com/en-gb/pages/ardbeg-day-2026' },
+  ],
+  arran: [{ label: 'Arran Whisky', url: 'https://www.arranwhisky.com' }],
+};
+
 export type DistilleryMilestone = {
   id: string;
   year: string;
@@ -13,14 +21,14 @@ type Props = {
   distilleryName: string;
   logoUrl: string | null;
   milestones: DistilleryMilestone[];
-  showArdbegSources?: boolean;
+  source?: keyof typeof timelineSources;
 };
 
 export default function DistilleryTimelineInfographic({
   distilleryName,
   logoUrl,
   milestones,
-  showArdbegSources = false,
+  source,
 }: Props) {
   const { i18n, t } = useTranslation();
   const languageCode = i18n.language.toLowerCase().split(/[-_]/, 1)[0];
@@ -80,16 +88,17 @@ export default function DistilleryTimelineInfographic({
             </div>
           ))}
         </div>
-        {showArdbegSources && (
+        {source && (
           <p className="mt-7 pl-[84px] text-[11px] text-[#C5A059]">
-            {t('ardbeg_timeline.sources')}{' '}
-            <a className="underline underline-offset-2" href="https://www.ardbeg.com/en-gb/pages/history" rel="noopener noreferrer" target="_blank">
-              Ardbeg
-            </a>
-            {' · '}
-            <a className="underline underline-offset-2" href="https://www.ardbeg.com/en-gb/pages/ardbeg-day-2026" rel="noopener noreferrer" target="_blank">
-              Ardbeg Day 2026
-            </a>
+            {t('infographic.sources')}{' '}
+            {timelineSources[source].map(({ label, url }, index) => (
+              <span key={url}>
+                {index > 0 && ' · '}
+                <a className="underline underline-offset-2" href={url} rel="noopener noreferrer" target="_blank">
+                  {label}
+                </a>
+              </span>
+            ))}
           </p>
         )}
       </div>

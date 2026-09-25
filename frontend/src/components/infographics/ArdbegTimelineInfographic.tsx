@@ -9,7 +9,7 @@ export default function ArdbegTimelineInfographic({ logoUrl, milestones = ardbeg
       distilleryName="Ardbeg"
       logoUrl={logoUrl}
       milestones={milestones}
-      showArdbegSources
+      source="ardbeg"
     />
   );
 }

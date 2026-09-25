@@ -54,7 +54,7 @@ export default function DistilleryInfographicContent({ distillery, isArdbeg }: P
             distilleryName={distillery.name}
             logoUrl={distillery.logo_url ?? null}
             milestones={milestones}
-            showArdbegSources={isArdbeg}
+            source={isArdbeg ? 'ardbeg' : distillery.name.trim().toLowerCase() === 'arran' ? 'arran' : undefined}
           />
         </Suspense>
       );

@@ -9,14 +9,14 @@
   },
   "ardbeg_timeline": {
     "aria_label": "Історія Ardbeg",
-    "subtitle": "Історія винокурні",
-    "sources": "Джерела:"
+    "subtitle": "Історія винокурні"
   },
   "infographic": {
     "load_error": "Не вдалося завантажити інфографіку винокурні.",
     "retry": "Повторити",
     "history_aria": "Історія {{name}}",
-    "history_subtitle": "Історія винокурні"
+    "history_subtitle": "Історія винокурні",
+    "sources": "Джерела:"
   },
   "review": {
     "title": "Мій відгук",
