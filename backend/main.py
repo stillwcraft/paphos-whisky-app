@@ -19,6 +19,7 @@ import models
 from card_generator import CardGenerationError, ReviewCardData, render_review_card
 from database import engine, get_db
 from routers.infographics import admin_router as infographics_admin_router
+from routers.infographics import distillery_router as distillery_infographics_router
 from routers.infographics import router as infographics_router
 from routers.whisky_trail import router as whisky_trail_router
 
@@ -128,6 +129,19 @@ def ensure_event_schema() -> None:
                     f"ADD COLUMN samples_price {samples_price_type} NULL"
                 )
             )
+
+
+def ensure_infographic_schema() -> None:
+    with engine.begin() as connection:
+        if "distillery_id" not in get_table_columns(connection, "infographics"):
+            connection.execute(text(
+                "ALTER TABLE infographics ADD COLUMN distillery_id INTEGER "
+                "REFERENCES distilleries(id) ON DELETE SET NULL"
+            ))
+        connection.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ix_infographics_distillery_id_unique "
+            "ON infographics (distillery_id)"
+        ))
 
 
 def ensure_catalog_schema() -> None:
@@ -452,6 +466,7 @@ def ensure_event_bottles_schema() -> None:
 
 
 ensure_event_schema()
+ensure_infographic_schema()
 ensure_catalog_schema()
 ensure_articles_schema()
 ensure_i18n_schema()
@@ -886,6 +901,7 @@ def require_admin(
 
 
 app.include_router(infographics_router)
+app.include_router(distillery_infographics_router)
 app.include_router(infographics_admin_router, dependencies=[Depends(require_admin)])
 
 

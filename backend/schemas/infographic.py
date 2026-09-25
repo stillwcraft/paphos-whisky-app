@@ -33,11 +33,17 @@ class ChartPayload(InfographicPayload):
         return self
 
 
+class LocalizedTimelineText(InfographicPayload):
+    en: str = Field(min_length=1)
+    ru: str = Field(min_length=1)
+    uk: str = Field(min_length=1)
+
+
 class TimelineStep(InfographicPayload):
     id: Union[str, int]
-    title: str = Field(min_length=1)
+    title: Union[str, LocalizedTimelineText]
     subtitle: str
-    description: str
+    description: Union[str, LocalizedTimelineText]
     dateOrYear: Union[str, int]
     badge: Optional[str] = None
 
@@ -85,6 +91,7 @@ class InfographicCreate(BaseModel):
     title: str = Field(min_length=1)
     type: InfographicType
     schema_data: SchemaData
+    distillery_id: Optional[int] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def validate_schema_data(self):
@@ -105,5 +112,6 @@ class InfographicResponse(BaseModel):
     title: str
     type: InfographicType
     schema_data: dict
+    distillery_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime

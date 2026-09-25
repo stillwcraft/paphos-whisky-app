@@ -1,13 +1,21 @@
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { ardbegMilestones, type ArdbegLanguage } from './ardbegHistory.ts';
+import { localizeTimelineText, type TimelineLanguage, type TimelineText } from '@/types/infographicSchemas.ts';
+import ardbegMilestones from './ardbegHistory.json';
 
-type Props = { logoUrl: string | null };
+export type ArdbegMilestone = {
+  id: string;
+  year: string;
+  title: TimelineText;
+  description: TimelineText;
+};
 
-export default function ArdbegTimelineInfographic({ logoUrl }: Props) {
+type Props = { logoUrl: string | null; milestones?: ArdbegMilestone[] };
+
+export default function ArdbegTimelineInfographic({ logoUrl, milestones = ardbegMilestones }: Props) {
   const { i18n, t } = useTranslation();
   const languageCode = i18n.language.toLowerCase().split(/[-_]/, 1)[0];
-  const language: ArdbegLanguage = languageCode === 'ru' || languageCode === 'uk' ? languageCode : 'en';
+  const language: TimelineLanguage = languageCode === 'ru' || languageCode === 'uk' ? languageCode : 'en';
 
   return (
     <section aria-label={t('ardbeg_timeline.aria_label')} className="text-[#E5E7EB]">
@@ -36,7 +44,7 @@ export default function ArdbegTimelineInfographic({ logoUrl }: Props) {
           transition={{ duration: 1.5, ease: 'easeOut' }}
         />
         <div className="relative space-y-5">
-          {ardbegMilestones.map((event) => (
+          {milestones.map((event) => (
             <div key={event.id} className="grid grid-cols-[68px_16px_1fr] items-start">
               <motion.div
                 className="break-words pt-5 font-serif text-[11px] font-semibold leading-tight text-[#FFE28A]"
@@ -57,8 +65,8 @@ export default function ArdbegTimelineInfographic({ logoUrl }: Props) {
                 viewport={{ once: true }}
                 transition={{ duration: 0.45 }}
               >
-                <h3 className="font-serif text-sm font-semibold text-[#FFE28A]">{event.title[language]}</h3>
-                <p className="mt-2 text-xs leading-relaxed text-[#E5E7EB]">{event.description[language]}</p>
+                <h3 className="font-serif text-sm font-semibold text-[#FFE28A]">{localizeTimelineText(event.title, language)}</h3>
+                <p className="mt-2 text-xs leading-relaxed text-[#E5E7EB]">{localizeTimelineText(event.description, language)}</p>
               </motion.article>
             </div>
           ))}

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Table, Text, UniqueConstraint, Uuid
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Table, Text, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from database import Base
@@ -13,12 +13,14 @@ class Infographic(Base):
     __tablename__ = "infographics"
     __table_args__ = (
         CheckConstraint("type IN ('chart', 'timeline', 'map_overlay')", name="ck_infographics_type"),
+        Index("ix_infographics_distillery_id_unique", "distillery_id", unique=True),
     )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     title = Column(Text, nullable=False)
     type = Column(String(20), nullable=False)
     schema_data = Column(I18N_JSON, nullable=False)
+    distillery_id = Column(Integer, ForeignKey("distilleries.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),

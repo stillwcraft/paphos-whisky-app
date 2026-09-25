@@ -12,6 +12,10 @@
     "subtitle": "Distillery history",
     "sources": "Sources:"
   },
+  "infographic": {
+    "load_error": "Could not load the distillery infographic.",
+    "retry": "Try again"
+  },
   "review": {
     "title": "My review",
     "points": "Points",

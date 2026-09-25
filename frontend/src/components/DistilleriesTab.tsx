@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
-import ArdbegTimelineInfographic from '@/components/infographics/ArdbegTimelineInfographic.tsx';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const DistilleryInfographicContent = lazy(() => import('@/components/infographics/DistilleryInfographicContent.tsx'));
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type Bottle = {
@@ -530,16 +530,9 @@ export function DistilleriesTab({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-              {isArdbeg ? (
-                <ArdbegTimelineInfographic logoUrl={selectedDistillery.logo_url ?? null} />
-              ) : (
-                <div className="p-6">
-                  <h2 className="text-2xl font-semibold text-white">{selectedDistillery.name}</h2>
-                  <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>
-                    {selectedDistillery.description || t('bottle.description_soon')}
-                  </p>
-                </div>
-              )}
+              <Suspense fallback={<p className="p-6 text-sm text-[#C5A059]">{t('common.loading')}</p>}>
+                <DistilleryInfographicContent distillery={selectedDistillery} isArdbeg={isArdbeg} />
+              </Suspense>
             </div>
           </article>
         </div>

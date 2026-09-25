@@ -23,12 +23,27 @@ export const chartSchema = z.object({
   }
 });
 
+const localizedTimelineTextSchema = z.object({
+  en: z.string().min(1),
+  ru: z.string().min(1),
+  uk: z.string().min(1),
+}).strict();
+
+const timelineTextSchema = z.union([z.string(), localizedTimelineTextSchema]);
+
+export type TimelineText = z.infer<typeof timelineTextSchema>;
+export type TimelineLanguage = 'en' | 'ru' | 'uk';
+
+export function localizeTimelineText(text: TimelineText, language: TimelineLanguage): string {
+  return typeof text === 'string' ? text : text[language];
+}
+
 const timelineStepSchema = z.object({
   id: z.union([z.string().min(1), z.number().int()]),
   badge: z.string().nullable().optional(),
-  title: z.string().min(1),
+  title: z.union([z.string().min(1), localizedTimelineTextSchema]),
   subtitle: z.string(),
-  description: z.string(),
+  description: timelineTextSchema,
   dateOrYear: z.union([z.string(), z.number().int()]),
 }).strict();
 
@@ -65,6 +80,7 @@ export const infographicSchema = z.discriminatedUnion('type', [
 export const infographicResponseSchema = infographicSchema.and(z.object({
   id: z.string().uuid(),
   title: z.string(),
+  distillery_id: z.number().int().positive().nullable(),
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
 }));

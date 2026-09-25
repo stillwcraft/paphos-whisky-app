@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import type { TimelineStep } from '@/types/infographicSchemas.ts';
+import { useTranslation } from 'react-i18next';
+import { localizeTimelineText, type TimelineLanguage, type TimelineStep } from '@/types/infographicSchemas.ts';
 
 const listVariants = {
   hidden: {},
@@ -14,6 +15,10 @@ const stepVariants = {
 type Props = { steps: TimelineStep[]; title?: string };
 
 export default function TimelineStepByStep({ steps, title }: Props) {
+  const { i18n } = useTranslation();
+  const code = i18n.language.toLowerCase().split(/[-_]/, 1)[0];
+  const language: TimelineLanguage = code === 'ru' || code === 'uk' ? code : 'en';
+
   return (
     <section aria-label={title || 'Таймлайн'} className="text-[#E5E7EB]">
       {title && <h2 className="mb-6 font-serif text-xl text-[#FFE28A]">{title}</h2>}
@@ -52,9 +57,9 @@ export default function TimelineStepByStep({ steps, title }: Props) {
                   {'dateOrYear' in item && <span>{item.dateOrYear}</span>}
                   {'step' in item && <span>{item.step}</span>}
                 </div>
-                <h3 className="mt-1 font-serif text-lg text-[#FFE28A]">{item.title}</h3>
+                <h3 className="mt-1 font-serif text-lg text-[#FFE28A]">{localizeTimelineText(item.title, language)}</h3>
                 {'subtitle' in item && item.subtitle && <p className="text-sm text-[#C5A059]">{item.subtitle}</p>}
-                <p className="mt-2 text-sm leading-relaxed text-[#E5E7EB]">{item.description}</p>
+                <p className="mt-2 text-sm leading-relaxed text-[#E5E7EB]">{localizeTimelineText(item.description, language)}</p>
               </div>
             </motion.div>
           );
