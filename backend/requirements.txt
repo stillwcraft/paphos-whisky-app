@@ -33,4 +33,5 @@ uvicorn==0.39.0
 yarl==1.22.0
 sqlalchemy
 psycopg2-binary
+psycopg[binary]>=3,<4
 Pillow==11.3.0
