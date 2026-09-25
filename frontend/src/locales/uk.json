@@ -14,7 +14,9 @@
   },
   "infographic": {
     "load_error": "Не вдалося завантажити інфографіку винокурні.",
-    "retry": "Повторити"
+    "retry": "Повторити",
+    "history_aria": "Історія {{name}}",
+    "history_subtitle": "Історія винокурні"
   },
   "review": {
     "title": "Мій відгук",

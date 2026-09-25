@@ -5,6 +5,7 @@ import type { TimelineStep } from '@/types/infographicSchemas.ts';
 import UniversalInfographicRenderer from './UniversalInfographicRenderer.tsx';
 
 const ArdbegTimelineInfographic = lazy(() => import('./ArdbegTimelineInfographic.tsx'));
+const DistilleryTimelineInfographic = lazy(() => import('./DistilleryTimelineInfographic.tsx'));
 type DetailedTimelineStep = Extract<TimelineStep, { id: string | number }>;
 
 type Props = {
@@ -40,7 +41,7 @@ export default function DistilleryInfographicContent({ distillery, isArdbeg }: P
   }
   if (infographic.data) {
     const steps = infographic.data.type === 'timeline' ? infographic.data.schema_data.steps : null;
-    if (isArdbeg && steps?.every((step): step is DetailedTimelineStep => 'id' in step)) {
+    if (steps?.every((step): step is DetailedTimelineStep => 'id' in step)) {
       const milestones = steps.map((step) => ({
         id: String(step.id),
         year: String(step.dateOrYear),
@@ -49,7 +50,12 @@ export default function DistilleryInfographicContent({ distillery, isArdbeg }: P
       }));
       return (
         <Suspense fallback={<p className="p-6 text-sm text-[#C5A059]">{t('common.loading')}</p>}>
-          <ArdbegTimelineInfographic logoUrl={distillery.logo_url ?? null} milestones={milestones} />
+          <DistilleryTimelineInfographic
+            distilleryName={distillery.name}
+            logoUrl={distillery.logo_url ?? null}
+            milestones={milestones}
+            showArdbegSources={isArdbeg}
+          />
         </Suspense>
       );
     }

@@ -14,7 +14,9 @@
   },
   "infographic": {
     "load_error": "Could not load the distillery infographic.",
-    "retry": "Try again"
+    "retry": "Try again",
+    "history_aria": "{{name}} history",
+    "history_subtitle": "Distillery history"
   },
   "review": {
     "title": "My review",

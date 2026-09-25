@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import unittest
 from pathlib import Path
 from uuid import uuid4
@@ -129,6 +130,25 @@ class InfographicTests(unittest.TestCase):
         self.assertEqual(len(payload.schema_data.steps), 23)
         self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1815")
         self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2026")
+
+    def test_arran_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "004_seed_arran_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$arran_payload\$\s*(.*?)\s*\$arran_payload\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Arran History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 13)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1800")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2019")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
 
     def test_distillery_lookup_and_single_assigned_infographic(self):
         self.assertIsNone(get_distillery_infographic(self.distillery.id, db=self.db))
