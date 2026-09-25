@@ -3,13 +3,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Получаем ссылку из переменных окружения Render
-DATABASE_URL = os.getenv("DATABASE_URL")
+def normalize_database_url(url: str) -> str:
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql+psycopg2://", 1)
+    return url
 
-# Небольшой хак: SQLAlchemy требует, чтобы ссылка начиналась именно с postgresql://
-# а некоторые сервисы выдают её как postgres://
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    DATABASE_URL = normalize_database_url(DATABASE_URL)
 
 # Создаем движок подключения
 engine = create_engine(DATABASE_URL)
