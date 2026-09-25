@@ -5,6 +5,7 @@ import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
+import ArdbegTimelineInfographic from '@/components/infographics/ArdbegTimelineInfographic.tsx';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 
@@ -34,6 +35,7 @@ type Distillery = {
   name: string;
   name_i18n?: I18nString;
   image_url: string | null;
+  logo_url?: string | null;
   description: string | null;
   description_i18n?: I18nString;
   bottle_count: number;
@@ -378,6 +380,9 @@ export function DistilleriesTab({
   };
 
   const selectedBottleState = selectedBottle ? userStates[selectedBottle.id] : undefined;
+  const isArdbeg = selectedDistillery !== null
+    && [selectedDistillery.name, selectedDistillery.name_i18n?.en]
+      .some((name) => /^(ardbeg|ардбег)$/i.test(name?.trim() ?? ''));
   const openBottles = openDistilleryId === null ? [] : distilleryBottles[openDistilleryId] ?? [];
   const openBottlePage = openDistilleryId === null ? undefined : bottlePages[openDistilleryId];
   const loadMoreOpenBottles = useCallback(() => {
@@ -524,11 +529,17 @@ export function DistilleriesTab({
                 ✕
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-6">
-              <h2 className="text-2xl font-semibold text-white">{selectedDistillery.name}</h2>
-              <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>
-                {selectedDistillery.description || t('bottle.description_soon')}
-              </p>
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+              {isArdbeg ? (
+                <ArdbegTimelineInfographic logoUrl={selectedDistillery.logo_url ?? null} />
+              ) : (
+                <div className="p-6">
+                  <h2 className="text-2xl font-semibold text-white">{selectedDistillery.name}</h2>
+                  <p className="mt-5 text-sm leading-7 text-slate-300" style={{ whiteSpace: 'pre-wrap' }}>
+                    {selectedDistillery.description || t('bottle.description_soon')}
+                  </p>
+                </div>
+              )}
             </div>
           </article>
         </div>

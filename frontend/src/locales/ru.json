@@ -7,6 +7,11 @@
     "na": "—",
     "main_navigation": "Основная навигация"
   },
+  "ardbeg_timeline": {
+    "aria_label": "История Ardbeg",
+    "subtitle": "История винокурни",
+    "sources": "Источники:"
+  },
   "review": {
     "title": "Мой отзыв",
     "points": "Баллы",

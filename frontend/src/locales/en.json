@@ -7,6 +7,11 @@
     "na": "N/A",
     "main_navigation": "Main navigation"
   },
+  "ardbeg_timeline": {
+    "aria_label": "Ardbeg history",
+    "subtitle": "Distillery history",
+    "sources": "Sources:"
+  },
   "review": {
     "title": "My review",
     "points": "Points",
