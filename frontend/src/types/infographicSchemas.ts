@@ -23,16 +23,28 @@ export const chartSchema = z.object({
   }
 });
 
-export const timelineSchema = z.object({
-  steps: z.array(z.object({
+const timelineStepSchema = z.object({
+  id: z.union([z.string().min(1), z.number().int()]),
+  badge: z.string().nullable().optional(),
+  title: z.string().min(1),
+  subtitle: z.string(),
+  description: z.string(),
+  dateOrYear: z.union([z.string(), z.number().int()]),
+}).strict();
+
+const legacyTimelineStepSchema = z.object({
     step: z.number().int().positive(),
     title: z.string().min(1),
     description: z.string(),
     badge: z.string().nullable().optional(),
-  }).strict()).min(1),
+}).strict();
+
+export const timelineSchema = z.object({
+  steps: z.array(z.union([timelineStepSchema, legacyTimelineStepSchema])).min(1),
 }).strict().superRefine((payload, context) => {
-  if (new Set(payload.steps.map((item) => item.step)).size !== payload.steps.length) {
-    context.addIssue({ code: 'custom', message: 'Timeline step numbers must be unique' });
+  const identifiers = payload.steps.map((item) => String('id' in item ? item.id : item.step));
+  if (new Set(identifiers).size !== payload.steps.length) {
+    context.addIssue({ code: 'custom', message: 'Timeline step identifiers must be unique' });
   }
 });
 
@@ -46,7 +58,7 @@ export const mapOverlaySchema = z.object({
 
 export const infographicSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('chart'), schema_data: chartSchema }),
-  z.object({ type: z.literal('timeline'), schema_data: timelineSchema }),
+  z.object({ type: z.literal('timeline'), schema_data: timelineSchema, title: z.string().optional() }),
   z.object({ type: z.literal('map_overlay'), schema_data: mapOverlaySchema }),
 ]);
 
@@ -59,5 +71,6 @@ export const infographicResponseSchema = infographicSchema.and(z.object({
 
 export type ChartPayload = z.infer<typeof chartSchema>;
 export type TimelinePayload = z.infer<typeof timelineSchema>;
+export type TimelineStep = TimelinePayload['steps'][number];
 export type Infographic = z.infer<typeof infographicSchema>;
 export type InfographicResponse = z.infer<typeof infographicResponseSchema>;

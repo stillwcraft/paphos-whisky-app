@@ -67,13 +67,34 @@ class InfographicTests(unittest.TestCase):
 
     def test_timeline_and_map_overlay_validate_and_persist(self):
         for infographic_type, schema_data in [
-            ("timeline", {"steps": [{"step": 1, "title": "Start", "description": "First"}]}),
+            ("timeline", {"steps": [
+                {
+                    "id": "foundation",
+                    "badge": "History",
+                    "title": "Founded",
+                    "subtitle": "The beginning",
+                    "description": "The distillery opened.",
+                    "dateOrYear": 1890,
+                },
+                {"step": 2, "title": "Legacy", "description": "Older saved format"},
+            ]}),
             ("map_overlay", {"markers": [{"latitude": 55.95, "longitude": -3.2, "title": "Edinburgh"}]}),
         ]:
             with self.subTest(infographic_type=infographic_type):
                 payload = InfographicCreate(title="Test", type=infographic_type, schema_data=schema_data)
                 created = create_infographic(payload, db=self.db)
                 self.assertEqual(get_infographic(created.id, db=self.db).schema_data, payload.model_dump()["schema_data"])
+
+    def test_rejects_duplicate_timeline_ids(self):
+        with self.assertRaises(ValidationError):
+            InfographicCreate(
+                title="History",
+                type="timeline",
+                schema_data={"steps": [
+                    {"id": "same", "title": "Start", "subtitle": "", "description": "", "dateOrYear": "1890"},
+                    {"id": "same", "title": "End", "subtitle": "", "description": "", "dateOrYear": "1900"},
+                ]},
+            )
 
     def test_post_is_admin_only_and_get_is_public(self):
         post = next(route for route in app.routes if route.path == "/api/v1/infographics" and "POST" in route.methods)

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal, Optional, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, field_validator, model_validator
 
 
 class InfographicPayload(BaseModel):
@@ -34,6 +34,22 @@ class ChartPayload(InfographicPayload):
 
 
 class TimelineStep(InfographicPayload):
+    id: Union[str, int]
+    title: str = Field(min_length=1)
+    subtitle: str
+    description: str
+    dateOrYear: Union[str, int]
+    badge: Optional[str] = None
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, value):
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("Timeline step id must not be empty")
+        return value
+
+
+class LegacyTimelineStep(InfographicPayload):
     step: int = Field(ge=1)
     title: str = Field(min_length=1)
     description: str
@@ -41,12 +57,13 @@ class TimelineStep(InfographicPayload):
 
 
 class TimelinePayload(InfographicPayload):
-    steps: list[TimelineStep] = Field(min_length=1)
+    steps: list[Union[TimelineStep, LegacyTimelineStep]] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_step_numbers(self):
-        if len({item.step for item in self.steps}) != len(self.steps):
-            raise ValueError("Timeline step numbers must be unique")
+        identifiers = [str(item.id if isinstance(item, TimelineStep) else item.step) for item in self.steps]
+        if len(set(identifiers)) != len(self.steps):
+            raise ValueError("Timeline step identifiers must be unique")
         return self
 
 

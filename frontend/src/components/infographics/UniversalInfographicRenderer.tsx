@@ -47,7 +47,11 @@ function Content({ infographicId, schemaData }: Props) {
     case 'chart':
       return <Suspense fallback={<Skeleton />}><EChartsRenderer payload={infographic.schema_data} /></Suspense>;
     case 'timeline':
-      return <Suspense fallback={<Skeleton />}><TimelineStepByStep payload={infographic.schema_data} /></Suspense>;
+      return (
+        <Suspense fallback={<Skeleton />}>
+          <TimelineStepByStep steps={infographic.schema_data.steps} title={infographic.title} />
+        </Suspense>
+      );
     case 'map_overlay':
       return <p className="rounded-xl border border-[#C5A059]/30 bg-[#1A1A1E] p-4 text-[#E5E7EB]">Отображение карты пока не поддерживается</p>;
   }
