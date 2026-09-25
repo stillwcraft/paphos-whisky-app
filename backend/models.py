@@ -1,11 +1,31 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Table, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Table, Text, UniqueConstraint, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, synonym
 from database import Base
 
 I18N_JSON = JSON().with_variant(JSONB, "postgresql")
+
+
+class Infographic(Base):
+    __tablename__ = "infographics"
+    __table_args__ = (
+        CheckConstraint("type IN ('chart', 'timeline', 'map_overlay')", name="ck_infographics_type"),
+    )
+
+    id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    title = Column(Text, nullable=False)
+    type = Column(String(20), nullable=False)
+    schema_data = Column(I18N_JSON, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 # Association table matching pre-existing Supabase event_bottles(event_id, bottle_id)
 event_bottles_table = Table(

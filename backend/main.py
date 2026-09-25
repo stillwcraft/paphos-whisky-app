@@ -18,6 +18,8 @@ from pydantic import BaseModel, Field
 import models
 from card_generator import CardGenerationError, ReviewCardData, render_review_card
 from database import engine, get_db
+from routers.infographics import admin_router as infographics_admin_router
+from routers.infographics import router as infographics_router
 from routers.whisky_trail import router as whisky_trail_router
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
@@ -881,6 +883,10 @@ def require_admin(
         )
 
     return authenticated_user
+
+
+app.include_router(infographics_router)
+app.include_router(infographics_admin_router, dependencies=[Depends(require_admin)])
 
 
 # --- Схемы валидации данных (Pydantic) ---
