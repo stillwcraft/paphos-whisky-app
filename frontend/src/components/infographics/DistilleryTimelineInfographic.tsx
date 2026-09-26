@@ -2,12 +2,16 @@ import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { localizeTimelineText, type TimelineLanguage, type TimelineText } from '@/types/infographicSchemas.ts';
 
-const timelineSources = {
-  ardbeg: [
-    { label: 'Ardbeg', url: 'https://www.ardbeg.com/en-gb/pages/history' },
-    { label: 'Ardbeg Day 2026', url: 'https://www.ardbeg.com/en-gb/pages/ardbeg-day-2026' },
-  ],
+const bruichladdichSources = [{ label: 'Bruichladdich', url: 'https://www.bruichladdich.com/' }];
+const ardbegSources = [
+  { label: 'Ardbeg', url: 'https://www.ardbeg.com/en-gb/pages/history' },
+  { label: 'Ardbeg Day 2026', url: 'https://www.ardbeg.com/en-gb/pages/ardbeg-day-2026' },
+];
+const timelineSources: Record<string, { label: string; url: string }[]> = {
+  ardbeg: ardbegSources,
   arran: [{ label: 'Arran Whisky', url: 'https://www.arranwhisky.com' }],
+  bruichladdich: bruichladdichSources,
+  bruichladdie: bruichladdichSources,
 };
 
 export type DistilleryMilestone = {
@@ -21,7 +25,7 @@ type Props = {
   distilleryName: string;
   logoUrl: string | null;
   milestones: DistilleryMilestone[];
-  source?: keyof typeof timelineSources;
+  source?: 'ardbeg';
 };
 
 export default function DistilleryTimelineInfographic({
@@ -33,6 +37,7 @@ export default function DistilleryTimelineInfographic({
   const { i18n, t } = useTranslation();
   const languageCode = i18n.language.toLowerCase().split(/[-_]/, 1)[0];
   const language: TimelineLanguage = languageCode === 'ru' || languageCode === 'uk' ? languageCode : 'en';
+  const sources = timelineSources[source ?? distilleryName.trim().toLowerCase()];
 
   return (
     <section aria-label={t('infographic.history_aria', { name: distilleryName })} className="text-[#E5E7EB]">
@@ -88,10 +93,10 @@ export default function DistilleryTimelineInfographic({
             </div>
           ))}
         </div>
-        {source && (
+        {sources && (
           <p className="mt-7 pl-[84px] text-[11px] text-[#C5A059]">
             {t('infographic.sources')}{' '}
-            {timelineSources[source].map(({ label, url }, index) => (
+            {sources.map(({ label, url }, index) => (
               <span key={url}>
                 {index > 0 && ' · '}
                 <a className="underline underline-offset-2" href={url} rel="noopener noreferrer" target="_blank">
