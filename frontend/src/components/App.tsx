@@ -9,7 +9,7 @@ import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
-import { ArticlesTab } from '@/components/ArticlesTab.tsx';
+import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 
@@ -178,7 +178,7 @@ export function App() {
               onOpenOnMap={openDistilleryOnMap}
             />
           ) : activeTab === 'articles' ? (
-            showArticlesTab ? <ArticlesTab /> : (
+            showArticlesTab ? <NewsFeedTab /> : (
               <div className="flex min-h-screen items-center justify-center text-center">
                 <p className="text-lg font-semibold text-[#F4F4F5]">Доступ ограничен</p>
               </div>

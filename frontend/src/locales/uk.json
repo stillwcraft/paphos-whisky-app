@@ -53,6 +53,9 @@
   "articles": {
     "article": "СТАТТЯ",
     "news": "НОВИНА",
+    "interactive": "Інтерактив",
+    "open": "Відкрити {{title}}",
+    "loading_presentation": "Завантаження презентації...",
     "close_presentation": "Закрити презентацію",
     "previous_slide": "Попередній слайд",
     "next_slide": "Наступний слайд",

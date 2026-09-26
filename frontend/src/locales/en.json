@@ -53,6 +53,9 @@
   "articles": {
     "article": "ARTICLE",
     "news": "NEWS",
+    "interactive": "Interactive",
+    "open": "Open {{title}}",
+    "loading_presentation": "Loading presentation...",
     "close_presentation": "Close presentation",
     "previous_slide": "Previous slide",
     "next_slide": "Next slide",
