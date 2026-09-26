@@ -78,8 +78,15 @@ class Article(Base):
     title = Column(I18N_JSON, nullable=False)
     content = Column(I18N_JSON, nullable=False)
     type = Column(String(20), nullable=False, default="news")
+    format = Column(String(32), nullable=False, default="standard", server_default="standard")
     image_urls = Column(JSON, nullable=False, default=list)
     is_published = Column(Boolean, nullable=False, default=True)
+    background_config = Column(
+        I18N_JSON,
+        nullable=True,
+        default=lambda: {"type": "color", "value": "#0a0a0c", "overlay_opacity": None},
+    )
+    slides_data = Column(I18N_JSON, nullable=False, default=list)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

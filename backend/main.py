@@ -22,13 +22,13 @@ from routers.infographics import admin_router as infographics_admin_router
 from routers.infographics import distillery_router as distillery_infographics_router
 from routers.infographics import router as infographics_router
 from routers.whisky_trail import router as whisky_trail_router
+from schemas.article import ArticleBase, ArticleCreate, ArticleResponse, ArticleUpdate
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
 models.Base.metadata.create_all(bind=engine)
 
 
 BottleLabel = Literal["bottle", "samples", "event"]
-ArticleType = Literal["article", "news"]
 ArticleLanguage = Literal["ru", "en", "uk"]
 CardLanguage = Literal["en", "ru", "uk"]
 I18nString = Dict[str, str]
@@ -319,6 +319,12 @@ def rebuild_sqlite_articles_table(connection, article_columns: dict[str, dict]) 
         }
         row["title"] = normalize_legacy_article_translation(article["title"])
         row["content"] = normalize_legacy_article_translation(article["content"])
+        if "format" not in article_columns:
+            row["format"] = "standard"
+        if "background_config" not in article_columns:
+            row["background_config"] = {"type": "color", "value": "#0a0a0c", "overlay_opacity": None}
+        if "slides_data" not in article_columns:
+            row["slides_data"] = []
         rows.append(row)
     if rows:
         connection.execute(models.Article.__table__.insert(), rows)
@@ -330,19 +336,28 @@ def ensure_articles_schema() -> None:
         article_columns = get_table_columns(connection, "articles")
         title_type = str(article_columns["title"]["type"]).upper()
         content_type = str(article_columns["content"]["type"]).upper()
-        if "JSON" in title_type and "JSON" in content_type:
-            return
-
-        if engine.dialect.name == "postgresql":
-            for column_name in ("title", "content"):
-                connection.execute(
-                    text(
-                        f"ALTER TABLE articles ALTER COLUMN {column_name} "
-                        f"TYPE JSONB USING jsonb_build_object('ru', {column_name})"
+        if "JSON" not in title_type or "JSON" not in content_type:
+            if engine.dialect.name == "postgresql":
+                for column_name in ("title", "content"):
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE articles ALTER COLUMN {column_name} "
+                            f"TYPE JSONB USING jsonb_build_object('ru', {column_name})"
+                        )
                     )
-                )
-        elif engine.dialect.name == "sqlite":
-            rebuild_sqlite_articles_table(connection, article_columns)
+            elif engine.dialect.name == "sqlite":
+                rebuild_sqlite_articles_table(connection, article_columns)
+                article_columns = get_table_columns(connection, "articles")
+
+        json_type = "JSONB" if engine.dialect.name == "postgresql" else "JSON"
+        missing_columns = {
+            "format": "VARCHAR(32) NOT NULL DEFAULT 'standard'",
+            "background_config": f"{json_type} DEFAULT '{{\"type\":\"color\",\"value\":\"#0a0a0c\",\"overlay_opacity\":null}}'",
+            "slides_data": f"{json_type} NOT NULL DEFAULT '[]'",
+        }
+        for column_name, definition in missing_columns.items():
+            if column_name not in article_columns:
+                connection.exec_driver_sql(f"ALTER TABLE articles ADD COLUMN {column_name} {definition}")
 
 
 def ensure_i18n_schema() -> None:
@@ -929,42 +944,16 @@ class EventUpdate(EventCreate):
     pass
 
 
-class ArticleBase(BaseModel):
-    title: I18nString
-    content: I18nString
-    type: ArticleType = "news"
-    image_urls: List[str] = Field(default_factory=list)
-    is_published: bool = True
-
-
-class ArticleCreate(ArticleBase):
-    pass
-
-
-class ArticleUpdate(BaseModel):
-    title: Optional[I18nString] = None
-    content: Optional[I18nString] = None
-    type: Optional[ArticleType] = None
-    image_urls: Optional[List[str]] = None
-    is_published: Optional[bool] = None
-
-
-class ArticleResponse(ArticleBase):
-    id: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
 class ArticleClientResponse(BaseModel):
     id: int
     title: str
     content: str
-    type: ArticleType
+    type: str
+    format: Literal["standard", "interactive_presentation"] = "standard"
     image_urls: List[str]
     is_published: bool
+    background_config: Optional[dict] = None
+    slides_data: List[dict] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -1634,8 +1623,11 @@ def article_translation(article: models.Article, language: ArticleLanguage) -> A
         title=title,
         content=content,
         type=article.type,
+        format=article.format,
         image_urls=article.image_urls,
         is_published=article.is_published,
+        background_config=article.background_config,
+        slides_data=article.slides_data,
         created_at=article.created_at,
         updated_at=article.updated_at,
     )
@@ -1656,18 +1648,18 @@ def articles_with_translation(
         content = models.Article.content.cast(JSONB)
         query = query.filter(
             title.has_key(language),
-            content.has_key(language),
             title[language].astext != "",
-            content[language].astext != "",
+            (models.Article.format == "interactive_presentation")
+            | (content.has_key(language) & (content[language].astext != "")),
         )
     else:
         title = func.json_extract(models.Article.title, f"$.{language}")
         content = func.json_extract(models.Article.content, f"$.{language}")
         query = query.filter(
             title.is_not(None),
-            content.is_not(None),
             title != "",
-            content != "",
+            (models.Article.format == "interactive_presentation")
+            | (content.is_not(None) & (content != "")),
         )
     return query
 
@@ -1742,6 +1734,7 @@ def create_article(
 
 
 @app.put("/api/admin/articles/{article_id}", response_model=ArticleResponse)
+@app.patch("/api/admin/articles/{article_id}", response_model=ArticleResponse)
 def update_article(
     article_id: int,
     article_data: ArticleUpdate,
@@ -1753,6 +1746,8 @@ def update_article(
         raise HTTPException(status_code=404, detail="Article not found")
 
     updates = article_data.model_dump(exclude_unset=True)
+    if any(value is None for field, value in updates.items() if field != "background_config"):
+        raise HTTPException(status_code=422, detail="Article fields cannot be null")
     for field in ("title", "content"):
         if field in updates:
             existing_translations = getattr(article, field)

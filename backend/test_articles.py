@@ -5,17 +5,31 @@ from datetime import datetime, timedelta, timezone
 os.environ["DATABASE_URL"] = "sqlite://"
 
 import models
+from pydantic import ValidationError
+from sqlalchemy import create_engine, inspect, text
 from database import SessionLocal
 from fastapi import HTTPException
+from unittest.mock import patch
 from main import (
     ArticleCreate,
     ArticleUpdate,
+    app,
     create_article,
     delete_article,
     get_admin_articles,
     get_article,
     get_articles,
+    ensure_articles_schema,
     update_article,
+)
+from schemas.article import (
+    AnimationConfig,
+    ArticleResponse,
+    BackgroundConfig,
+    InteractiveSlide,
+    PositionConfig,
+    SlideElement,
+    TextStyleConfig,
 )
 
 
@@ -104,6 +118,101 @@ class ArticlesTest(unittest.TestCase):
         with self.assertRaises(HTTPException) as context:
             get_article(article.id, db=self.db)
         self.assertEqual(context.exception.status_code, 404)
+
+    def test_interactive_article_round_trip_and_partial_update(self):
+        slide = {
+            "slide_index": 0,
+            "elements": [{
+                "id": "headline",
+                "type": "text",
+                "content": {"ru": "Остров Скай", "en": "Isle of Skye"},
+                "position": {"top": "20px", "width": "80%"},
+                "animation": {"type": "slide_up", "delay": 0.2},
+            }],
+        }
+        article = create_article(
+            ArticleCreate(
+                title={"ru": "История Talisker", "en": "Talisker history"},
+                format="interactive_presentation",
+                background_config=BackgroundConfig(type="image", value="/talisker.jpg", overlay_opacity=0.4),
+                slides_data=[InteractiveSlide.model_validate(slide)],
+            ),
+            db=self.db,
+        )
+        self.assertEqual(article.content, {})
+        self.assertEqual(ArticleResponse.model_validate(article).slides_data[0].elements[0].animation.delay, 0.2)
+        self.assertEqual(article.background_config["value"], "/talisker.jpg")
+        self.assertEqual(get_article(article.id, lang="en", db=self.db).slides_data[0]["slide_index"], 0)
+        self.assertEqual(get_articles(lang="ru", limit=3, offset=0, db=self.db)["total"], 1)
+
+        updated = update_article(article.id, ArticleUpdate(is_published=False), db=self.db)
+        self.assertEqual(updated.slides_data[0]["elements"][0]["content"], slide["elements"][0]["content"])
+        self.assertFalse(updated.is_published)
+        with self.assertRaises(HTTPException) as invalid:
+            update_article(article.id, ArticleUpdate(format=None), db=self.db)
+        self.assertEqual(invalid.exception.status_code, 422)
+        self.assertEqual(updated.format, "interactive_presentation")
+        self.assertTrue(any(
+            route.path == "/api/admin/articles/{article_id}" and "PATCH" in route.methods
+            for route in app.routes
+        ))
+
+    def test_article_schema_defaults_and_validation(self):
+        first = ArticleCreate(title={"en": "One"})
+        second = ArticleCreate(title={"en": "Two"})
+        first.image_urls.append("/one.jpg")
+        first.slides_data.append(InteractiveSlide(slide_index=0, elements=[]))
+        self.assertEqual(second.image_urls, [])
+        self.assertEqual(second.slides_data, [])
+        self.assertEqual(first.background_config.value, "#0a0a0c")
+        self.assertEqual(PositionConfig().z_index, 10)
+        self.assertEqual(TextStyleConfig().text_align, "left")
+        self.assertEqual(ArticleUpdate().model_dump(exclude_unset=True), {})
+
+        for model, fields in [
+            (AnimationConfig, {"type": "slide_up", "delay": -1}),
+            (AnimationConfig, {"type": "fade_in", "duration": 0}),
+            (AnimationConfig, {"type": "spin"}),
+            (BackgroundConfig, {"overlay_opacity": 1.1}),
+            (BackgroundConfig, {"overlay_opacity": -0.1}),
+            (TextStyleConfig, {"text_align": "justify"}),
+            (SlideElement, {"id": "broken", "type": "video", "position": {}}),
+            (SlideElement, {"id": "missing-position", "type": "image"}),
+            (ArticleCreate, {"title": {"en": "A"}, "format": "unknown"}),
+            (ArticleCreate, {"title": {"en": "A"}, "slides_data": [{"slide_index": 0, "elements": [{"id": "x", "type": "text"}]}]}),
+        ]:
+            with self.subTest(model=model.__name__, fields=fields):
+                with self.assertRaises(ValidationError):
+                    model(**fields)
+
+    def test_existing_article_table_gains_interactive_columns(self):
+        legacy_engine = create_engine("sqlite://")
+        with legacy_engine.begin() as connection:
+            connection.execute(text(
+                "CREATE TABLE articles (id INTEGER PRIMARY KEY, title JSON NOT NULL, "
+                "content JSON NOT NULL, type VARCHAR(20), image_urls JSON, "
+                "is_published BOOLEAN, created_at DATETIME, updated_at DATETIME)"
+            ))
+            connection.execute(text(
+                "INSERT INTO articles (id, title, content, type, image_urls, is_published) "
+                "VALUES (1, '{\"ru\":\"Старая\"}', '{\"ru\":\"Текст\"}', 'news', '[]', 1)"
+            ))
+        with patch("main.engine", legacy_engine):
+            ensure_articles_schema()
+            ensure_articles_schema()
+        self.assertTrue(
+            {"format", "background_config", "slides_data"}.issubset(
+                {column["name"] for column in inspect(legacy_engine).get_columns("articles")}
+            )
+        )
+        with legacy_engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT format, background_config, slides_data FROM articles WHERE id = 1")
+            ).one()
+        self.assertEqual(row.format, "standard")
+        self.assertEqual(row.background_config, '{"type":"color","value":"#0a0a0c","overlay_opacity":null}')
+        self.assertEqual(row.slides_data, "[]")
+        legacy_engine.dispose()
 
     def test_public_articles_are_paginated(self):
         now = datetime.now(timezone.utc)
