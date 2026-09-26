@@ -13,6 +13,7 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   bruichladdich: bruichladdichSources,
   bruichladdie: bruichladdichSources,
   deanston: [{ label: 'Deanston', url: 'https://deanstonmalt.com/' }],
+  'glen scotia': [{ label: 'Glen Scotia', url: 'https://www.glenscotia.com/' }],
 };
 
 export type DistilleryMilestone = {
