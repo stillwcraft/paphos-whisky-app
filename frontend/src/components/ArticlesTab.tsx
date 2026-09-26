@@ -1,19 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 import { useAnalytics } from '@/hooks/useAnalytics.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
+import type { Article } from '@/types/interactiveNews.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
-
-type Article = {
-  id: number;
-  title: string;
-  content: string;
-  type: 'article' | 'news';
-  image_urls: string[];
-  created_at: string;
-};
+const InteractiveNewsViewer = lazy(() => import('@/components/news/InteractiveNewsViewer.tsx'));
 
 function formatArticleDate(value: string, language: string) {
   const date = new Date(value);
@@ -238,7 +231,7 @@ export function ArticlesTab() {
                 <div className="p-4">
                   <p className="text-[11px] font-medium uppercase tracking-wider text-[#C5A059]">{formatArticleDate(article.created_at, i18n.language)}</p>
                   <h2 className="mt-2 text-lg font-semibold text-[#F4F4F5]">{article.title}</h2>
-                  <p className="mt-2 overflow-hidden text-sm leading-5 text-slate-400" style={{ WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, display: '-webkit-box' }}>{article.content}</p>
+                  {article.content && <p className="mt-2 overflow-hidden text-sm leading-5 text-slate-400" style={{ WebkitBoxOrient: 'vertical', WebkitLineClamp: 3, display: '-webkit-box' }}>{article.content}</p>}
                 </div>
               </button>
             </article>
@@ -247,7 +240,15 @@ export function ArticlesTab() {
           {isLoadingMore && <p className="text-center text-sm text-slate-400">Завантаження...</p>}
         </div>
       )}
-      {selectedArticle && <ArticleReader article={selectedArticle} onClose={() => setSelectedArticle(null)} />}
+      {selectedArticle && (
+        selectedArticle.format === 'interactive_presentation' ? (
+          <Suspense fallback={null}>
+            <InteractiveNewsViewer article={selectedArticle} key={selectedArticle.id} language={i18n.language} onClose={() => setSelectedArticle(null)} />
+          </Suspense>
+        ) : (
+          <ArticleReader article={selectedArticle} onClose={() => setSelectedArticle(null)} />
+        )
+      )}
     </section>
   );
 }

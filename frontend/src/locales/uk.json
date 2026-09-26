@@ -52,7 +52,12 @@
   },
   "articles": {
     "article": "СТАТТЯ",
-    "news": "НОВИНА"
+    "news": "НОВИНА",
+    "close_presentation": "Закрити презентацію",
+    "previous_slide": "Попередній слайд",
+    "next_slide": "Наступний слайд",
+    "slide_progress": "Слайд {{current}} з {{total}}",
+    "no_slides": "У цій презентації поки немає слайдів."
   },
   "bottle": {
     "age": "Вік",

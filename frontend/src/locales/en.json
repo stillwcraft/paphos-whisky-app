@@ -52,7 +52,12 @@
   },
   "articles": {
     "article": "ARTICLE",
-    "news": "NEWS"
+    "news": "NEWS",
+    "close_presentation": "Close presentation",
+    "previous_slide": "Previous slide",
+    "next_slide": "Next slide",
+    "slide_progress": "Slide {{current}} of {{total}}",
+    "no_slides": "This presentation has no slides yet."
   },
   "bottle": {
     "age": "Age",

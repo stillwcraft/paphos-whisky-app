@@ -52,7 +52,12 @@
   },
   "articles": {
     "article": "СТАТЬЯ",
-    "news": "НОВОСТЬ"
+    "news": "НОВОСТЬ",
+    "close_presentation": "Закрыть презентацию",
+    "previous_slide": "Предыдущий слайд",
+    "next_slide": "Следующий слайд",
+    "slide_progress": "Слайд {{current}} из {{total}}",
+    "no_slides": "В этой презентации пока нет слайдов."
   },
   "bottle": {
     "age": "Возраст",

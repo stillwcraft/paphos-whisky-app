@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import type { BackgroundConfig, InteractiveSlide } from '@/types/interactiveNews.ts';
 
 type ArticleLocale = 'ru' | 'en' | 'uk';
 type ArticleTranslations = Partial<Record<ArticleLocale, string>>;
@@ -14,6 +15,9 @@ export type AdminArticle = {
   is_published: boolean;
   created_at: string;
   updated_at: string;
+  format?: 'standard' | 'interactive_presentation';
+  background_config?: BackgroundConfig | null;
+  slides_data?: InteractiveSlide[];
 };
 
 export type ArticleFormValues = {
