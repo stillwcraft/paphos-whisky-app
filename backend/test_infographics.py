@@ -242,6 +242,25 @@ class InfographicTests(unittest.TestCase):
                 self.assertTrue(getattr(step.title, language))
                 self.assertTrue(getattr(step.description, language))
 
+    def test_glengyle_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "009_seed_glengyle_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$glengyle_data\$\s*(.*?)\s*\$glengyle_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Glengyle History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 14)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1872")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2025–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
     def test_distillery_lookup_and_single_assigned_infographic(self):
         self.assertIsNone(get_distillery_infographic(self.distillery.id, db=self.db))
         payload = InfographicCreate(
