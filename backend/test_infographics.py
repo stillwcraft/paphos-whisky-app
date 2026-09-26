@@ -280,6 +280,101 @@ class InfographicTests(unittest.TestCase):
                 self.assertTrue(getattr(step.title, language))
                 self.assertTrue(getattr(step.description, language))
 
+    def test_kilchoman_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "011_seed_kilchoman_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$kilchoman_data\$\s*(.*?)\s*\$kilchoman_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Kilchoman History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 15)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "2001")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
+    def test_lagavulin_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "012_seed_lagavulin_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$lagavulin_data\$\s*(.*?)\s*\$lagavulin_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Lagavulin History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 17)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1742")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2024–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
+    def test_laphroaig_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "013_seed_laphroaig_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$laphroaig_data\$\s*(.*?)\s*\$laphroaig_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Laphroaig History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 16)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1815")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2025–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
+    def test_springbank_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "014_seed_springbank_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$springbank_data\$\s*(.*?)\s*\$springbank_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Springbank History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 13)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1828")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2024–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
+    def test_talisker_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "015_seed_talisker_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$talisker_data\$\s*(.*?)\s*\$talisker_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Talisker History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 17)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1830")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2025–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
     def test_distillery_lookup_and_single_assigned_infographic(self):
         self.assertIsNone(get_distillery_infographic(self.distillery.id, db=self.db))
         payload = InfographicCreate(

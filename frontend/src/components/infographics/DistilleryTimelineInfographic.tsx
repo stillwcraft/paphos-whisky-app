@@ -17,6 +17,11 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   glenfiddich: [{ label: 'Glenfiddich', url: 'https://www.glenfiddich.com' }],
   glengyle: [{ label: 'Kilkerran', url: 'https://kilkerran.scot' }],
   glenmorangie: [{ label: 'Glenmorangie', url: 'https://www.glenmorangie.com' }],
+  kilchoman: [{ label: 'Kilchoman', url: 'https://www.kilchomandistillery.com' }],
+  lagavulin: [{ label: 'Diageo', url: 'https://www.diageo.com' }],
+  laphroaig: [{ label: 'Laphroaig', url: 'https://www.laphroaig.com' }],
+  springbank: [{ label: 'Springbank', url: 'https://www.springbank.scot' }],
+  talisker: [{ label: 'Malts', url: 'https://www.malts.com' }],
 };
 
 export type DistilleryMilestone = {
