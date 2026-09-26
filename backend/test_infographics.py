@@ -177,6 +177,33 @@ class InfographicTests(unittest.TestCase):
         self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1881")
         self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2023")
 
+    def test_deanston_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "006_seed_deanston_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$deanston_data\$\s*(.*?)\s*\$deanston_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        source_steps = json.loads(match.group(1))
+        headings = re.findall(r"^\s*\((\d+), '([^']+)', '([^']+)', '([^']+)'\),?$", sql, re.MULTILINE)
+        self.assertEqual(len(source_steps), 21)
+        self.assertEqual([int(row[0]) for row in headings], list(range(1, 22)))
+        payload = InfographicCreate(
+            title="Deanston History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data={"steps": [
+                {
+                    "id": f"deanston-{index}",
+                    "dateOrYear": step["dateOrYear"],
+                    "title": dict(zip(("en", "ru", "uk"), heading[1:])),
+                    "subtitle": step["subtitle"],
+                    "description": step["description"],
+                }
+                for index, (step, heading) in enumerate(zip(source_steps, headings), 1)
+            ]},
+        )
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1500")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2024–2026")
+
     def test_distillery_lookup_and_single_assigned_infographic(self):
         self.assertIsNone(get_distillery_infographic(self.distillery.id, db=self.db))
         payload = InfographicCreate(
