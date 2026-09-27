@@ -1,0 +1,229 @@
+INSERT INTO public.articles (
+    title,
+    content,
+    type,
+    format,
+    image_urls,
+    is_published,
+    background_config,
+    slides_data
+) VALUES (
+    '{"ru": "Дистиллерии острова Айла", "en": "Islay Distilleries", "uk": "Дистилерії острова Айла"}'::jsonb,
+    '{"ru": "Полный гид по 11 производствам", "en": "Complete guide to 11 distilleries", "uk": "Повний гід по 11 виробництвам"}'::jsonb,
+    'news',
+    'interactive_presentation',
+    '["https://i.ibb.co/23fx58tc/Islay-News2.png"]'::jsonb,
+    true,
+    '{"type": "image", "value": "https://i.ibb.co/HL1H1bjn/f9d5a05a-d989-49b3-8e22-2ddef78c4738.jpg", "overlay_opacity": 0.0}'::jsonb,
+    '[
+      {
+        "slide_index": 0,
+        "elements": [
+          {
+            "id": "ardbeg_logo",
+            "type": "logo",
+            "src": "https://i.ibb.co/dwcq4k8T/Ardbeg-Logo-PNG.png",
+            "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 },
+            "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 }
+          },
+          {
+            "id": "ardbeg_bottle",
+            "type": "image",
+            "src": "https://i.ibb.co/gMXtRMz2/408143-big.png",
+            "position": { "bottom": "-2%", "right": "-7%", "width": "45%", "z_index": 15 },
+            "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 }
+          },
+          {
+            "id": "ardbeg_founded",
+            "type": "text",
+            "content": { "ru": "Основана: 1815 г.", "en": "Founded: 1815", "uk": "Заснована: 1815 р." },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 }
+          },
+          {
+            "id": "ardbeg_capacity",
+            "type": "text",
+            "content": { "ru": "Объем: 2 400 000 л/г", "en": "Volume: 2 400 000 LPA", "uk": "Об''єм: 2 400 000 л/р" },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 }
+          },
+          {
+            "id": "ardbeg_owner",
+            "type": "text",
+            "content": { "ru": "The Glenmorangie Co.", "en": "The Glenmorangie Co.", "uk": "The Glenmorangie Co." },
+            "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 }
+          }
+        ]
+      },
+      {
+        "slide_index": 1,
+        "elements": [
+          {
+            "id": "bruichladdich_logo",
+            "type": "logo",
+            "src": "https://i.ibb.co/dh1J35J/bruichladdich-gold-white.png",
+            "position": { "top": "8%", "left": "5%", "width": "50%", "z_index": 10 },
+            "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 }
+          },
+          {
+            "id": "bruichladdich_bottle",
+            "type": "image",
+            "src": "https://i.ibb.co/1JXt3xMT/Bruichladdie-Port-Charlotte-PNG.png",
+            "position": { "bottom": "-2%", "right": "-10%", "width": "65%", "z_index": 15 },
+            "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 }
+          },
+          {
+            "id": "bruichladdich_founded",
+            "type": "text",
+            "content": { "ru": "Основана: 1881 г.", "en": "Founded: 1881", "uk": "Заснована: 1881 р." },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 }
+          },
+          {
+            "id": "bruichladdich_capacity",
+            "type": "text",
+            "content": { "ru": "Объем: 2 000 000 л/г", "en": "Volume: 2 000 000 LPA", "uk": "Об''єм: 2 000 000 л/р" },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 }
+          },
+          {
+            "id": "bruichladdich_owner",
+            "type": "text",
+            "content": { "ru": "Rémy Cointreau", "en": "Rémy Cointreau", "uk": "Rémy Cointreau" },
+            "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 }
+          }
+        ]
+      },
+      {
+        "slide_index": 2,
+        "elements": [
+          {
+            "id": "kilchoman_logo",
+            "type": "logo",
+            "src": "https://i.ibb.co/gbv6gLN0/kilchoman-logo2000w.png",
+            "position": { "top": "12%", "left": "5%", "width": "50%", "z_index": 10 },
+            "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 }
+          },
+          {
+            "id": "kilchoman_bottle",
+            "type": "image",
+            "src": "https://i.ibb.co/SDx0kZDT/Kilchoman-Machir.png",
+            "position": { "bottom": "-2%", "right": "-5%", "width": "55%", "z_index": 15 },
+            "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 }
+          },
+          {
+            "id": "kilchoman_founded",
+            "type": "text",
+            "content": { "ru": "Основана: 2005 г.", "en": "Founded: 2005", "uk": "Заснована: 2005 р." },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 }
+          },
+          {
+            "id": "kilchoman_capacity",
+            "type": "text",
+            "content": { "ru": "Объем: 650 000 л/г", "en": "Volume: 650 000 LPA", "uk": "Об''єм: 650 000 л/р" },
+            "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 }
+          },
+          {
+            "id": "kilchoman_owner",
+            "type": "text",
+            "content": { "ru": "Independent", "en": "Independent", "uk": "Independent" },
+            "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" },
+            "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 },
+            "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 }
+          }
+        ]
+      },
+      {
+        "slide_index": 3,
+        "elements": [
+          { "id": "laphroaig_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1789148437/laphroaig_gold_white.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "laphroaig_bottle", "type": "image", "src": "https://i.ibb.co/v6gtS5J2/Laphroaig.png", "position": { "bottom": "-2%", "right": "-7%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "laph_f", "type": "text", "content": { "ru": "Основана: 1815 г.", "en": "Founded: 1815", "uk": "Заснована: 1815 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "laph_c", "type": "text", "content": { "ru": "Объем: 3 300 000 л/г", "en": "Volume: 3 300 000 LPA", "uk": "Об''єм: 3 300 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "laph_o", "type": "text", "content": { "ru": "Beam Suntory", "en": "Beam Suntory", "uk": "Beam Suntory" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 4,
+        "elements": [
+          { "id": "lagavulin_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1789148625/lagavulin-1.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "lagavulin_bottle", "type": "image", "src": "https://i.ibb.co/fVFnd7xr/lagavulin-16.png", "position": { "bottom": "-2%", "right": "-5%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "laga_f", "type": "text", "content": { "ru": "Основана: 1816 г.", "en": "Founded: 1816", "uk": "Заснована: 1816 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "laga_c", "type": "text", "content": { "ru": "Объем: 2 600 000 л/г", "en": "Volume: 2 600 000 LPA", "uk": "Об''єм: 2 600 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "laga_o", "type": "text", "content": { "ru": "Diageo", "en": "Diageo", "uk": "Diageo" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 5,
+        "elements": [
+          { "id": "bowmore_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790512590/BowmorePNG.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "bowmore_bottle", "type": "image", "src": "https://i.ibb.co/cXNQVCGq/Bowmore-12yo.png", "position": { "bottom": "-2%", "right": "-5%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "bow_f", "type": "text", "content": { "ru": "Основана: 1779 г.", "en": "Founded: 1779", "uk": "Заснована: 1779 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "bow_c", "type": "text", "content": { "ru": "Объем: 2 000 000 л/г", "en": "Volume: 2 000 000 LPA", "uk": "Об''єм: 2 000 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "bow_o", "type": "text", "content": { "ru": "Beam Suntory", "en": "Beam Suntory", "uk": "Beam Suntory" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 6,
+        "elements": [
+          { "id": "caolila_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790507264/caol_ila_gold_white.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "caolila_bottle", "type": "image", "src": "https://i.ibb.co/JRdrxvQX/caol-ila-12.png", "position": { "bottom": "-2%", "right": "-5%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "caol_f", "type": "text", "content": { "ru": "Основана: 1846 г.", "en": "Founded: 1846", "uk": "Заснована: 1846 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "caol_c", "type": "text", "content": { "ru": "Объем: 6 500 000 л/г", "en": "Volume: 6 500 000 LPA", "uk": "Об''єм: 6 500 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "caol_o", "type": "text", "content": { "ru": "Diageo", "en": "Diageo", "uk": "Diageo" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 7,
+        "elements": [
+          { "id": "bunnahabhain_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790506338/bunnahabhain_gold_transparent.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "bunnahabhain_bottle", "type": "image", "src": "https://i.ibb.co/sdK0YX6c/Bunna12-FRONTNaked.png", "position": { "bottom": "-2%", "right": "-10%", "width": "65%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "bunna_f", "type": "text", "content": { "ru": "Основана: 1881 г.", "en": "Founded: 1881", "uk": "Заснована: 1881 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "bunna_c", "type": "text", "content": { "ru": "Объем: 2 700 000 л/г", "en": "Volume: 2 700 000 LPA", "uk": "Об''єм: 2 700 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "bunna_o", "type": "text", "content": { "ru": "Distell Group", "en": "Distell Group", "uk": "Distell Group" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 8,
+        "elements": [
+          { "id": "ardnahoe_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790507781/lArdnahoeDistillery.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "ardnahoe_bottle", "type": "image", "src": "https://i.ibb.co/x0dqQhF/ardnahoe-5.png", "position": { "bottom": "-2%", "right": "-5%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "ardna_f", "type": "text", "content": { "ru": "Основана: 2018 г.", "en": "Founded: 2018", "uk": "Заснована: 2018 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "ardna_c", "type": "text", "content": { "ru": "Объем: 1 000 000 л/г", "en": "Volume: 1 000 000 LPA", "uk": "Об''єм: 1 000 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "ardna_o", "type": "text", "content": { "ru": "Hunter Laing & Co", "en": "Hunter Laing & Co", "uk": "Hunter Laing & Co" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 9,
+        "elements": [
+          { "id": "portellen_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790509056/port_ellen_goldPNG.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "portellen_bottle", "type": "image", "src": "https://i.ibb.co/Kz7VRr8C/Port-Ellen-1978.png", "position": { "bottom": "-2%", "right": "-10%", "width": "45%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "porte_f", "type": "text", "content": { "ru": "Основана: 1825 г.", "en": "Founded: 1825", "uk": "Заснована: 1825 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "porte_c", "type": "text", "content": { "ru": "Объем: 1 500 000 л/г", "en": "Volume: 1 500 000 LPA", "uk": "Об''єм: 1 500 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "porte_o", "type": "text", "content": { "ru": "Diageo", "en": "Diageo", "uk": "Diageo" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      },
+      {
+        "slide_index": 10,
+        "elements": [
+          { "id": "laggan_bay_logo", "type": "logo", "src": "https://res.cloudinary.com/xktqh0l4/image/upload/v1790513659/laggan_bay_goldPNG.png", "position": { "top": "8%", "left": "5%", "width": "45%", "z_index": 10 }, "animation": { "type": "slide_right", "delay": 0.1, "duration": 0.6 } },
+          { "id": "laggan_bay_bottle", "type": "image", "src": "https://i.ibb.co/RGcsVysj/Unknow.png", "position": { "bottom": "-2%", "right": "-10%", "width": "65%", "z_index": 15 }, "animation": { "type": "slide_left", "delay": 0.3, "duration": 0.7 } },
+          { "id": "portin_f", "type": "text", "content": { "ru": "Основана: 2026 г.", "en": "Founded: 2026", "uk": "Заснована: 2026 р." }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "17%", "left": "8%", "width": "50%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.5, "duration": 0.5 } },
+          { "id": "portin_c", "type": "text", "content": { "ru": "Объем: 1 000 000 л/г", "en": "Volume: 1 000 000 LPA", "uk": "Об''єм: 1 000 000 л/р" }, "style": { "font_size": "20px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "11%", "left": "8%", "width": "60%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.6, "duration": 0.5 } },
+          { "id": "portin_o", "type": "text", "content": { "ru": "Ian Macleod Distillers", "en": "Ian Macleod Distillers", "uk": "Ian Macleod Distillers" }, "style": { "font_size": "24px", "color": "#C5A059", "font_family": "Cinzel", "font_weight": "bold", "text_align": "left" }, "position": { "bottom": "4%", "left": "8%", "width": "70%", "z_index": 20 }, "animation": { "type": "slide_up", "delay": 0.7, "duration": 0.5 } }
+        ]
+      }
+    ]'::jsonb
+);

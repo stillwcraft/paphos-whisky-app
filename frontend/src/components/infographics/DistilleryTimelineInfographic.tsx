@@ -9,9 +9,12 @@ const ardbegSources = [
 ];
 const timelineSources: Record<string, { label: string; url: string }[]> = {
   ardbeg: ardbegSources,
+  ardnahoe: [{ label: 'Ardnahoe', url: 'https://ardnahoedistillery.com' }],
   arran: [{ label: 'Arran Whisky', url: 'https://www.arranwhisky.com' }],
   bruichladdich: bruichladdichSources,
   bruichladdie: bruichladdichSources,
+  bunnahabhain: [{ label: 'Bunnahabhain', url: 'https://bunnahabhain.com' }],
+  'caol ila': [{ label: 'Malts', url: 'https://www.malts.com/' }],
   deanston: [{ label: 'Deanston', url: 'https://deanstonmalt.com/' }],
   'glen scotia': [{ label: 'Glen Scotia', url: 'https://www.glenscotia.com/' }],
   glenfiddich: [{ label: 'Glenfiddich', url: 'https://www.glenfiddich.com' }],
@@ -20,6 +23,7 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   kilchoman: [{ label: 'Kilchoman', url: 'https://www.kilchomandistillery.com' }],
   lagavulin: [{ label: 'Diageo', url: 'https://www.diageo.com' }],
   laphroaig: [{ label: 'Laphroaig', url: 'https://www.laphroaig.com' }],
+  'port ellen': [{ label: 'Malts', url: 'https://www.malts.com/' }],
   springbank: [{ label: 'Springbank', url: 'https://www.springbank.scot' }],
   talisker: [{ label: 'Malts', url: 'https://www.malts.com' }],
 };
