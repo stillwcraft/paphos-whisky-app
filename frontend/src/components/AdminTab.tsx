@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
+import { clearEventsCache } from '@/eventsCache.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 import { AdminArticles } from '@/components/AdminArticles.tsx';
 
@@ -242,6 +244,7 @@ export function AdminTab() {
   const [catalogBottleForm, setCatalogBottleForm] = useState<BottleForm>(emptyBottle);
   const [tabBottleForm, setTabBottleForm] = useState<BottleForm>(emptyBottle);
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const queryClient = useQueryClient();
   const [editingDistilleryId, setEditingDistilleryId] = useState<number | null>(null);
   const [editingTastingTagId, setEditingTastingTagId] = useState<number | null>(null);
   const [editingCatalogBottleId, setEditingCatalogBottleId] = useState<number | null>(null);
@@ -316,6 +319,8 @@ export function AdminTab() {
     try {
       const response = await fetch(editing ? `${API_URL}/api/events/${editingEventId}` : `${API_URL}/api/events`, { method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) }, body: JSON.stringify(eventForm) });
       if (!response.ok) throw new Error(await getError(response));
+      clearEventsCache();
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
       resetEvent(); await loadContent(); setMessage(editing ? 'Event updated.' : 'Event created.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not save event.'); }
   };
@@ -409,6 +414,10 @@ export function AdminTab() {
     try {
       const response = await fetch(`${API_URL}/api/${path}/${deletion.item.id}`, { method: 'DELETE', headers: telegramAuthHeaders(initDataRaw) });
       if (!response.ok) throw new Error(await getError(response));
+      if (deletion.kind === 'event') {
+        clearEventsCache();
+        await queryClient.invalidateQueries({ queryKey: ['events'] });
+      }
       setDeletion(null); await loadContent(); setMessage('Deleted.');
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not delete item.'); }
   };

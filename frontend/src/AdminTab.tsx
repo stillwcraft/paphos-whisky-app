@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { normalizePaginatedResponse, type PaginatedResponse } from '@/pagination.ts';
+import { clearEventsCache } from '@/eventsCache.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
@@ -95,6 +97,7 @@ async function getErrorMessage(response: Response): Promise<string> {
 }
 
 export function AdminTab() {
+  const queryClient = useQueryClient();
   const [eventForm, setEventForm] = useState<EventForm>(initialEventForm);
   const [distilleryForm, setDistilleryForm] = useState(initialDistilleryForm);
   const [bottleForm, setBottleForm] = useState(initialBottleForm);
@@ -200,6 +203,8 @@ export function AdminTab() {
         throw new Error(await getErrorMessage(response));
       }
 
+      clearEventsCache();
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
       await loadEvents();
       cancelEditing();
       setFeedback({

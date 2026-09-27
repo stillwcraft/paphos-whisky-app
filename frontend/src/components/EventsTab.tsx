@@ -8,6 +8,7 @@ import { localizedApiUrl } from '@/localization.ts';
 import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
+import { eventsCacheKey } from '@/eventsCache.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 const EVENTS_PAGE_SIZE = 8;
@@ -97,10 +98,6 @@ async function getErrorMessage(response: Response): Promise<string> {
   return `Ошибка сервера: ${response.status}`;
 }
 
-function eventsCacheKey(languageCode: string) {
-  return `paphos-whisky:events:${languageCode}`;
-}
-
 function readEventsCache(languageCode: string): EventListCache | null {
   try {
     const value = window.sessionStorage.getItem(eventsCacheKey(languageCode));
@@ -124,11 +121,11 @@ function readEventsCache(languageCode: string): EventListCache | null {
   }
 }
 
-function writeEventsCache(languageCode: string, page: EventListPage) {
+function writeEventsCache(languageCode: string, page: EventListPage, updatedAt: number) {
   try {
     window.sessionStorage.setItem(eventsCacheKey(languageCode), JSON.stringify({
       ...page,
-      updatedAt: Date.now(),
+      updatedAt,
     }));
   } catch {
     // The in-memory TanStack cache remains available if session storage is unavailable.
@@ -758,6 +755,7 @@ export function EventsTab({
     queryKey: ['events', languageCode, EVENTS_PAGE_SIZE],
     queryFn: ({ signal }) => fetchEventsPage(languageCode, 0, signal),
     staleTime: EVENTS_CACHE_STALE_TIME,
+    refetchOnMount: 'always',
     initialData: () => readEventsCache(languageCode) ?? undefined,
     initialDataUpdatedAt: () => readEventsCache(languageCode)?.updatedAt,
   });
@@ -769,7 +767,11 @@ export function EventsTab({
       const page = await fetchEventsPage(languageCode, offset);
       setEvents((current) => {
         const nextEvents = [...current, ...page.items];
-        writeEventsCache(languageCode, { items: nextEvents, hasMore: page.hasMore });
+        writeEventsCache(
+          languageCode,
+          { items: nextEvents, hasMore: page.hasMore },
+          readEventsCache(languageCode)?.updatedAt ?? eventsQuery.dataUpdatedAt,
+        );
         return nextEvents;
       });
       setHasMore(page.hasMore);
@@ -781,7 +783,7 @@ export function EventsTab({
     } finally {
       setIsLoadingMore(false);
     }
-  }, [languageCode]);
+  }, [eventsQuery.dataUpdatedAt, languageCode]);
 
   useEffect(() => {
     const cachedEvents = readEventsCache(languageCode);
@@ -796,17 +798,19 @@ export function EventsTab({
     if (!page) {
       return;
     }
-    setEvents((current) => {
-      const refreshedEventIds = new Set(page.items.map((event) => event.id));
-      const nextEvents = [
-        ...page.items,
-        ...current.filter((event) => !refreshedEventIds.has(event.id)),
-      ];
-      writeEventsCache(languageCode, { items: nextEvents, hasMore: page.hasMore });
-      return nextEvents;
-    });
+    setEvents(page.items);
+    writeEventsCache(languageCode, page, eventsQuery.dataUpdatedAt);
     setHasMore(page.hasMore);
-  }, [eventsQuery.data, languageCode]);
+    setEventDetails((current) => {
+      const next = { ...current };
+      for (const event of page.items) {
+        if (next[event.id]) {
+          next[event.id] = { ...next[event.id], ...event };
+        }
+      }
+      return next;
+    });
+  }, [eventsQuery.data, eventsQuery.dataUpdatedAt, languageCode]);
 
   useEffect(() => {
     if (!eventsQuery.error) {
@@ -947,11 +951,9 @@ export function EventsTab({
 
   const openEventDetails = useCallback(async (eventId: number) => {
     setExpandedEventId(eventId);
-    if (eventDetails[eventId]) {
-      return;
+    if (!eventDetails[eventId]) {
+      setLoadingEventDetailId(eventId);
     }
-
-    setLoadingEventDetailId(eventId);
     try {
       await fetchEventDetail(eventId);
     } catch (error) {
