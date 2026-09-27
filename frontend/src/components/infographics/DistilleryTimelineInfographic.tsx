@@ -11,6 +11,7 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   ardbeg: ardbegSources,
   ardnahoe: [{ label: 'Ardnahoe', url: 'https://ardnahoedistillery.com' }],
   arran: [{ label: 'Arran Whisky', url: 'https://www.arranwhisky.com' }],
+  bowmore: [{ label: 'Bowmore', url: 'https://www.bowmore.com' }],
   bruichladdich: bruichladdichSources,
   bruichladdie: bruichladdichSources,
   bunnahabhain: [{ label: 'Bunnahabhain', url: 'https://bunnahabhain.com' }],
