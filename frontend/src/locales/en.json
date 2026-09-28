@@ -13,6 +13,9 @@
     "clear": "Clear search",
     "no_results": "No distilleries found."
   },
+  "map_view": {
+    "close": "Close map"
+  },
   "ardbeg_timeline": {
     "aria_label": "Ardbeg history",
     "subtitle": "Distillery history"

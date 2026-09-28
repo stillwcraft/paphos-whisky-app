@@ -6,6 +6,7 @@ import {
   Marker,
   ZoomableGroup,
 } from 'react-simple-maps';
+import { useTranslation } from 'react-i18next';
 import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
@@ -41,6 +42,7 @@ type ScotlandWhiskyMapProps = {
   onSelectDistillery: (distillery: MapDistillery) => void;
   selectedDistilleryId?: number | null;
   onSelectedDistilleryHandled?: () => void;
+  onClose: () => void;
 };
 
 type WhiskyRegion = {
@@ -105,7 +107,9 @@ export function ScotlandWhiskyMap({
   onSelectDistillery,
   selectedDistilleryId = null,
   onSelectedDistilleryHandled,
+  onClose,
 }: ScotlandWhiskyMapProps) {
+  const { t } = useTranslation();
   const { trackEvent } = useAnalytics();
   const [position, setPosition] = useState(initialPosition);
   const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
@@ -541,7 +545,7 @@ export function ScotlandWhiskyMap({
           type="button"
           aria-label={`Open ${activeDistillery.name}`}
           onClick={() => { void selectDistillery(activeDistillery); }}
-          className="absolute bottom-4 left-1/2 flex w-[90%] max-w-xs -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#C5A059]/40 bg-[#1a1a1e]/80 p-3 text-left shadow-2xl backdrop-blur-md"
+          className="absolute bottom-20 left-1/2 flex w-[90%] max-w-xs -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#C5A059]/40 bg-[#1a1a1e]/80 p-3 text-left shadow-2xl backdrop-blur-md"
         >
           <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#C5A059] bg-[#141417] text-[#C5A059]">
             {activeDistillery.logo_url || activeDistillery.image_url ? (
@@ -565,8 +569,18 @@ export function ScotlandWhiskyMap({
         </button>
       )}
       {mapLoadError && (
-        <p className="absolute bottom-3 right-3 text-xs text-[#9E9D9A]">{mapLoadError}</p>
+        <p className="absolute bottom-20 right-3 text-xs text-[#9E9D9A]">{mapLoadError}</p>
       )}
+      <button
+        aria-label={t('map_view.close')}
+        className="absolute right-4 z-20 flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+        onClick={onClose}
+        type="button"
+      >
+        <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+          <path d="M6 6 18 18M18 6 6 18" />
+        </svg>
+      </button>
     </section>
   );
 }

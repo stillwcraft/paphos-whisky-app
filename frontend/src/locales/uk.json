@@ -13,6 +13,9 @@
     "clear": "Очистити пошук",
     "no_results": "Дистилерії не знайдено."
   },
+  "map_view": {
+    "close": "Закрити мапу"
+  },
   "ardbeg_timeline": {
     "aria_label": "Історія Ardbeg",
     "subtitle": "Історія винокурні"

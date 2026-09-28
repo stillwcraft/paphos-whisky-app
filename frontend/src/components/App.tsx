@@ -30,7 +30,6 @@ const tabs: Tab[] = [
   { id: 'favorites', labelKey: 'tabs.favorites', iconSrc: '/assets/nav/Fav.webp' },
   { id: 'profile', labelKey: 'tabs.profile', iconSrc: '/assets/nav/Profile.webp' },
 ];
-const mapTab: Tab = { id: 'map', labelKey: 'tabs.map', iconSrc: '/assets/nav/Globe.webp' };
 const articlesTab: Tab = { id: 'articles', labelKey: 'tabs.articles', iconSrc: '/assets/nav/News.webp' };
 const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', iconSrc: '/assets/nav/Admin.webp' };
 
@@ -39,15 +38,13 @@ type FooterProps = {
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
   showArticlesTab: boolean;
-  showMapTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showMapTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
     ...(showArticlesTab ? [articlesTab] : []),
-    ...(showMapTab ? [mapTab] : []),
     ...tabs.slice(1),
     ...(isAdmin ? [adminTab] : []),
   ];
@@ -97,7 +94,6 @@ export function App() {
   const [mapDistilleryId, setMapDistilleryId] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
-  const showMapTab = true;
   const showArticlesTab = import.meta.env.DEV || isAdmin;
   const activeScreen = t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
@@ -107,6 +103,14 @@ export function App() {
   const openDistilleryOnMap = useCallback((distilleryId: number) => {
     setMapDistilleryId(distilleryId);
     setActiveTab('map');
+  }, []);
+  const openMap = useCallback(() => {
+    setMapDistilleryId(null);
+    setActiveTab('map');
+  }, []);
+  const closeMap = useCallback(() => {
+    setMapDistilleryId(null);
+    setActiveTab('distilleries');
   }, []);
   const handleMapDistillerySelected = useCallback(() => undefined, []);
 
@@ -155,7 +159,7 @@ export function App() {
       return;
     }
 
-    const matchingTab = [...tabs, articlesTab, mapTab].find((tab) => tab.id === startParam);
+    const matchingTab = [...tabs, articlesTab].find((tab) => tab.id === startParam);
     if (matchingTab) {
       setActiveTab(matchingTab.id);
     }
@@ -163,7 +167,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#0D0D0E] text-[#F4F4F5]">
-      <main className={activeTab === 'map' && showMapTab ? 'h-[calc(100dvh_-_6rem_-_env(safe-area-inset-bottom))]' : 'min-h-screen px-6 pb-28'}>
+      <main className={activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
           {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
@@ -176,7 +180,7 @@ export function App() {
               selectedDistilleryId={selectedDistilleryId}
               onSelectedDistilleryHandled={clearSelectedDistillery}
               onOpenOnMap={openDistilleryOnMap}
-              onNavigateToMap={() => setActiveTab('map')}
+              onNavigateToMap={openMap}
             />
           ) : activeTab === 'articles' ? (
             showArticlesTab ? <NewsFeedTab /> : (
@@ -190,11 +194,12 @@ export function App() {
             <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
-          ) : activeTab === 'map' && showMapTab ? (
+          ) : activeTab === 'map' ? (
             <ScotlandWhiskyMap
               onSelectDistillery={handleMapDistillerySelected}
               selectedDistilleryId={mapDistilleryId}
               onSelectedDistilleryHandled={clearMapDistillery}
+              onClose={closeMap}
             />
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab />
@@ -209,13 +214,14 @@ export function App() {
             </div>
           )}
       </main>
-      <Footer
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        isAdmin={isAdmin}
-        showArticlesTab={showArticlesTab}
-        showMapTab={showMapTab}
-      />
+      {activeTab !== 'map' && (
+        <Footer
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isAdmin={isAdmin}
+          showArticlesTab={showArticlesTab}
+        />
+      )}
     </div>
   );
 }
