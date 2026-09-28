@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
@@ -128,12 +128,14 @@ export function DistilleriesTab({
   selectedDistilleryId = null,
   onSelectedDistilleryHandled,
   onOpenOnMap,
+  onNavigateToMap,
 }: {
   selectedBottleId?: number | null;
   onSelectedBottleHandled?: () => void;
   selectedDistilleryId?: number | null;
   onSelectedDistilleryHandled?: () => void;
   onOpenOnMap?: (distilleryId: number) => void;
+  onNavigateToMap: () => void;
 }) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
@@ -141,6 +143,8 @@ export function DistilleriesTab({
   const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -191,9 +195,23 @@ export function DistilleriesTab({
   const loadMoreDistilleries = useCallback(() => {
     if (hasMore && !isLoadingMore) void loadDistilleries(distilleries.length);
   }, [distilleries.length, hasMore, isLoadingMore, loadDistilleries]);
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredDistilleries = useMemo(
+    () => normalizedSearch
+      ? distilleries.filter((distillery) => distillery.name.toLowerCase().includes(normalizedSearch))
+      : distilleries,
+    [distilleries, normalizedSearch],
+  );
+
+  useEffect(() => {
+    if (normalizedSearch && hasMore && !isLoading && !isLoadingMore && !catalogError) {
+      loadMoreDistilleries();
+    }
+  }, [catalogError, hasMore, isLoading, isLoadingMore, loadMoreDistilleries, normalizedSearch]);
+
   const distillerySentinelRef = useInfiniteScroll(
     loadMoreDistilleries,
-    hasMore && !isLoading && !isLoadingMore,
+    hasMore && !isLoading && !isLoadingMore && !normalizedSearch,
   );
 
   const loadDistilleryBottles = useCallback(async (distilleryId: number, offset = 0) => {
@@ -402,6 +420,44 @@ export function DistilleriesTab({
 
   return (
     <section className="mx-auto w-full max-w-md pb-5 pt-[calc(env(safe-area-inset-top)+1rem)]">
+      <div className="mb-4 flex flex-row items-center gap-3">
+        <div className="relative min-w-0 flex-1">
+          <input
+            ref={searchInputRef}
+            aria-label={t('distillery_search.label')}
+            className="w-full rounded-xl border border-[#C5A059]/30 bg-[#141417]/80 py-2.5 pl-4 pr-11 text-white placeholder-gray-400 backdrop-blur-md transition-colors focus:border-[#C5A059] focus:outline-none"
+            enterKeyHint="search"
+            inputMode="search"
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t('distillery_search.placeholder')}
+            type="text"
+            value={searchQuery}
+          />
+          {searchQuery && (
+            <button
+              aria-label={t('distillery_search.clear')}
+              className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#C5A059]"
+              onClick={() => {
+                setSearchQuery('');
+                searchInputRef.current?.focus();
+              }}
+              type="button"
+            >
+              <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M6 6 18 18M18 6 6 18" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <button
+          aria-label={t('tabs.map')}
+          className="relative h-11 w-11 flex-shrink-0 overflow-hidden rounded-xl border border-[#C5A059]/30 bg-[#141417]/80 backdrop-blur-md transition-colors active:bg-[#C5A059]/20"
+          onClick={onNavigateToMap}
+          type="button"
+        >
+          <img alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover" src="/assets/nav/Globe.webp" />
+        </button>
+      </div>
       {(feedback || catalogError) && (
         <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">
           {feedback || catalogError}
@@ -414,7 +470,10 @@ export function DistilleriesTab({
         <p className="text-center text-sm text-slate-400">{t('bottle.catalog_empty')}</p>
       ) : (
         <div className="space-y-4">
-          {distilleries.map((distillery) => {
+          {filteredDistilleries.length === 0 && !hasMore && !isLoadingMore && !catalogError && (
+            <p className="text-center text-sm text-slate-400">{t('distillery_search.no_results')}</p>
+          )}
+          {filteredDistilleries.map((distillery) => {
             const isOpen = openDistilleryId === distillery.id;
             const panelId = `distillery-${distillery.id}-bottles`;
 
@@ -510,7 +569,7 @@ export function DistilleriesTab({
               </article>
             );
           })}
-          {hasMore && <div ref={distillerySentinelRef} className="h-px" aria-hidden="true" />}
+          {hasMore && !normalizedSearch && <div ref={distillerySentinelRef} className="h-px" aria-hidden="true" />}
           {isLoadingMore && <p className="text-center text-sm text-slate-400">{t('common.loading')}</p>}
         </div>
       )}

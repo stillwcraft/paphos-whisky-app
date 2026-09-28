@@ -7,6 +7,12 @@
     "na": "N/A",
     "main_navigation": "Main navigation"
   },
+  "distillery_search": {
+    "label": "Search distilleries",
+    "placeholder": "Search...",
+    "clear": "Clear search",
+    "no_results": "No distilleries found."
+  },
   "ardbeg_timeline": {
     "aria_label": "Ardbeg history",
     "subtitle": "Distillery history"

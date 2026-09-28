@@ -7,6 +7,12 @@
     "na": "—",
     "main_navigation": "Основная навигация"
   },
+  "distillery_search": {
+    "label": "Поиск дистиллерии",
+    "placeholder": "Поиск...",
+    "clear": "Очистить поиск",
+    "no_results": "Дистиллерии не найдены."
+  },
   "ardbeg_timeline": {
     "aria_label": "История Ardbeg",
     "subtitle": "История винокурни"

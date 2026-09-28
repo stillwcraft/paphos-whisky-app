@@ -176,6 +176,7 @@ export function App() {
               selectedDistilleryId={selectedDistilleryId}
               onSelectedDistilleryHandled={clearSelectedDistillery}
               onOpenOnMap={openDistilleryOnMap}
+              onNavigateToMap={() => setActiveTab('map')}
             />
           ) : activeTab === 'articles' ? (
             showArticlesTab ? <NewsFeedTab /> : (
