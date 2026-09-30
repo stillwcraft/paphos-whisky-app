@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { normalizePaginatedResponse, type PaginatedResponse } from '@/pagination.ts';
 import { clearEventsCache } from '@/eventsCache.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
+const EventLocationPicker = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
+  ({ EventLocationPicker: Picker }) => ({ default: Picker }),
+));
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type Feedback = {
@@ -17,6 +20,8 @@ type AdminEvent = {
   title_i18n?: I18nString;
   name_i18n?: I18nString;
   date: string;
+  latitude: number | null;
+  longitude: number | null;
   description: string;
   description_i18n?: I18nString;
   price: number;
@@ -29,6 +34,8 @@ type AdminEvent = {
 type EventForm = {
   title: string;
   date: string;
+  latitude: number | null;
+  longitude: number | null;
   description: string;
   price: string;
   image_url: string;
@@ -39,6 +46,8 @@ type EventForm = {
 const initialEventForm: EventForm = {
   title: '',
   date: '',
+  latitude: null,
+  longitude: null,
   description: '',
   price: '',
   image_url: '',
@@ -167,6 +176,8 @@ export function AdminTab() {
     setEventForm({
       title: currentEvent.title,
       date: currentEvent.date,
+      latitude: currentEvent.latitude,
+      longitude: currentEvent.longitude,
       description: currentEvent.description,
       price: String(currentEvent.price),
       image_url: currentEvent.image_url ?? '',
@@ -374,6 +385,13 @@ export function AdminTab() {
           onChange={(event) => setEventForm({ ...eventForm, date: event.target.value })}
           className={inputClassName}
         />
+        <Suspense fallback={<span>Загрузка карты...</span>}>
+          <EventLocationPicker
+            latitude={eventForm.latitude}
+            longitude={eventForm.longitude}
+            onChange={(latitude, longitude) => setEventForm((current) => ({ ...current, latitude, longitude }))}
+          />
+        </Suspense>
         <textarea required value={eventForm.description} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value })} placeholder="Описание" rows={4} className={`${inputClassName} resize-none`} />
         <div className="space-y-1.5">
           <p className="px-1 text-xs font-medium text-slate-400">Бутылки для дегустации</p>

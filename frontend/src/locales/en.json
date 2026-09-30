@@ -16,6 +16,15 @@
   "map_view": {
     "close": "Close map"
   },
+  "cyprus_map": {
+    "title": "Events map",
+    "open_map": "Events map",
+    "open_event": "View event",
+    "pick_location": "Tap the map to set the event location (optional)",
+    "clear_location": "Remove pin",
+    "load_error": "Could not load events on the map",
+    "empty": "No events have been placed on the map yet."
+  },
   "ardbeg_timeline": {
     "aria_label": "Ardbeg history",
     "subtitle": "Distillery history"

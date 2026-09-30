@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { initData, retrieveLaunchParams, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +13,11 @@ import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 
-type TabId = 'events' | 'articles' | 'map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
+const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
+  ({ CyprusEventsMap: Map }) => ({ default: Map }),
+));
+
+type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
@@ -31,6 +35,7 @@ const tabs: Tab[] = [
   { id: 'profile', labelKey: 'tabs.profile', iconSrc: '/assets/nav/Profile.webp' },
 ];
 const articlesTab: Tab = { id: 'articles', labelKey: 'tabs.articles', iconSrc: '/assets/nav/News.webp' };
+const cyprusMapTab: Tab = { id: 'cyprus-map', labelKey: 'cyprus_map.open_map', iconSrc: '/assets/nav/Globe.webp' };
 const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', iconSrc: '/assets/nav/Admin.webp' };
 
 type FooterProps = {
@@ -38,19 +43,21 @@ type FooterProps = {
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
   showArticlesTab: boolean;
+  showCyprusMapTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showCyprusMapTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
+    ...(showCyprusMapTab ? [cyprusMapTab] : []),
     ...(showArticlesTab ? [articlesTab] : []),
     ...tabs.slice(1),
     ...(isAdmin ? [adminTab] : []),
   ];
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur">
+    <footer className={`${activeTab === 'cyprus-map' && showCyprusMapTab ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
       <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
         {visibleTabs.map(({ id, labelKey, iconSrc }) => {
           const isActive = activeTab === id;
@@ -95,7 +102,9 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
-  const activeScreen = t(`tabs.${activeTab}`);
+  const showCyprusMapTab = import.meta.env.DEV || isAdmin;
+  const activeCyprusMap = activeTab === 'cyprus-map' && showCyprusMapTab;
+  const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
   const clearSelectedDistillery = useCallback(() => setSelectedDistilleryId(null), []);
@@ -112,6 +121,10 @@ export function App() {
     setMapDistilleryId(null);
     setActiveTab('distilleries');
   }, []);
+  const openEventFromMap = useCallback((eventId: number) => {
+    setSelectedEventId(eventId);
+    setActiveTab('events');
+  }, []);
   const handleMapDistillerySelected = useCallback(() => undefined, []);
 
   useEffect(() => {
@@ -120,6 +133,10 @@ export function App() {
       && initDataState?.user?.id === ADMIN_TELEGRAM_ID,
     );
   }, [initDataState]);
+
+  useEffect(() => {
+    if (activeTab === 'cyprus-map' && !showCyprusMapTab) setActiveTab('events');
+  }, [activeTab, showCyprusMapTab]);
 
   useEffect(() => {
     initAnalytics(initDataState?.user);
@@ -166,9 +183,9 @@ export function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#0D0D0E] text-[#F4F4F5]">
-      <main className={activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
-          {activeTab === 'events' ? (
+    <div className={`${activeCyprusMap ? 'flex h-[100dvh] flex-col' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
+      <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
+          {activeTab === 'events' || (activeTab === 'cyprus-map' && !showCyprusMapTab) ? (
             <EventsTab
               selectedEventId={selectedEventId}
               onSelectedEventHandled={clearSelectedEvent}
@@ -194,6 +211,10 @@ export function App() {
             <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
+          ) : activeTab === 'cyprus-map' ? (
+            <Suspense fallback={<p className="p-5 text-slate-300">{t('common.loading')}</p>}>
+              <CyprusEventsMap onSelectEvent={openEventFromMap} />
+            </Suspense>
           ) : activeTab === 'map' ? (
             <ScotlandWhiskyMap
               onSelectDistillery={handleMapDistillerySelected}
@@ -220,6 +241,7 @@ export function App() {
           onTabChange={setActiveTab}
           isAdmin={isAdmin}
           showArticlesTab={showArticlesTab}
+          showCyprusMapTab={showCyprusMapTab}
         />
       )}
     </div>

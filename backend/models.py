@@ -47,6 +47,8 @@ class Event(Base):
     title_i18n = synonym("name_i18n")
     date = Column(String)  # Например: "25 Июля, 19:00"
     location = Column(String, nullable=True)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     description = Column(String)
     description_i18n = Column(I18N_JSON, nullable=True)
     price = Column(Float)

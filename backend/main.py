@@ -13,7 +13,7 @@ from sqlalchemy import case, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 import models
 from card_generator import CardGenerationError, ReviewCardData, render_review_card
@@ -94,6 +94,12 @@ def ensure_event_schema() -> None:
     with engine.begin() as connection:
         if "location" not in event_columns:
             connection.execute(text("ALTER TABLE events ADD COLUMN location VARCHAR"))
+        coordinate_type = "DOUBLE PRECISION" if engine.dialect.name == "postgresql" else "FLOAT"
+        for column_name in ("latitude", "longitude"):
+            if column_name not in event_columns:
+                connection.execute(
+                    text(f"ALTER TABLE events ADD COLUMN {column_name} {coordinate_type}")
+                )
         if "distillery_id" not in event_columns:
             connection.execute(
                 text("ALTER TABLE events ADD COLUMN distillery_id INTEGER")
@@ -927,6 +933,8 @@ class EventCreate(BaseModel):
     name_i18n: Optional[I18nString] = None
     date: str
     location: Optional[str] = None
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False)
     description: str = ""
     description_i18n: Optional[I18nString] = None
     price: float
@@ -938,6 +946,14 @@ class EventCreate(BaseModel):
     has_samples: bool = False
     show_participants: bool = True
     bottle_ids: List[int] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_coordinates(self):
+        if ("latitude" in self.model_fields_set) != ("longitude" in self.model_fields_set):
+            raise ValueError("latitude and longitude must be supplied together")
+        if (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude and longitude must both be set or both be null")
+        return self
 
 
 class EventUpdate(EventCreate):
@@ -1053,6 +1069,8 @@ class EventDetailResponse(BaseModel):
     name_i18n: Optional[I18nString] = None
     date: str
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     description: str
     description_i18n: Optional[I18nString] = None
     price: float
@@ -1083,6 +1101,8 @@ class EventSummaryResponse(BaseModel):
     name_i18n: Optional[I18nString] = None
     date: str
     location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     price: float
     samples_price: Optional[float] = None
     distillery_id: Optional[int] = None
@@ -1349,6 +1369,8 @@ def build_event_response(
         name_i18n=title_i18n,
         date=event.date,
         location=event.location,
+        latitude=event.latitude,
+        longitude=event.longitude,
         description=get_localized_string(
             event.description_i18n,
             lang,
@@ -1389,6 +1411,8 @@ def build_event_summary_response(
         name_i18n=title_i18n,
         date=event.date,
         location=event.location,
+        latitude=event.latitude,
+        longitude=event.longitude,
         price=event.price,
         samples_price=event.samples_price,
         distillery_id=event.distillery_id,

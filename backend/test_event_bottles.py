@@ -1,11 +1,13 @@
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ["DATABASE_URL"] = "sqlite://"
 
 import models
-from sqlalchemy import text
+from sqlalchemy import create_engine, inspect, text
 from fastapi import HTTPException
+from pydantic import ValidationError
 from main import (
     BottleCreate,
     BottleUpdate,
@@ -15,6 +17,7 @@ from main import (
     create_event,
     delete_bottle,
     delete_event,
+    ensure_event_schema,
     EventCreate,
     EventUpdate,
     get_event_detail,
@@ -252,6 +255,117 @@ class EventBottleTest(unittest.TestCase):
     def test_event_location_defaults_to_none_for_existing_events(self):
         self.assertIsNone(build_event_response(self.event).location)
         self.assertIsNone(build_event_summary_response(self.event).location)
+
+    def test_event_coordinates_default_to_none(self):
+        self.assertIsNone(get_event_detail(self.event.id, "en", self.db).latitude)
+        self.assertIsNone(get_events("en", limit=24, offset=0, db=self.db)["items"][0].longitude)
+
+    def test_create_and_update_event_coordinates_in_responses(self):
+        created = create_event(
+            EventCreate(
+                title="Paphos tasting",
+                date="2026-09-01T19:00:00Z",
+                price=25,
+                latitude=34.772,
+                longitude=32.425,
+            ),
+            self.db,
+            None,
+        )
+        self.assertEqual((created.latitude, created.longitude), (34.772, 32.425))
+        self.assertEqual(
+            (self.db.get(models.Event, created.id).latitude, self.db.get(models.Event, created.id).longitude),
+            (34.772, 32.425),
+        )
+        detail = get_event_detail(created.id, "en", self.db)
+        summary = next(
+            item for item in get_events("en", limit=24, offset=0, db=self.db)["items"]
+            if item.id == created.id
+        )
+        self.assertEqual((detail.latitude, detail.longitude), (34.772, 32.425))
+        self.assertEqual((summary.latitude, summary.longitude), (34.772, 32.425))
+
+        updated = update_event(
+            created.id,
+            EventUpdate(title="Paphos tasting", date="2026-09-01T19:00:00Z",
+                        price=25, latitude=34.78, longitude=32.43),
+            self.db,
+            None,
+        )
+        self.assertEqual((updated.latitude, updated.longitude), (34.78, 32.43))
+        self.assertEqual(
+            (self.db.get(models.Event, created.id).latitude, self.db.get(models.Event, created.id).longitude),
+            (34.78, 32.43),
+        )
+
+        unchanged = update_event(
+            created.id,
+            EventUpdate(title="Paphos tasting", date="2026-09-01T19:00:00Z", price=25),
+            self.db,
+            None,
+        )
+        self.assertEqual((unchanged.latitude, unchanged.longitude), (34.78, 32.43))
+
+        cleared = update_event(
+            created.id,
+            EventUpdate(title="Paphos tasting", date="2026-09-01T19:00:00Z",
+                        price=25, latitude=None, longitude=None),
+            self.db,
+            None,
+        )
+        self.assertIsNone(cleared.latitude)
+        self.assertIsNone(cleared.longitude)
+        self.assertIsNone(self.db.get(models.Event, created.id).latitude)
+
+    def test_event_coordinates_must_be_finite_in_range_and_paired(self):
+        invalid = [
+            {"latitude": 34.7},
+            {"longitude": 32.4},
+            {"latitude": None},
+            {"latitude": 34.7, "longitude": None},
+            {"latitude": 91, "longitude": 32},
+            {"latitude": -91, "longitude": 32},
+            {"latitude": 34, "longitude": 181},
+            {"latitude": 34, "longitude": -181},
+            {"latitude": float("nan"), "longitude": 32},
+            {"latitude": 34, "longitude": float("inf")},
+        ]
+        for schema in (EventCreate, EventUpdate):
+            for coordinates in invalid:
+                with self.subTest(schema=schema.__name__, coordinates=coordinates):
+                    with self.assertRaises(ValidationError):
+                        schema(title="Invalid", date="2026-09-01", price=25, **coordinates)
+            self.assertIsNone(
+                schema(title="Without coordinates", date="2026-09-01", price=25).latitude
+            )
+            self.assertIsNone(
+                schema(title="Cleared", date="2026-09-01", price=25,
+                       latitude=None, longitude=None).longitude
+            )
+            boundary = schema(title="Boundary", date="2026-09-01", price=25,
+                              latitude=-90, longitude=180)
+            self.assertEqual((boundary.latitude, boundary.longitude), (-90, 180))
+
+    def test_legacy_event_schema_adds_coordinates_without_losing_rows(self):
+        legacy_engine = create_engine("sqlite://")
+        try:
+            with legacy_engine.begin() as connection:
+                connection.execute(text("CREATE TABLE events (id INTEGER PRIMARY KEY, title VARCHAR)"))
+                connection.execute(text("INSERT INTO events (id, title) VALUES (1, 'Legacy')"))
+            with patch("main.engine", legacy_engine):
+                ensure_event_schema()
+                ensure_event_schema()
+            with legacy_engine.connect() as connection:
+                columns = {column["name"] for column in inspect(connection).get_columns("events")}
+                self.assertTrue({"latitude", "longitude"} <= columns)
+                self.assertEqual(
+                    connection.execute(
+                        text("SELECT title, latitude, longitude FROM events WHERE id = 1")
+                    ).one(),
+                    ("Legacy", None, None),
+                )
+        finally:
+            legacy_engine.dispose()
 
     def test_event_list_returns_lightweight_summary_with_bottle_count(self):
         self.db.execute(
