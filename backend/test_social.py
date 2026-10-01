@@ -593,6 +593,33 @@ class SocialTest(unittest.TestCase):
             self.assertTrue(mock_post.call_args.kwargs["json"]["expiresIn"] <= 300)
             self.assertNotIn("/1/", mock_post.call_args.args[0])
 
+    def test_uploaded_photo_is_at_most_one_megabyte(self):
+        size = 1600
+        noisy = Image.frombytes("RGB", (size, size), os.urandom(size * size * 3))
+        image = io.BytesIO()
+        noisy.save(image, "JPEG", quality=95)
+        self.assertGreater(len(image.getvalue()), social.MAX_SOCIAL_IMAGE_BYTES)
+        self.assertLess(len(image.getvalue()), 5 * 1024 * 1024)
+
+        class Response:
+            ok = True
+            def raise_for_status(self):
+                pass
+
+        env = {"SUPABASE_URL": "https://example.supabase.co",
+               "SUPABASE_SERVICE_ROLE_KEY": "fake-test-key",
+               "SUPABASE_SOCIAL_BUCKET": "social"}
+        with patch.dict(os.environ, env), patch.object(social.requests, "post", return_value=Response()) as mock_post:
+            result = self.request("POST", "/media?kind=avatar", content=image.getvalue())
+            self.assertEqual(result.status_code, 200, result.text)
+            stored = mock_post.call_args.kwargs["data"]
+            self.assertLessEqual(len(stored), social.MAX_SOCIAL_IMAGE_BYTES)
+            with Image.open(io.BytesIO(stored)) as encoded:
+                self.assertEqual(encoded.format, "JPEG")
+                self.assertLessEqual(max(encoded.size), 1600)
+        self.assertEqual(self.request("POST", "/media?kind=avatar",
+                                      content=b"x" * (5 * 1024 * 1024 + 1)).status_code, 413)
+
 
 if __name__ == "__main__":
     unittest.main()

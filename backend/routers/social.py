@@ -23,6 +23,7 @@ from database import get_db
 
 log = logging.getLogger(__name__)
 OPAQUE_MEDIA_KEY = re.compile(r"^(event|avatar)/[0-9a-f]{32}\.jpg$")
+MAX_SOCIAL_IMAGE_BYTES = 1024 * 1024
 
 
 def auth():
@@ -417,8 +418,18 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
             if image.format not in ("JPEG", "PNG", "WEBP") or image.width * image.height > 25_000_000:
                 fail(422, "Unsupported image")
             image.load()
-            output = io.BytesIO()
-            image.convert("RGB").save(output, format="JPEG", quality=85)
+            rgb = image.convert("RGB")
+            for max_dimension in (1600, 1280, 1024, 800, 640, 512, 384, 256):
+                rgb.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+                for quality in (85, 70, 55):
+                    output = io.BytesIO()
+                    rgb.save(output, format="JPEG", quality=quality)
+                    if output.tell() <= MAX_SOCIAL_IMAGE_BYTES:
+                        break
+                if output.tell() <= MAX_SOCIAL_IMAGE_BYTES:
+                    break
+            else:
+                fail(422, "Image cannot be compressed to 1 MB")
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
         fail(422, "Invalid image")
     url, secret, bucket = storage_config()

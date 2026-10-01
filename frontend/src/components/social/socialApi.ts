@@ -2,6 +2,7 @@ import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import type { SocialEvent, SocialProfile } from './SocialEventCard.tsx';
 import type { SocialEventDraft } from './SocialEventForms.tsx';
 import type { ChatMessage, FriendRequest, JoinRequest, Report, TagRequest } from './SocialPanels.tsx';
+import { compressSocialImage } from './compressImage.ts';
 
 const API_URL = `${import.meta.env.VITE_API_BASE_URL ?? 'https://paphos-whisky-api.onrender.com'}/api/social`;
 type DeliveryStatus = 'sent' | 'not_delivered' | 'not_configured';
@@ -89,10 +90,11 @@ export class SocialApi {
   resolveReport(id: number) { return this.request<void>(`/admin/reports/${id}/resolve`, 'POST'); }
 
   async upload(file: File, kind: 'event' | 'avatar'): Promise<string> {
+    const image = await compressSocialImage(file);
     const response = await fetch(`${API_URL}/media?kind=${kind}`, {
       method: 'POST',
-      headers: { ...telegramAuthHeaders(this.initDataRaw), 'Content-Type': file.type },
-      body: file,
+      headers: { ...telegramAuthHeaders(this.initDataRaw), 'Content-Type': 'image/jpeg' },
+      body: image,
     });
     if (!response.ok) throw new Error(await errorMessage(response));
     const result = await response.json() as { key: string };

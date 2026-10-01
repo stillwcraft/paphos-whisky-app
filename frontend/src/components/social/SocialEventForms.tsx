@@ -1,6 +1,7 @@
 import { useEffect, useState, type ComponentType, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Drink, SocialProfile, Visibility } from './SocialEventCard.tsx';
+import { MAX_SOURCE_IMAGE_BYTES, SOCIAL_IMAGE_TYPES } from './compressImage.ts';
 
 const inputStyle = 'w-full rounded-xl border border-[#C5A059]/30 bg-[#1A1A1E] px-3 py-2.5 text-[#F4F4F5] outline-none focus:border-[#C5A059]';
 
@@ -97,7 +98,7 @@ export function SocialEventForm({
         <span>{t('social.photo')}</span>
         <input required type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
           const file = event.target.files?.[0] ?? null;
-          if (file && (file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
+          if (file && (file.size > MAX_SOURCE_IMAGE_BYTES || !SOCIAL_IMAGE_TYPES.includes(file.type))) {
             setPhoto(null);
             setPhotoError(t('social.invalid_photo'));
             event.target.value = '';

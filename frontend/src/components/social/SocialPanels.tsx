@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SocialProfile } from './SocialEventCard.tsx';
+import { MAX_SOURCE_IMAGE_BYTES, SOCIAL_IMAGE_TYPES } from './compressImage.ts';
 
 type FriendRequest = { id: number; sender: SocialProfile };
 type TagRequest = { id: number; location: string };
@@ -84,7 +85,7 @@ export function SocialProfilePanel({
         <label className="block space-y-1"><span>{t('social.avatar')}</span>
           <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
             const file = event.target.files?.[0] ?? null;
-            if (file && (file.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp'].includes(file.type))) {
+            if (file && (file.size > MAX_SOURCE_IMAGE_BYTES || !SOCIAL_IMAGE_TYPES.includes(file.type))) {
               setAvatar(null);
               setAvatarError(t('social.invalid_photo'));
               event.target.value = '';

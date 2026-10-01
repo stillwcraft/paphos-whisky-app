@@ -21,6 +21,10 @@ For image support, configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
 Creating an event requires exactly one image: first `POST /api/social/media?kind=event`
 with the image bytes (`Content-Type: application/octet-stream`, up to 5 MB),
 then submit the returned owner-bound `key` as `photo_key` in `POST /api/social/events`.
+The Mini App accepts JPEG, PNG or WebP files up to 20 MB and compresses them
+to JPEG at most 1 MiB before sending them. The server independently verifies
+the uploaded image and caps the stored JPEG at 1 MiB by reducing quality and
+resolution as needed. Direct API uploads still have a 5 MiB input limit.
 An event image key can be used only once. `description` must be 1–400 characters.
 `POST /api/social/events` requires `location` (a 1–150 character string) and
 `photo_key` (the uploaded event photo's key, not a URL); `capacity` may be
