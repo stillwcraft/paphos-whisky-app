@@ -74,3 +74,28 @@ list/detail/chat/join/report/block routes for everyone, including the owner.
 `{"id": number, "status": "resolved"}`. Hiding and resolving are independent
 moderator decisions. Signed URLs issued before hiding can remain usable until
 their short expiration; they cannot be individually revoked by Supabase Storage.
+
+## Media retention
+
+Apply `migrations/023_social_media_retention.sql` before deploying this backend
+version and starting the cleanup job. Existing `social_media` rows receive
+the migration time as `created_at`, so older unattached uploads get a 24-hour
+grace period.
+
+Run `python social_cleanup.py` from the `backend/` directory once daily (for
+example, a Render Cron Job with schedule `0 3 * * *` UTC). If the Render root
+directory is the repository root, use build command `sh backend/render-build.sh`
+and cron command `cd backend && python social_cleanup.py`. Give that job the
+same `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`SUPABASE_SOCIAL_BUCKET` as the backend. It requires access to the same private
+bucket; never put the service role key in the frontend. Do not use a SQL-only
+cron to delete files: Storage objects must be removed through the Storage API.
+
+Events and their photos are removed 7 days after expiry. An open report blocks
+deletion; resolved reports keep the event until at least 30 days after the
+latest resolution. Removing an event cascades to its reports, tags, joins,
+cheers, and chat. Uploads not referenced by an event or current profile
+avatar are removed 24 hours after upload, including replaced/cleared avatars
+and abandoned event photos. Current avatars are not affected by event expiry.
+Cleanup processes records in batches, treats already-missing Storage objects
+as deleted, and exits nonzero on Storage failures so the next run can retry.

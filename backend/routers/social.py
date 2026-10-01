@@ -20,6 +20,7 @@ from typing import Literal, Optional
 
 import models as m
 from database import get_db
+from social_storage import storage_config
 
 log = logging.getLogger(__name__)
 OPAQUE_MEDIA_KEY = re.compile(r"^(event|avatar)/[0-9a-f]{32}\.jpg$")
@@ -146,15 +147,6 @@ def block_pair(db, blocker_id, blocked_id):
                  db.query(m.SocialEvent.id).filter_by(owner_id=blocked_id))),
     )).delete(synchronize_session=False)
     commit(db)
-
-
-def storage_config():
-    url, key, bucket = (os.getenv(k) for k in ("SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_SOCIAL_BUCKET"))
-    if not all((url, key, bucket)):
-        fail(503, "Social media storage is not configured")
-    if not url.startswith("https://") or "/" in bucket or ".." in bucket:
-        fail(503, "Invalid social media storage configuration")
-    return url.rstrip("/"), key, bucket
 
 
 def signed(key, lifetime=300):
@@ -303,7 +295,7 @@ def put_profile(data: ProfileUpdate, user=Depends(auth()), db: Session = Depends
     p = profile(db, user)
     avatar_key = data.avatar_key if "avatar_key" in data.model_fields_set else p.avatar_key
     if "avatar_key" in data.model_fields_set and avatar_key is not None:
-        media = db.get(m.SocialMedia, data.avatar_key)
+        media = db.query(m.SocialMedia).filter_by(key=data.avatar_key).with_for_update().first()
         if (not OPAQUE_MEDIA_KEY.fullmatch(data.avatar_key)
                 or not media or media.owner_id != uid(user) or media.kind != "avatar"):
             fail(422, "Upload your avatar first")
@@ -434,6 +426,9 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
         fail(422, "Invalid image")
     url, secret, bucket = storage_config()
     key = f"{kind}/{uuid4().hex}.jpg"
+    # Record the key first so even an interrupted upload can be collected later.
+    db.add(m.SocialMedia(key=key, owner_id=uid(user), kind=kind))
+    commit(db)
     try:
         r = requests.post(
             f"{url}/storage/v1/object/{quote(bucket, safe='')}/{quote(key, safe='/')}",
@@ -446,15 +441,13 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
     except requests.RequestException:
         log.warning("Social image upload failed")
         fail(503, "Media temporarily unavailable")
-    db.add(m.SocialMedia(key=key, owner_id=uid(user), kind=kind))
-    commit(db)
     return {"key": key}
 
 
 @router.post("/events", status_code=201)
 def create_event(data: EventCreate, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
-    media = db.get(m.SocialMedia, data.photo_key)
+    media = db.query(m.SocialMedia).filter_by(key=data.photo_key).with_for_update().first()
     if (not OPAQUE_MEDIA_KEY.fullmatch(data.photo_key)
             or not media or media.owner_id != uid(user) or media.kind != "event"):
         fail(422, "Upload your event photo first")
