@@ -158,8 +158,9 @@ export function SocialEventForm({
         </fieldset>
       )}
       {(photoError || error) && <p role="alert" className="text-red-300">{photoError || error}</p>}
-      <button type="submit" disabled={busy} className="w-full rounded-xl bg-gradient-to-r from-[#C5A059] to-[#8A5A2B] px-4 py-3 font-semibold text-[#141417] disabled:opacity-50">
-        {t('social.create')}
+      <button type="submit" disabled={busy} aria-busy={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#8A5A2B] px-4 py-3 font-semibold text-[#141417] disabled:opacity-50">
+        {busy && <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-[#141417]/30 border-t-[#141417]" />}
+        {t(busy ? 'social.creating' : 'social.create')}
       </button>
     </form>
   );

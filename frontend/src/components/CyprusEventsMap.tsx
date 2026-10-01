@@ -11,7 +11,7 @@ import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
 import { SocialChatPanel, SocialProfilePanel, SocialReportsPanel, type ChatMessage, type FriendRequest, type JoinRequest, type Report, type TagRequest } from './social/SocialPanels.tsx';
-import { SocialApi } from './social/socialApi.ts';
+import { SocialApi, SocialApiError } from './social/socialApi.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
@@ -108,6 +108,7 @@ export function CyprusEventsMap({
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   const [socialError, setSocialError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [socialNotice, setSocialNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -148,14 +149,27 @@ export function CyprusEventsMap({
     let active = true;
     void api.event(initialSocialEventId).then((event) => {
       if (!active) return;
+      setLinkError(null);
       setSocialEvents((current) => current.some((item) => item.id === event.id) ? current : [...current, event]);
       setSelectedSocialId(event.id);
       onSocialEventHandled();
     }).catch((reason: unknown) => {
-      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      if (!active) return;
+      if (reason instanceof SocialApiError && reason.status === 404) {
+        setLinkError(reason.message);
+        onSocialEventHandled();
+      } else {
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      }
     });
     return () => { active = false; };
   }, [api, initialSocialEventId, onSocialEventHandled, t]);
+
+  useEffect(() => {
+    if (!linkError) return;
+    const timeout = window.setTimeout(() => setLinkError(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [linkError]);
 
   const run = async (action: () => Promise<void>) => {
     if (busyRef.current) return false;
@@ -328,7 +342,7 @@ export function CyprusEventsMap({
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
       )}
-      {socialError && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{socialError}</p>}
+      {(linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{linkError || socialError}</p>}
       {socialNotice && <p role="status" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl border border-[#C5A059]/40 bg-[#141417] p-3 text-sm text-[#FFE28A]">{socialNotice}</p>}
       {selected && !panel && (
         <button

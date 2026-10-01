@@ -20,6 +20,13 @@ async function errorMessage(response: Response): Promise<string> {
   return `HTTP ${response.status}`;
 }
 
+export class SocialApiError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = 'SocialApiError';
+  }
+}
+
 export class SocialApi {
   constructor(private readonly initDataRaw: string) {}
 
@@ -29,7 +36,7 @@ export class SocialApi {
       headers: { ...telegramAuthHeaders(this.initDataRaw), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
-    if (!response.ok) throw new Error(await errorMessage(response));
+    if (!response.ok) throw new SocialApiError(await errorMessage(response), response.status);
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
   }

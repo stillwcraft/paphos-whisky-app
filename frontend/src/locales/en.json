@@ -18,7 +18,7 @@
   },
   "cyprus_map": {
     "title": "Events map",
-    "open_map": "Events map",
+    "open_map": "Map",
     "open_event": "View event",
     "pick_location": "Tap the map to set the event location (optional)",
     "clear_location": "Remove pin",
@@ -27,6 +27,7 @@
   },
   "social": {
     "create": "Create event",
+    "creating": "Creating event...",
     "create_title": "New event",
     "place": "Meeting place",
     "description": "Description (up to 400 characters)",
