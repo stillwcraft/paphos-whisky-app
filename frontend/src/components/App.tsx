@@ -96,6 +96,7 @@ export function App() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [selectedSocialEventId, setSelectedSocialEventId] = useState<number | null>(null);
   const [selectedBottleId, setSelectedBottleId] = useState<number | null>(null);
   const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
   const [mapDistilleryId, setMapDistilleryId] = useState<number | null>(null);
@@ -106,6 +107,7 @@ export function App() {
   const activeCyprusMap = activeTab === 'cyprus-map' && showCyprusMapTab;
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
+  const clearSelectedSocialEvent = useCallback(() => setSelectedSocialEventId(null), []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
   const clearSelectedDistillery = useCallback(() => setSelectedDistilleryId(null), []);
   const clearMapDistillery = useCallback(() => setMapDistilleryId(null), []);
@@ -182,6 +184,17 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!showCyprusMapTab) return;
+    const startParam = retrieveLaunchParams().tgWebAppStartParam
+      ?? window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+    const match = /^social_event_(\d+)$/.exec(startParam ?? '');
+    if (match) {
+      setSelectedSocialEventId(Number(match[1]));
+      setActiveTab('cyprus-map');
+    }
+  }, [showCyprusMapTab]);
+
   return (
     <div className={`${activeCyprusMap ? 'flex h-[100dvh] flex-col' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
       <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
@@ -213,7 +226,12 @@ export function App() {
             <ProfileTab />
           ) : activeTab === 'cyprus-map' ? (
             <Suspense fallback={<p className="p-5 text-slate-300">{t('common.loading')}</p>}>
-              <CyprusEventsMap onSelectEvent={openEventFromMap} />
+              <CyprusEventsMap
+                isAdmin={isAdmin}
+                initialSocialEventId={selectedSocialEventId}
+                onSocialEventHandled={clearSelectedSocialEvent}
+                onSelectEvent={openEventFromMap}
+              />
             </Suspense>
           ) : activeTab === 'map' ? (
             <ScotlandWhiskyMap

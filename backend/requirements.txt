@@ -35,3 +35,4 @@ sqlalchemy
 psycopg2-binary
 psycopg[binary]>=3,<4
 Pillow==11.3.0
+httpx==0.28.1

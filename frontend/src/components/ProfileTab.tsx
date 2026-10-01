@@ -27,6 +27,7 @@ declare global {
           callback?: (accepted: boolean) => void,
         ) => void;
         switchInlineQuery: (query: string, chooseChatTypes?: string[]) => void;
+        openTelegramLink?: (url: string) => void;
       };
     };
   }

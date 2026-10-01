@@ -924,6 +924,8 @@ def require_admin(
 app.include_router(infographics_router)
 app.include_router(distillery_infographics_router)
 app.include_router(infographics_admin_router, dependencies=[Depends(require_admin)])
+from routers.social import router as social_router
+app.include_router(social_router)
 
 
 # --- Схемы валидации данных (Pydantic) ---

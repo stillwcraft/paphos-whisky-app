@@ -73,6 +73,102 @@ class Event(Base):
     distillery = relationship("Distillery", back_populates="events")
 
 
+class SocialProfile(Base):
+    __tablename__ = "social_profiles"
+    telegram_id = Column(BigInteger, primary_key=True)
+    display_name = Column(String(100), nullable=False)
+    age = Column(Integer, nullable=True)
+    verified = Column(Boolean, nullable=False, default=False)
+    avatar_key = Column(String(256), nullable=True)
+
+
+class SocialMedia(Base):
+    __tablename__ = "social_media"
+    key = Column(String(256), primary_key=True)
+    owner_id = Column(BigInteger, nullable=False, index=True)
+    kind = Column(String(10), nullable=False)
+
+
+class SocialFriendRequest(Base):
+    __tablename__ = "social_friend_requests"
+    __table_args__ = (UniqueConstraint("sender_id", "recipient_id"),)
+    id = Column(Integer, primary_key=True)
+    sender_id = Column(BigInteger, nullable=False, index=True)
+    recipient_id = Column(BigInteger, nullable=False, index=True)
+    status = Column(String(12), nullable=False, default="pending")
+
+
+class SocialBlock(Base):
+    __tablename__ = "social_blocks"
+    __table_args__ = (UniqueConstraint("blocker_id", "blocked_id"),)
+    id = Column(Integer, primary_key=True)
+    blocker_id = Column(BigInteger, nullable=False, index=True)
+    blocked_id = Column(BigInteger, nullable=False, index=True)
+
+
+class SocialEvent(Base):
+    __tablename__ = "social_events"
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(BigInteger, nullable=False, index=True)
+    description = Column(String(400), nullable=False)
+    drink = Column(String(12), nullable=False)
+    visibility = Column(String(12), nullable=False)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    location = Column(String(150), nullable=False)
+    photo_key = Column(String(256), nullable=False, unique=True)
+    starts_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    capacity = Column(Integer, nullable=True)
+    hidden = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class SocialTag(Base):
+    __tablename__ = "social_tags"
+    __table_args__ = (Index("ix_social_tags_telegram_status", "telegram_id", "status"),)
+    event_id = Column(Integer, ForeignKey("social_events.id", ondelete="CASCADE"), primary_key=True)
+    telegram_id = Column(BigInteger, primary_key=True)
+    status = Column(String(10), nullable=False, default="pending")
+
+
+class SocialCheer(Base):
+    __tablename__ = "social_cheers"
+    event_id = Column(Integer, ForeignKey("social_events.id", ondelete="CASCADE"), primary_key=True)
+    telegram_id = Column(BigInteger, primary_key=True)
+
+
+class SocialJoinRequest(Base):
+    __tablename__ = "social_join_requests"
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("social_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    telegram_id = Column(BigInteger, nullable=False)
+    status = Column(String(12), nullable=False, default="pending")
+    __table_args__ = (UniqueConstraint("event_id", "telegram_id"),)
+
+
+class SocialChatMessage(Base):
+    __tablename__ = "social_chat_messages"
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("social_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_id = Column(BigInteger, nullable=False)
+    body = Column(String(1000), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class SocialReport(Base):
+    __tablename__ = "social_reports"
+    id = Column(Integer, primary_key=True)
+    event_id = Column(Integer, ForeignKey("social_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    reporter_id = Column(BigInteger, nullable=False)
+    category = Column(String(20), nullable=False)
+    status = Column(String(10), nullable=False, default="open")
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+    resolved_by = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (UniqueConstraint("event_id", "reporter_id"),)
+
+
 class Article(Base):
     __tablename__ = "articles"
 

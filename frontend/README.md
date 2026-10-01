@@ -61,6 +61,12 @@ To run the application in the development mode, use the `dev` script:
 npm run dev:https
 ```
 
+For local testing of the social events map, set `VITE_API_BASE_URL` to the local
+backend URL before starting Vite. The backend must separately set
+`SOCIAL_EVENTS_ENABLED=true`; otherwise only the configured administrator can
+use its social API. See `backend/SOCIAL_EVENTS.md` for the private photo-storage
+setup. This feature remains hidden from regular users in production.
+
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),
 > launching the dev mode for the first time, you may see sudo password request.

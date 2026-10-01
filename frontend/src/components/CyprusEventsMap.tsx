@@ -1,12 +1,17 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { initData, useSignal } from '@tma.js/sdk-react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import { Icon, type LatLngTuple } from 'leaflet';
+import { DivIcon, Icon, type LatLngTuple } from 'leaflet';
 import { useTranslation } from 'react-i18next';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import { localizedApiUrl } from '@/localization.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
+import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
+import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
+import { SocialChatPanel, SocialProfilePanel, SocialReportsPanel, type ChatMessage, type FriendRequest, type JoinRequest, type Report, type TagRequest } from './social/SocialPanels.tsx';
+import { SocialApi } from './social/socialApi.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
@@ -18,6 +23,15 @@ const eventIcon = new Icon({
   iconAnchor: [12, 41],
   shadowSize: [41, 41],
 });
+const socialIcons: Record<Drink, DivIcon> = Object.fromEntries(
+  (Object.entries({ beer: '🍺', wine: '🍷', spirits: '🥃', cocktails: '🍸', coffee: '☕' }) as [Drink, string][])
+    .map(([drink, emoji]) => [drink, new DivIcon({
+      html: `<span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;background:#141417;font-size:22px;box-shadow:0 2px 12px #0009">${emoji}</span>`,
+      className: '',
+      iconSize: [38, 38],
+      iconAnchor: [19, 38],
+    })]),
+) as Record<Drink, DivIcon>;
 
 type EventMarker = {
   id: number;
@@ -67,15 +81,180 @@ function BaseMap({ children, className }: { children: ReactNode; className: stri
 }
 
 export function CyprusEventsMap({
+  isAdmin,
+  initialSocialEventId,
+  onSocialEventHandled,
   onSelectEvent,
 }: {
+  isAdmin: boolean;
+  initialSocialEventId: number | null;
+  onSocialEventHandled: () => void;
   onSelectEvent: (eventId: number) => void;
 }) {
   const { t, i18n } = useTranslation();
+  const initDataRaw = useSignal(initData.raw);
+  const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
   const [events, setEvents] = useState<PositionedEvent[]>([]);
+  const [socialEvents, setSocialEvents] = useState<SocialEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
+  const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
+  const [panel, setPanel] = useState<'create' | 'profile' | 'chat' | 'reports' | null>(null);
+  const [friends, setFriends] = useState<SocialProfile[]>([]);
+  const [profile, setProfile] = useState<SocialProfile | null>(null);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [tagRequests, setTagRequests] = useState<TagRequest[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [socialNotice, setSocialNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const chatCursor = useRef(0);
+  const [resumeCreate, setResumeCreate] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
+
+  const reloadSocial = useCallback(async () => {
+    if (!api) return;
+    const items = await api.events();
+    setSocialEvents(items);
+  }, [api]);
+
+  useEffect(() => {
+    if (!api) return;
+    let active = true;
+    void api.events().then((items) => {
+      if (active) setSocialEvents(items);
+    }).catch((reason: unknown) => {
+      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+    });
+    return () => { active = false; };
+  }, [api, t]);
+
+  useEffect(() => {
+    if (!api) return;
+    const interval = window.setInterval(() => {
+      void reloadSocial().catch((reason: unknown) => {
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      });
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [api, reloadSocial, t]);
+
+  useEffect(() => {
+    if (!api || initialSocialEventId === null) return;
+    let active = true;
+    void api.event(initialSocialEventId).then((event) => {
+      if (!active) return;
+      setSocialEvents((current) => current.some((item) => item.id === event.id) ? current : [...current, event]);
+      setSelectedSocialId(event.id);
+      onSocialEventHandled();
+    }).catch((reason: unknown) => {
+      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+    });
+    return () => { active = false; };
+  }, [api, initialSocialEventId, onSocialEventHandled, t]);
+
+  const run = async (action: () => Promise<void>) => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(true);
+    setSocialError(null);
+    setSocialNotice(null);
+    try {
+      await action();
+      return true;
+    } catch (reason) {
+      setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      return false;
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
+
+  const openProfile = () => {
+    if (!api) { setSocialError(t('social.auth_required')); return; }
+    void run(async () => {
+      const [me, contacts, requests, tags] = await Promise.all([
+        api.profile(), api.friends(), api.friendRequests(), api.tagRequests(),
+      ]);
+      setProfile(me);
+      setFriends(contacts);
+      setFriendRequests(requests);
+      setTagRequests(tags);
+      setPanel('profile');
+    });
+  };
+
+  const openCreate = () => {
+    if (!api) { setSocialError(t('social.auth_required')); return; }
+    void run(async () => {
+      const [me, contacts] = await Promise.all([api.profile(), api.friends()]);
+      setFriends(contacts);
+      if (me.age === null) {
+        setProfile(me);
+        setFriendRequests(await api.friendRequests());
+        setTagRequests(await api.tagRequests());
+        setResumeCreate(true);
+        setPanel('profile');
+        setSocialError(t('social.complete_profile'));
+        return;
+      }
+      setSelected(null);
+      setSelectedSocialId(null);
+      setPanel('create');
+    });
+  };
+
+  const openChat = (event: SocialEvent) => {
+    if (!api) return;
+    void run(async () => {
+      const [chat, requests] = await Promise.all([
+        api.chatSince(event.id),
+        event.is_owner ? api.joinRequests(event.id) : Promise.resolve([]),
+      ]);
+      chatCursor.current = chat.length ? chat[chat.length - 1].id : 0;
+      setMessages(chat);
+      setJoinRequests(requests);
+      setPanel('chat');
+    });
+  };
+
+  useEffect(() => {
+    if (panel !== 'chat' || !api || selectedSocialId === null) return;
+    let active = true;
+    const interval = window.setInterval(() => {
+      void api.chatSince(selectedSocialId, chatCursor.current).then((newMessages) => {
+        if (!active || newMessages.length === 0) return;
+        chatCursor.current = newMessages[newMessages.length - 1].id;
+        setMessages((current) => {
+          const ids = new Set(current.map((message) => message.id));
+          return [...current, ...newMessages.filter((message) => !ids.has(message.id))].sort((a, b) => a.id - b.id);
+        });
+      }).catch((reason: unknown) => {
+        if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      });
+    }, 5000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [panel, api, selectedSocialId, t]);
+
+  const share = (event: SocialEvent) => {
+    const url = `https://t.me/CyprusWhiskyClubBot/NoMoreDram?startapp=social_event_${event.id}`;
+    const telegramShare = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(event.location)}`;
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(telegramShare);
+    } else if (navigator.share) {
+      void navigator.share({ title: event.location, url }).catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') return;
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      });
+    } else {
+      if (!window.open(telegramShare, '_blank', 'noopener,noreferrer')) setSocialError(t('social.share_failed'));
+    }
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -119,22 +298,42 @@ export function CyprusEventsMap({
             key={event.id}
             icon={eventIcon}
             position={[event.latitude, event.longitude]}
-            eventHandlers={{ click: () => setSelected(event) }}
+            eventHandlers={{ click: () => { setSelected(event); setSelectedSocialId(null); setPanel(null); } }}
+          />
+        ))}
+        {socialEvents.map((event) => (
+          <Marker
+            key={`social-${event.id}`}
+            icon={socialIcons[event.drink] ?? eventIcon}
+            position={[event.latitude, event.longitude]}
+            eventHandlers={{ click: () => { setSelectedSocialId(event.id); setSelected(null); setPanel(null); } }}
           />
         ))}
       </BaseMap>
-      <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000]">
+      <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000] flex items-start justify-between gap-2">
         <h1 className="inline-block rounded-xl border border-[#C5A059]/30 bg-[#141417]/90 px-4 py-3 font-serif text-[#FFE28A] backdrop-blur-md">
           {t('cyprus_map.title')}
         </h1>
+        <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
+          <button type="button" disabled={busy} onClick={openCreate} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.create')}</button>
+          <button type="button" disabled={busy} onClick={openProfile} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.profile')}</button>
+          {isAdmin && (
+            <button type="button" disabled={busy} onClick={() => {
+              if (!api) { setSocialError(t('social.auth_required')); return; }
+              void run(async () => { setReports(await api.reports()); setPanel('reports'); });
+            }} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.admin_reports')}</button>
+          )}
+        </div>
       </div>
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || events.length === 0) && (
+      {!error && (isLoading || (events.length === 0 && socialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
       )}
-      {selected && (
+      {socialError && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{socialError}</p>}
+      {socialNotice && <p role="status" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl border border-[#C5A059]/40 bg-[#141417] p-3 text-sm text-[#FFE28A]">{socialNotice}</p>}
+      {selected && !panel && (
         <button
           type="button"
           className="absolute bottom-[calc(2.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[1000] mx-auto flex max-w-md flex-col rounded-xl border border-[#C5A059]/50 bg-[#141417]/95 p-4 text-left text-[#F4F4F5] shadow-xl backdrop-blur-md"
@@ -144,6 +343,125 @@ export function CyprusEventsMap({
           <span className="text-sm text-slate-300">{[selected.date, selected.location].filter(Boolean).join(' · ')}</span>
           <span className="mt-1 text-xs text-[#C5A059]">{t('cyprus_map.open_event')}</span>
         </button>
+      )}
+      {selectedSocial && !panel && (
+        <div className="absolute bottom-4 left-3 right-3 z-[1100] mx-auto max-h-[calc(100%-8rem)] max-w-md overflow-y-auto">
+          <SocialEventCard
+            event={selectedSocial}
+            busy={busy}
+            onClose={() => setSelectedSocialId(null)}
+            onCheer={() => { if (api) void run(async () => { await api.cheer(selectedSocial.id); await reloadSocial(); }); }}
+            onJoin={() => { if (api) void run(async () => {
+              const result = await api.join(selectedSocial.id);
+              await reloadSocial();
+              if (result.notification_status !== 'sent') setSocialNotice(t('social.join_notification_failed'));
+            }); }}
+            onShare={() => share(selectedSocial)}
+            onChat={() => openChat(selectedSocial)}
+            onReport={(reason) => { if (api) void run(async () => { await api.report(selectedSocial.id, reason); setSocialNotice(t('social.report_sent')); }); }}
+            onBlock={() => { if (api) void run(async () => { await api.blockEvent(selectedSocial.id); setSelectedSocialId(null); await reloadSocial(); }); }}
+          />
+        </div>
+      )}
+      {panel === 'create' && api && (
+        <SocialEventForm
+          friends={friends}
+          LocationPicker={EventLocationPicker}
+          busy={busy}
+          error={socialError}
+          onCancel={() => { setPanel(null); setSocialError(null); }}
+          onSubmit={(draft: SocialEventDraft, photo: File) => void run(async () => {
+            const photoKey = await api.upload(photo, 'event');
+            const created = await api.createEvent(draft, photoKey);
+            await reloadSocial();
+            setPanel(null);
+            if (Object.values(created.notifications).some((status) => status !== 'sent')) {
+              setSocialNotice(t('social.notification_failed'));
+            }
+          })}
+        />
+      )}
+      {panel === 'profile' && api && (
+        <SocialProfilePanel
+          profile={profile}
+          friends={friends}
+          requests={friendRequests}
+          tagRequests={tagRequests}
+          busy={busy}
+          error={socialError}
+          onClose={() => { setPanel(null); setResumeCreate(false); setSocialError(null); }}
+          onSave={(name, age, avatar) => void run(async () => {
+            if (avatar && profile?.age === null && age !== null) {
+              setProfile(await api.updateProfile(name, age, null));
+            }
+            const key = avatar ? await api.upload(avatar, 'avatar') : null;
+            setProfile(await api.updateProfile(name, age, key));
+            await reloadSocial();
+            if (resumeCreate) {
+              setResumeCreate(false);
+              setPanel('create');
+            }
+          })}
+          onInvite={(id) => void run(async () => {
+            const result = await api.invite(id);
+            setSocialNotice(t(result.notification_status === 'sent' ? 'social.friend_invited' : 'social.friend_notification_failed'));
+          })}
+          onAccept={(id) => void run(async () => {
+            await api.acceptFriend(id);
+            const [contacts, requests] = await Promise.all([api.friends(), api.friendRequests()]);
+            setFriends(contacts);
+            setFriendRequests(requests);
+          })}
+          onAcceptTag={(id) => void run(async () => {
+            await api.acceptTag(id);
+            setTagRequests(await api.tagRequests());
+            await reloadSocial();
+          })}
+          onDeclineTag={(id) => void run(async () => {
+            await api.declineTag(id);
+            setTagRequests(await api.tagRequests());
+            await reloadSocial();
+          })}
+        />
+      )}
+      {panel === 'chat' && api && selectedSocial && (
+        <SocialChatPanel
+          messages={messages}
+          requests={joinRequests}
+          isOwner={selectedSocial.is_owner}
+          busy={busy}
+          error={socialError}
+          onClose={() => { setPanel(null); setSocialError(null); }}
+          onSend={(text) => run(async () => {
+            const sent = await api.sendChat(selectedSocial.id, text);
+            setMessages((current) => current.some((message) => message.id === sent.id)
+              ? current : [...current, sent].sort((a, b) => a.id - b.id));
+          })}
+          onAccept={(id) => void run(async () => {
+            const result = await api.acceptJoin(selectedSocial.id, id);
+            setJoinRequests(await api.joinRequests(selectedSocial.id));
+            await reloadSocial();
+            if (result.notification_status !== 'sent') setSocialNotice(t('social.join_notification_failed'));
+          })}
+        />
+      )}
+      {panel === 'reports' && api && (
+        <SocialReportsPanel
+          reports={reports}
+          busy={busy}
+          error={socialError}
+          onClose={() => { setPanel(null); setSocialError(null); }}
+          onVerify={(id) => void run(async () => { await api.verify(id); setSocialNotice(t('social.profile_verified')); })}
+          onHide={(id) => void run(async () => {
+            await api.hideEvent(id);
+            setReports(await api.reports());
+            await reloadSocial();
+          })}
+          onResolve={(id) => void run(async () => {
+            await api.resolveReport(id);
+            setReports(await api.reports());
+          })}
+        />
       )}
     </section>
   );
