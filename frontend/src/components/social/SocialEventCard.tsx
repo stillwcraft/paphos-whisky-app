@@ -103,7 +103,7 @@ export function SocialEventCard({
         </span>
         <button type="button" onClick={onClose} className="ml-1 text-xl text-slate-300" aria-label={t('social.close')}>×</button>
       </header>
-      <img src={event.photo_url} alt={event.location} className="aspect-[16/9] w-full object-cover" />
+      <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full bg-[#0D0D10] object-contain" />
       <div className="space-y-3 p-4 text-sm">
         <div className="flex items-center gap-2">
           {event.owner ? <Avatar profile={event.owner} /> : (

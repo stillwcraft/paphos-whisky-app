@@ -310,10 +310,7 @@ export function CyprusEventsMap({
           />
         ))}
       </BaseMap>
-      <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000] flex items-start justify-between gap-2">
-        <h1 className="inline-block rounded-xl border border-[#C5A059]/30 bg-[#141417]/90 px-4 py-3 font-serif text-[#FFE28A] backdrop-blur-md">
-          {t('cyprus_map.title')}
-        </h1>
+      <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000] flex justify-end">
         <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
           <button type="button" disabled={busy} onClick={openCreate} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.create')}</button>
           <button type="button" disabled={busy} onClick={openProfile} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.profile')}</button>
