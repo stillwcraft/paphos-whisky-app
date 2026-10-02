@@ -10,7 +10,7 @@ import { localizedApiUrl } from '@/localization.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
-import { SocialChatPanel, SocialProfilePanel, SocialReportsPanel, type ChatMessage, type FriendRequest, type JoinRequest, type Report, type TagRequest } from './social/SocialPanels.tsx';
+import { SocialAgeGate, SocialChatPanel, SocialProfilePanel, SocialReportsPanel, type ChatMessage, type FriendRequest, type JoinRequest, type Report, type TagRequest } from './social/SocialPanels.tsx';
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -85,11 +85,15 @@ export function CyprusEventsMap({
   initialSocialEventId,
   onSocialEventHandled,
   onSelectEvent,
+  openReports,
+  onReportsHandled,
 }: {
   isAdmin: boolean;
   initialSocialEventId: number | null;
   onSocialEventHandled: () => void;
   onSelectEvent: (eventId: number) => void;
+  openReports: boolean;
+  onReportsHandled: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const initDataRaw = useSignal(initData.raw);
@@ -99,7 +103,7 @@ export function CyprusEventsMap({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
-  const [panel, setPanel] = useState<'create' | 'profile' | 'chat' | 'reports' | null>(null);
+  const [panel, setPanel] = useState<'age' | 'create' | 'profile' | 'chat' | 'reports' | null>(null);
   const [friends, setFriends] = useState<SocialProfile[]>([]);
   const [profile, setProfile] = useState<SocialProfile | null>(null);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -113,7 +117,6 @@ export function CyprusEventsMap({
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const chatCursor = useRef(0);
-  const [resumeCreate, setResumeCreate] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
 
@@ -126,26 +129,42 @@ export function CyprusEventsMap({
   useEffect(() => {
     if (!api) return;
     let active = true;
+    void api.profile().then((me) => {
+      if (!active) return;
+      setProfile(me);
+      if (me.age === null && !isAdmin) setPanel('age');
+      else setPanel((current) => current === 'age' ? null : current);
+    }).catch((reason: unknown) => {
+      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+    });
+    return () => { active = false; };
+  }, [api, isAdmin, t]);
+
+  const ageConfirmed = profile !== null && (profile.age !== null || isAdmin);
+
+  useEffect(() => {
+    if (!api || !ageConfirmed) return;
+    let active = true;
     void api.events().then((items) => {
       if (active) setSocialEvents(items);
     }).catch((reason: unknown) => {
       if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
     });
     return () => { active = false; };
-  }, [api, t]);
+  }, [api, ageConfirmed, t]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api || !ageConfirmed) return;
     const interval = window.setInterval(() => {
       void reloadSocial().catch((reason: unknown) => {
         setSocialError(reason instanceof Error ? reason.message : t('social.error'));
       });
     }, 60_000);
     return () => window.clearInterval(interval);
-  }, [api, reloadSocial, t]);
+  }, [api, ageConfirmed, reloadSocial, t]);
 
   useEffect(() => {
-    if (!api || initialSocialEventId === null) return;
+    if (!api || !ageConfirmed || initialSocialEventId === null) return;
     let active = true;
     void api.event(initialSocialEventId).then((event) => {
       if (!active) return;
@@ -163,7 +182,23 @@ export function CyprusEventsMap({
       }
     });
     return () => { active = false; };
-  }, [api, initialSocialEventId, onSocialEventHandled, t]);
+  }, [api, ageConfirmed, initialSocialEventId, onSocialEventHandled, t]);
+
+  useEffect(() => {
+    if (!api || !openReports || !isAdmin) return;
+    let active = true;
+    void api.reports().then((items) => {
+      if (!active) return;
+      setReports(items);
+      setPanel('reports');
+      onReportsHandled();
+    }).catch((reason: unknown) => {
+      if (!active) return;
+      setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      onReportsHandled();
+    });
+    return () => { active = false; };
+  }, [api, openReports, isAdmin, onReportsHandled, t]);
 
   useEffect(() => {
     if (!linkError) return;
@@ -205,18 +240,12 @@ export function CyprusEventsMap({
 
   const openCreate = () => {
     if (!api) { setSocialError(t('social.auth_required')); return; }
+    if (!profile) { setSocialError(t('common.loading')); return; }
+    if (!ageConfirmed) { setPanel('age'); return; }
     void run(async () => {
       const [me, contacts] = await Promise.all([api.profile(), api.friends()]);
       setFriends(contacts);
-      if (me.age === null) {
-        setProfile(me);
-        setFriendRequests(await api.friendRequests());
-        setTagRequests(await api.tagRequests());
-        setResumeCreate(true);
-        setPanel('profile');
-        setSocialError(t('social.complete_profile'));
-        return;
-      }
+      setProfile(me);
       setSelected(null);
       setSelectedSocialId(null);
       setPanel('create');
@@ -328,12 +357,6 @@ export function CyprusEventsMap({
         <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
           <button type="button" disabled={busy} onClick={openCreate} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.create')}</button>
           <button type="button" disabled={busy} onClick={openProfile} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.profile')}</button>
-          {isAdmin && (
-            <button type="button" disabled={busy} onClick={() => {
-              if (!api) { setSocialError(t('social.auth_required')); return; }
-              void run(async () => { setReports(await api.reports()); setPanel('reports'); });
-            }} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.admin_reports')}</button>
-          )}
         </div>
       </div>
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
@@ -356,7 +379,7 @@ export function CyprusEventsMap({
         </button>
       )}
       {selectedSocial && !panel && (
-        <div className="absolute bottom-4 left-3 right-3 z-[1100] mx-auto max-h-[calc(100%-8rem)] max-w-md overflow-y-auto">
+        <div className="absolute bottom-4 left-3 right-3 top-[calc(7rem+env(safe-area-inset-top))] z-[1100] mx-auto flex max-w-md flex-col justify-end">
           <SocialEventCard
             event={selectedSocial}
             busy={busy}
@@ -400,18 +423,11 @@ export function CyprusEventsMap({
           tagRequests={tagRequests}
           busy={busy}
           error={socialError}
-          onClose={() => { setPanel(null); setResumeCreate(false); setSocialError(null); }}
-          onSave={(name, age, avatar) => void run(async () => {
-            if (avatar && profile?.age === null && age !== null) {
-              setProfile(await api.updateProfile(name, age, null));
-            }
+          onClose={() => { setPanel(null); setSocialError(null); }}
+          onSave={(name, avatar) => void run(async () => {
             const key = avatar ? await api.upload(avatar, 'avatar') : null;
-            setProfile(await api.updateProfile(name, age, key));
+            setProfile(await api.updateProfile(name, profile?.age ?? null, key));
             await reloadSocial();
-            if (resumeCreate) {
-              setResumeCreate(false);
-              setPanel('create');
-            }
           })}
           onInvite={(id) => void run(async () => {
             const result = await api.invite(id);
@@ -434,6 +450,21 @@ export function CyprusEventsMap({
             await reloadSocial();
           })}
         />
+      )}
+      {panel === 'age' && api && profile && !isAdmin && (
+        <div className="absolute inset-0 z-[1300] bg-[#141417]/90">
+          <SocialAgeGate busy={busy} error={socialError} onConfirm={(age) => {
+            if (!Number.isInteger(age) || age < 18 || age > 120) {
+              setSocialError(t('social.age_gate_invalid'));
+              return;
+            }
+            void run(async () => {
+              const me = await api.updateProfile(profile.display_name, age, null);
+              setProfile(me);
+              setPanel(null);
+            });
+          }} />
+        </div>
       )}
       {panel === 'chat' && api && selectedSocial && (
         <SocialChatPanel

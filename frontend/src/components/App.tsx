@@ -97,6 +97,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<TabId>('events');
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedSocialEventId, setSelectedSocialEventId] = useState<number | null>(null);
+  const [openSocialReports, setOpenSocialReports] = useState(false);
   const [selectedBottleId, setSelectedBottleId] = useState<number | null>(null);
   const [selectedDistilleryId, setSelectedDistilleryId] = useState<number | null>(null);
   const [mapDistilleryId, setMapDistilleryId] = useState<number | null>(null);
@@ -108,6 +109,11 @@ export function App() {
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedSocialEvent = useCallback(() => setSelectedSocialEventId(null), []);
+  const clearOpenSocialReports = useCallback(() => setOpenSocialReports(false), []);
+  const showSocialReports = useCallback(() => {
+    setOpenSocialReports(true);
+    setActiveTab('cyprus-map');
+  }, []);
   const clearSelectedBottle = useCallback(() => setSelectedBottleId(null), []);
   const clearSelectedDistillery = useCallback(() => setSelectedDistilleryId(null), []);
   const clearMapDistillery = useCallback(() => setMapDistilleryId(null), []);
@@ -231,6 +237,8 @@ export function App() {
                 initialSocialEventId={selectedSocialEventId}
                 onSocialEventHandled={clearSelectedSocialEvent}
                 onSelectEvent={openEventFromMap}
+                openReports={openSocialReports}
+                onReportsHandled={clearOpenSocialReports}
               />
             </Suspense>
           ) : activeTab === 'map' ? (
@@ -241,7 +249,7 @@ export function App() {
               onClose={closeMap}
             />
           ) : activeTab === 'admin' && isAdmin ? (
-            <AdminTab />
+            <AdminTab onOpenSocialReports={showSocialReports} />
           ) : (
             <div className="flex min-h-screen items-center justify-center text-center">
               <div>

@@ -89,7 +89,11 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(self.request("POST", f"/friend-requests/{invite.json()['id']}/accept").status_code, 200)
         self.actor = 2
         self.assertEqual(len(self.request("GET", "/events").json()), 1)
-        self.assertEqual(self.request("GET", f"/events/{event}").json()["owner"]["age"], 21)
+        self.assertIsNone(self.request("GET", f"/events/{event}").json()["owner"]["age"])
+        self.assertEqual(self.request("GET", "/profile").json()["age"], 21)
+        self.assertEqual(self.request("PUT", "/profile", json={
+            "display_name": "Person2", "age": None,
+        }).status_code, 422)
         self.assertEqual(self.request("POST", "/blocks", json={"telegram_id": 1}).status_code, 200)
         self.assertEqual(self.request("GET", "/events").json(), [])
         self.assertEqual(self.request("POST", f"/events/{event}/join").status_code, 404)
@@ -99,6 +103,22 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/events/{event}/chat").status_code, 200)
         self.actor = 3
         self.assertEqual(self.request("PUT", "/profile", json={"display_name": "Young", "age": 17}).status_code, 422)
+
+    def test_age_required_once_and_admin_can_remain_without_age(self):
+        self.actor = 5
+        self.assertIsNone(self.request("GET", "/profile").json()["age"])
+        self.assertEqual(self.request("GET", "/events").status_code, 403)
+        self.assertEqual(self.request("PUT", "/profile", json={
+            "display_name": "Person5", "age": 18,
+        }).status_code, 200)
+        self.assertEqual(self.request("GET", "/events").status_code, 200)
+        self.assertEqual(self.request("GET", "/profile").json()["age"], 18)
+        self.actor = 4
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "4"}):
+            self.assertEqual(self.request("PUT", "/profile", json={
+                "display_name": "Admin", "age": None,
+            }).status_code, 200)
+            self.assertEqual(self.request("GET", "/events").status_code, 200)
 
     def test_profile_avatar_omission_preserves_and_explicit_null_clears(self):
         avatar_key = f"avatar/{uuid4().hex}.jpg"
@@ -158,7 +178,7 @@ class SocialTest(unittest.TestCase):
         self.actor = 2
         chat = self.request("GET", f"/events/{event}/chat").json()
         self.assertIsNone(chat[0]["sender"])
-        self.assertEqual(self.request("GET", f"/events/{event}").json()["attendees"][0]["age"], 21)
+        self.assertIsNone(self.request("GET", f"/events/{event}").json()["attendees"][0]["age"])
         self.assertEqual(self.request("POST", f"/events/{event}/report",
                                       json={"category": "false_location"}).status_code, 200)
         self.actor = 4

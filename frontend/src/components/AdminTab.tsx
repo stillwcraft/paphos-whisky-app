@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { clearEventsCache } from '@/eventsCache.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
@@ -236,7 +237,8 @@ function BottleFields({ backgrounds, form, setForm, includeLabel }: { background
   </div>;
 }
 
-export function AdminTab() {
+export function AdminTab({ onOpenSocialReports }: { onOpenSocialReports: () => void }) {
+  const { t } = useTranslation();
   const initDataRaw = useSignal(initData.raw);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [distilleries, setDistilleries] = useState<Distillery[]>([]);
@@ -447,6 +449,7 @@ export function AdminTab() {
 
   return <div style={pageStyle}>
     {message && <p style={messageStyle}>{message}</p>}
+    <button type="button" style={buttonStyle} onClick={onOpenSocialReports}>{t('social.admin_reports')}</button>
     <Accordion title="📅 Manage Events">
       <form onSubmit={saveEvent} style={formStyle}>
         <I18nTextEditor label="Title" required translations={eventForm.title_i18n} onChange={(title_i18n) => setEventForm({ ...eventForm, title: title_i18n.en, title_i18n })} />

@@ -94,8 +94,8 @@ export function SocialEventCard({
   const duration = durationSeconds === 3600 ? '1h' : durationSeconds === 10800 ? '3h' : 'evening';
 
   return (
-    <article className="relative overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
-      <header className="flex items-center gap-2 p-4">
+    <article className="pointer-events-auto flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
+      <header className="flex shrink-0 items-center gap-2 border-b border-[#C5A059]/20 p-4">
         <span className="text-2xl" aria-hidden="true">{drinkIcons[event.drink]}</span>
         <h2 className="min-w-0 flex-1 truncate font-serif text-lg text-[#FFE28A]">{event.location}</h2>
         <span className="shrink-0 text-xs text-[#C5A059]" aria-label={t('social.expires_in', { time: remainingText })}>
@@ -103,33 +103,37 @@ export function SocialEventCard({
         </span>
         <button type="button" onClick={onClose} className="ml-1 text-xl text-slate-300" aria-label={t('social.close')}>×</button>
       </header>
-      <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full bg-[#0D0D10] object-contain" />
-      <div className="space-y-3 p-4 text-sm">
-        <div className="flex items-center gap-2">
-          {event.owner ? <Avatar profile={event.owner} /> : (
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#29272B]">👤</span>
+      <div className="min-h-0 overflow-y-auto overscroll-contain">
+        <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full bg-[#0D0D10] object-contain" />
+        <div className="space-y-3 p-4 text-sm">
+          <div className="flex items-center gap-2">
+            {event.owner ? <Avatar profile={event.owner} /> : (
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#29272B]">👤</span>
+            )}
+            <span className="font-medium">{name}</span>
+            {event.owner?.verified && (
+              <span className="text-xs text-[#C5A059]">✓ {t('social.verified')}</span>
+            )}
+            <span className="ml-auto text-xs text-slate-400">
+              {arrivalMinutes > 0
+                ? t('social.arriving_in', { count: arrivalMinutes })
+                : t('social.already_here')}
+            </span>
+          </div>
+          <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>
+          <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>
+          <p className="text-xs text-slate-400">{t(`social.visibility_${event.visibility}`)}</p>
+          {event.tagged_friends.length > 0 && (
+            <p className="text-slate-300">{t('social.drinking_with')}: {event.tagged_friends.map((friend) => friend.display_name).join(', ')}</p>
           )}
-          <span className="font-medium">{name}{event.owner?.age != null ? `, ${event.owner.age}` : ''}</span>
-          {event.owner?.verified && (
-            <span className="text-xs text-[#C5A059]">✓ {t('social.verified')}</span>
-          )}
-          <span className="ml-auto text-xs text-slate-400">
-            {arrivalMinutes > 0
-              ? t('social.arriving_in', { count: arrivalMinutes })
-              : t('social.already_here')}
-          </span>
+          <div className="flex items-center gap-2 text-slate-300">
+            <span>{t('social.joined', { count: Math.max(0, event.attendee_count - 1) })}</span>
+            {participants.slice(0, 4).map((person) => <Avatar key={person.telegram_id} profile={person} size="h-7 w-7" />)}
+            {event.capacity !== null && <span className="ml-auto text-xs">{event.attendee_count}/{event.capacity}</span>}
+          </div>
         </div>
-        <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>
-        <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>
-        <p className="text-xs text-slate-400">{t(`social.visibility_${event.visibility}`)}</p>
-        {event.tagged_friends.length > 0 && (
-          <p className="text-slate-300">{t('social.drinking_with')}: {event.tagged_friends.map((friend) => friend.display_name).join(', ')}</p>
-        )}
-        <div className="flex items-center gap-2 text-slate-300">
-          <span>{t('social.joined', { count: Math.max(0, event.attendee_count - 1) })}</span>
-          {participants.slice(0, 4).map((person) => <Avatar key={person.telegram_id} profile={person} size="h-7 w-7" />)}
-          {event.capacity !== null && <span className="ml-auto text-xs">{event.attendee_count}/{event.capacity}</span>}
-        </div>
+      </div>
+      <footer className="max-h-[50%] shrink-0 space-y-2 overflow-y-auto border-t border-[#C5A059]/20 bg-[#141417] p-3 text-sm">
         {showReport && (
           <div className="flex flex-wrap gap-2 rounded-lg border border-red-400/30 p-2 text-xs">
             {(['spam', 'inappropriate', 'false_location'] as const).map((reason) => (
@@ -166,7 +170,7 @@ export function SocialEventCard({
             <button type="button" onClick={() => { setShowBlock(!showBlock); setShowReport(false); }}>{t('social.block')}</button>
           </div>
         )}
-      </div>
+      </footer>
     </article>
   );
 }

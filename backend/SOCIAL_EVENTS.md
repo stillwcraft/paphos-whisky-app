@@ -30,8 +30,12 @@ An event image key can be used only once. `description` must be 1–400 characte
 `photo_key` (the uploaded event photo's key, not a URL); `capacity` may be
 omitted or `null` for unlimited, otherwise it must be 2–100. Event responses
 return `capacity: number | null`. Visible owner, friend, and attendee
-mini-profiles include `age: number | null` (self-entered); anonymous owners
-remain `owner: null` and are omitted from non-owner attendee lists.
+mini-profiles always contain `age: null`; self-reported age is returned only
+by the current user's `/profile` endpoint for the one-time 18+ gate. Anonymous
+owners remain `owner: null` and are omitted from non-owner attendee lists.
+After a user confirms their age, it remains on their own profile across visits;
+only the configured admin may save a profile with `age: null`.
+The moderator reports entry is in the admin tab, not on the map.
 For `PUT /api/social/profile`, omitting `avatar_key` preserves the current
 avatar; explicitly sending `avatar_key: null` removes it. Actual changes to
 profile fields reset the manually assigned verification badge.

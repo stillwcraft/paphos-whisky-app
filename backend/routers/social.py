@@ -177,7 +177,7 @@ def mini(db, person_id):
     p = db.get(m.SocialProfile, person_id)
     return {"telegram_id": person_id, "display_name": p.display_name if p else "Member",
             "verified": p.verified if p else False,
-            "age": p.age if p else None,
+            "age": None,
             "avatar_url": signed(p.avatar_key) if p and p.avatar_key else None}
 
 
@@ -250,7 +250,7 @@ def event_json(db, e, viewer, moderator=False):
 
 class ProfileUpdate(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
-    age: int = Field(ge=18, le=120)
+    age: Optional[int] = Field(ge=18, le=120)
     avatar_key: Optional[str] = None
 
 
@@ -292,6 +292,8 @@ def get_profile(user=Depends(auth()), db: Session = Depends(get_db)):
 
 @router.put("/profile")
 def put_profile(data: ProfileUpdate, user=Depends(auth()), db: Session = Depends(get_db)):
+    if data.age is None and not is_admin(user):
+        fail(422, "Enter an age of at least 18 in your social profile")
     p = profile(db, user)
     avatar_key = data.avatar_key if "avatar_key" in data.model_fields_set else p.avatar_key
     if "avatar_key" in data.model_fields_set and avatar_key is not None:

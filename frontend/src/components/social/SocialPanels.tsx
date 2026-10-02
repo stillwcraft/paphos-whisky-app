@@ -24,6 +24,33 @@ type Report = {
 const inputStyle = 'w-full rounded-xl border border-[#C5A059]/30 bg-[#1A1A1E] p-2.5 text-white outline-none focus:border-[#C5A059]';
 const actionStyle = 'rounded-xl border border-[#C5A059]/40 px-3 py-2 text-[#C5A059] disabled:opacity-50';
 
+export function SocialAgeGate({
+  busy,
+  error,
+  onConfirm,
+}: {
+  busy: boolean;
+  error: string | null;
+  onConfirm: (age: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [age, setAge] = useState('');
+
+  return (
+    <form onSubmit={(event) => { event.preventDefault(); onConfirm(Number(age)); }}
+      className="absolute inset-x-3 top-[calc(1rem+env(safe-area-inset-top))] z-[1100] mx-auto max-w-md space-y-4 rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-5 text-sm text-white shadow-2xl">
+      <h2 className="font-serif text-xl text-[#FFE28A]">{t('social.age_gate_title')}</h2>
+      <p className="text-slate-300">{t('social.age_gate_description')}</p>
+      <label className="block space-y-1">
+        <span>{t('social.age')}</span>
+        <input type="number" required min={18} max={120} value={age} onChange={(event) => setAge(event.target.value)} className={inputStyle} />
+      </label>
+      {error && <p role="alert" className="text-red-300">{error}</p>}
+      <button type="submit" disabled={busy} className={actionStyle}>{t('social.confirm_age')}</button>
+    </form>
+  );
+}
+
 export function SocialProfilePanel({
   profile,
   friends,
@@ -45,7 +72,7 @@ export function SocialProfilePanel({
   busy: boolean;
   error: string | null;
   onClose: () => void;
-  onSave: (name: string, age: number | null, avatar: File | null) => void;
+  onSave: (name: string, avatar: File | null) => void;
   onInvite: (telegramId: number) => void;
   onAccept: (requestId: number) => void;
   onAcceptTag: (eventId: number) => void;
@@ -53,19 +80,17 @@ export function SocialProfilePanel({
 }) {
   const { t } = useTranslation();
   const [name, setName] = useState(profile?.display_name ?? '');
-  const [age, setAge] = useState(profile?.age?.toString() ?? '');
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
   const [friendId, setFriendId] = useState('');
   useEffect(() => {
     setName(profile?.display_name ?? '');
-    setAge(profile?.age?.toString() ?? '');
   }, [profile]);
 
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    onSave(name.trim(), age ? Number(age) : null, avatar);
+    onSave(name.trim(), avatar);
   };
 
   return (
@@ -78,9 +103,6 @@ export function SocialProfilePanel({
         {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="h-16 w-16 rounded-full object-cover" />}
         <label className="block space-y-1"><span>{t('social.name')}</span>
           <input required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} className={inputStyle} />
-        </label>
-        <label className="block space-y-1"><span>{t('social.age')}</span>
-          <input type="number" required min={18} max={120} value={age} onChange={(event) => setAge(event.target.value)} className={inputStyle} />
         </label>
         <label className="block space-y-1"><span>{t('social.avatar')}</span>
           <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
