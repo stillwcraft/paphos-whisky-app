@@ -14,6 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from database import SessionLocal
 from fastapi import HTTPException
 from pydantic import ValidationError
+from import_infographic import import_timeline
 from main import TelegramAuthContext, app, ensure_infographic_schema, require_admin
 from routers.infographics import create_infographic, get_distillery_infographic, get_infographic
 from schemas.infographic import InfographicCreate, InfographicResponse
@@ -130,6 +131,69 @@ class InfographicTests(unittest.TestCase):
         self.assertEqual(len(payload.schema_data.steps), 23)
         self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1815")
         self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2026")
+
+    def test_import_timeline_matches_distillery_and_rejects_overwrite(self):
+        distillery = models.Distillery(name="Isle of Raasay")
+        self.db.add(distillery)
+        self.db.commit()
+        data = {"steps": [{
+            "id": "first-spirit", "dateOrYear": "2017", "subtitle": "", "badge": None,
+            "title": {"en": "First spirit", "ru": "Первый спирт", "uk": "Перший спирт"},
+            "description": {"en": "Distillation begins.", "ru": "Начало производства.",
+                            "uk": "Початок виробництва."},
+        }]}
+        try:
+            result = import_timeline(self.db, "Raasay", data)
+            self.assertEqual(result.distillery_id, distillery.id)
+            self.assertEqual(import_timeline(self.db, "Raasay", data).id, result.id)
+            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
+                import_timeline(self.db, "Raasay", {"steps": [{**data["steps"][0], "id": "changed"}]})
+            with self.assertRaisesRegex(ValueError, "exactly one"):
+                import_timeline(self.db, "Missing Distillery", data)
+            with self.assertRaises(ValidationError):
+                import_timeline(self.db, "Raasay", {"steps": []})
+            self.assertEqual(self.db.query(models.Infographic).count(), 1)
+        finally:
+            self.db.delete(distillery)
+            self.db.commit()
+
+    def test_raasay_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "024_seed_raasay_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$raasay_data\$\s*(.*?)\s*\$raasay_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Raasay History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 11)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "2014")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
+
+    def test_ardmore_sql_contains_valid_localized_timeline(self):
+        sql_file = Path(__file__).with_name("migrations") / "025_seed_ardmore_infographic.sql"
+        sql = sql_file.read_text(encoding="utf-8")
+        match = re.search(r"\$ardmore_data\$\s*(.*?)\s*\$ardmore_data\$", sql, re.DOTALL)
+        self.assertIsNotNone(match)
+        payload = InfographicCreate(
+            title="Ardmore History",
+            type="timeline",
+            distillery_id=self.distillery.id,
+            schema_data=json.loads(match.group(1)),
+        )
+        self.assertEqual(len(payload.schema_data.steps), 10)
+        self.assertEqual(payload.schema_data.steps[0].dateOrYear, "1898")
+        self.assertEqual(payload.schema_data.steps[-1].dateOrYear, "2025–2026")
+        for step in payload.schema_data.steps:
+            for language in ("en", "ru", "uk"):
+                self.assertTrue(getattr(step.title, language))
+                self.assertTrue(getattr(step.description, language))
 
     def test_arran_sql_contains_valid_localized_timeline(self):
         sql_file = Path(__file__).with_name("migrations") / "004_seed_arran_infographic.sql"

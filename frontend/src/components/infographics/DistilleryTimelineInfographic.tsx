@@ -9,6 +9,7 @@ const ardbegSources = [
 ];
 const timelineSources: Record<string, { label: string; url: string }[]> = {
   ardbeg: ardbegSources,
+  ardmore: [{ label: 'Ardmore Whisky', url: 'https://www.ardmorewhisky.com' }],
   ardnahoe: [{ label: 'Ardnahoe', url: 'https://ardnahoedistillery.com' }],
   arran: [{ label: 'Arran Whisky', url: 'https://www.arranwhisky.com' }],
   bowmore: [{ label: 'Bowmore', url: 'https://www.bowmore.com' }],
@@ -25,6 +26,7 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   lagavulin: [{ label: 'Diageo', url: 'https://www.diageo.com' }],
   laphroaig: [{ label: 'Laphroaig', url: 'https://www.laphroaig.com' }],
   'port ellen': [{ label: 'Malts', url: 'https://www.malts.com/' }],
+  raasay: [{ label: 'Raasay Distillery', url: 'https://raasaydistillery.com' }],
   springbank: [{ label: 'Springbank', url: 'https://www.springbank.scot' }],
   talisker: [{ label: 'Malts', url: 'https://www.malts.com' }],
 };
@@ -52,7 +54,9 @@ export default function DistilleryTimelineInfographic({
   const { i18n, t } = useTranslation();
   const languageCode = i18n.language.toLowerCase().split(/[-_]/, 1)[0];
   const language: TimelineLanguage = languageCode === 'ru' || languageCode === 'uk' ? languageCode : 'en';
-  const sources = timelineSources[source ?? distilleryName.trim().toLowerCase()];
+  const normalizedName = distilleryName.trim().toLowerCase();
+  const sourceKey = source ?? normalizedName.match(/(?:^|\s)(ardmore|raasay)(?:\s|$)/)?.[1] ?? normalizedName;
+  const sources = timelineSources[sourceKey];
 
   return (
     <section aria-label={t('infographic.history_aria', { name: distilleryName })} className="text-[#E5E7EB]">
