@@ -170,6 +170,8 @@ class ArticlesTest(unittest.TestCase):
         self.assertEqual(ArticleUpdate().model_dump(exclude_unset=True), {})
         self.assertEqual(AnimationConfig(type="fade_in_out").duration, 1.1)
         self.assertEqual(AnimationConfig(type="fade_in_out", duration=0.8).duration, 0.8)
+        self.assertEqual(AnimationConfig(type="pulse").duration, 2.0)
+        self.assertEqual(AnimationConfig(type="pulse", duration=0.8).duration, 0.8)
         self.assertEqual(AnimationConfig(type="fade_in").duration, 0.5)
 
         for model, fields in [

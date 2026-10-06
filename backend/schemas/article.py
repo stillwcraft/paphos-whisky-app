@@ -5,15 +5,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AnimationConfig(BaseModel):
-    type: Literal["slide_up", "slide_down", "slide_left", "slide_right", "fade_in", "fade_in_out", "zoom_in"]
+    type: Literal["slide_up", "slide_down", "slide_left", "slide_right", "fade_in", "fade_in_out", "zoom_in", "pulse"]
     delay: float = Field(default=0.0, ge=0)
     duration: float = Field(default=0.5, gt=0)
 
     @model_validator(mode="before")
     @classmethod
-    def default_fade_in_out_duration(cls, value):
-        if isinstance(value, dict) and value.get("type") == "fade_in_out" and "duration" not in value:
-            return {**value, "duration": 1.1}
+    def default_animation_duration(cls, value):
+        if isinstance(value, dict) and "duration" not in value:
+            duration = {"fade_in_out": 1.1, "pulse": 2.0}.get(value.get("type"))
+            if duration is not None:
+                return {**value, "duration": duration}
         return value
 
 

@@ -22,6 +22,17 @@ function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial'
       },
     };
   }
+  if (anim.type === 'pulse') {
+    return {
+      initial: { opacity: 1 },
+      animate: { opacity: [1, 0.2, 1, 0.2, 1] },
+      transition: {
+        duration: anim.duration || 2.0,
+        delay: anim.delay || 0,
+        ease: 'easeInOut',
+      },
+    };
+  }
 
   const movement = {
     slide_up: { y: 50 },
