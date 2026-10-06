@@ -168,6 +168,9 @@ class ArticlesTest(unittest.TestCase):
         self.assertEqual(PositionConfig().z_index, 10)
         self.assertEqual(TextStyleConfig().text_align, "left")
         self.assertEqual(ArticleUpdate().model_dump(exclude_unset=True), {})
+        self.assertEqual(AnimationConfig(type="fade_in_out").duration, 1.1)
+        self.assertEqual(AnimationConfig(type="fade_in_out", duration=0.8).duration, 0.8)
+        self.assertEqual(AnimationConfig(type="fade_in").duration, 0.5)
 
         for model, fields in [
             (AnimationConfig, {"type": "slide_up", "delay": -1}),

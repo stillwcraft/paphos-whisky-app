@@ -1,5 +1,5 @@
 export interface AnimationConfig {
-  type: 'slide_up' | 'slide_down' | 'slide_left' | 'slide_right' | 'fade_in' | 'zoom_in';
+  type: 'slide_up' | 'slide_down' | 'slide_left' | 'slide_right' | 'fade_in' | 'fade_in_out' | 'zoom_in';
   delay: number;
   duration: number;
 }

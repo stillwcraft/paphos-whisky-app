@@ -10,6 +10,19 @@ type Props = {
 };
 
 function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial' | 'animate' | 'transition'> {
+  if (anim.type === 'fade_in_out') {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: [0, 1, 1, 0] },
+      transition: {
+        duration: anim.duration || 1.1,
+        delay: anim.delay || 0,
+        times: [0, 0.15, 0.85, 1],
+        ease: 'easeInOut',
+      },
+    };
+  }
+
   const movement = {
     slide_up: { y: 50 },
     slide_down: { y: -50 },
