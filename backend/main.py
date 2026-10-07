@@ -22,7 +22,7 @@ from routers.infographics import admin_router as infographics_admin_router
 from routers.infographics import distillery_router as distillery_infographics_router
 from routers.infographics import router as infographics_router
 from routers.whisky_trail import router as whisky_trail_router
-from schemas.article import ArticleBase, ArticleCreate, ArticleResponse, ArticleUpdate
+from schemas.article import ArticleBase, ArticleCreate, ArticleResponse, ArticleUpdate, InteractiveSlide
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
 models.Base.metadata.create_all(bind=engine)
@@ -1653,7 +1653,7 @@ def article_translation(article: models.Article, language: ArticleLanguage) -> A
         image_urls=article.image_urls,
         is_published=article.is_published,
         background_config=article.background_config,
-        slides_data=article.slides_data,
+        slides_data=[InteractiveSlide.model_validate(slide).model_dump() for slide in article.slides_data],
         created_at=article.created_at,
         updated_at=article.updated_at,
     )

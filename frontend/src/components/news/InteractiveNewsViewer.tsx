@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
-import { AnimatePresence, motion, type MotionProps } from 'framer-motion';
+import { AnimatePresence, motion, useAnimationControls } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import type { AnimationConfig, Article, SlideElement } from '@/types/interactiveNews.ts';
 
@@ -9,7 +9,7 @@ type Props = {
   language: string;
 };
 
-function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial' | 'animate' | 'transition'> {
+function getElementAnimation(anim: AnimationConfig) {
   if (anim.type === 'fade_in_out') {
     return {
       initial: { opacity: 0 },
@@ -18,7 +18,7 @@ function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial'
         duration: anim.duration || 1.1,
         delay: anim.delay || 0,
         times: [0, 0.15, 0.85, 1],
-        ease: 'easeInOut',
+        ease: 'easeInOut' as const,
       },
     };
   }
@@ -29,7 +29,7 @@ function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial'
       transition: {
         duration: anim.duration || 2.0,
         delay: anim.delay || 0,
-        ease: 'easeInOut',
+        ease: 'easeInOut' as const,
       },
     };
   }
@@ -46,7 +46,7 @@ function getElementAnimation(anim: AnimationConfig): Pick<MotionProps, 'initial'
   return {
     initial: { opacity: 0, ...movement },
     animate: { opacity: 1, x: 0, y: 0, scale: 1 },
-    transition: { delay: anim.delay, duration: anim.duration, ease: 'easeOut' },
+    transition: { delay: anim.delay, duration: anim.duration, ease: 'easeOut' as const },
   };
 }
 
@@ -59,6 +59,23 @@ function localizedContent(element: SlideElement, language: string): string {
 
 function SlideItem({ element, language }: { element: SlideElement; language: string }) {
   const { position, style } = element;
+  const controls = useAnimationControls();
+  const animations = element.animations;
+  useEffect(() => {
+    if (!animations?.length) return;
+    let active = true;
+    const play = async () => {
+      for (const animation of animations) {
+        if (!active) return;
+        const { initial, animate, transition } = getElementAnimation(animation);
+        controls.set(initial);
+        await controls.start({ ...animate, transition });
+      }
+    };
+    void play();
+    return () => { active = false; controls.stop(); };
+  }, [animations, controls]);
+
   const positionStyle: CSSProperties = {
     position: 'absolute',
     top: position.top ?? undefined,
@@ -78,7 +95,11 @@ function SlideItem({ element, language }: { element: SlideElement; language: str
   };
 
   return (
-    <motion.div {...(element.animation ? getElementAnimation(element.animation) : {})} style={positionStyle}>
+    <motion.div
+      animate={controls}
+      initial={animations?.length ? getElementAnimation(animations[0]).initial : undefined}
+      style={positionStyle}
+    >
       <div className="h-full w-full" style={{ transform: position.transform ?? undefined }}>
         {element.type === 'image' || element.type === 'logo' ? (
           element.src ? <img alt={localizedContent(element, language)} className="block h-full w-full object-contain" src={element.src} /> : null

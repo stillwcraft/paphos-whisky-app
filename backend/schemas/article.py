@@ -45,7 +45,14 @@ class SlideElement(BaseModel):
     content: Optional[Dict[str, str]] = None
     style: Optional[TextStyleConfig] = None
     position: PositionConfig
-    animation: Optional[AnimationConfig] = None
+    animations: List[AnimationConfig] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_animation(cls, value):
+        if isinstance(value, dict) and "animations" not in value and "animation" in value:
+            return {**value, "animations": [value["animation"]] if value["animation"] is not None else []}
+        return value
 
 
 class BackgroundConfig(BaseModel):

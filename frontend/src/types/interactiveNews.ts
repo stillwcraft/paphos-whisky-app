@@ -30,7 +30,7 @@ export interface SlideElement {
   content?: Record<string, string> | null;
   style?: TextStyleConfig | null;
   position: PositionConfig;
-  animation?: AnimationConfig | null;
+  animations?: AnimationConfig[];
 }
 
 export interface BackgroundConfig {

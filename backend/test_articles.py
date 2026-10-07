@@ -140,13 +140,33 @@ class ArticlesTest(unittest.TestCase):
             db=self.db,
         )
         self.assertEqual(article.content, {})
-        self.assertEqual(ArticleResponse.model_validate(article).slides_data[0].elements[0].animation.delay, 0.2)
+        element = ArticleResponse.model_validate(article).slides_data[0].elements[0]
+        self.assertEqual(element.animations[0].delay, 0.2)
+        self.assertNotIn("animation", element.model_dump())
         self.assertEqual(article.background_config["value"], "/talisker.jpg")
-        self.assertEqual(get_article(article.id, lang="en", db=self.db).slides_data[0]["slide_index"], 0)
+        public_slide = get_article(article.id, lang="en", db=self.db).slides_data[0]
+        self.assertEqual(public_slide["slide_index"], 0)
+        self.assertEqual(public_slide["elements"][0]["animations"][0]["type"], "slide_up")
+        self.assertNotIn("animation", public_slide["elements"][0])
         self.assertEqual(get_articles(lang="ru", limit=3, offset=0, db=self.db)["total"], 1)
 
+        sequence = [{
+            "slide_index": 0,
+            "elements": [{
+                "id": "headline", "type": "text", "position": {"top": "20px"},
+                "animations": [{"type": "fade_in_out"}, {"type": "pulse", "delay": 0.4}],
+            }],
+        }]
+        sequenced = update_article(
+            article.id, ArticleUpdate(slides_data=[InteractiveSlide.model_validate(sequence[0])]), db=self.db
+        )
+        self.assertEqual([item["type"] for item in sequenced.slides_data[0]["elements"][0]["animations"]],
+                         ["fade_in_out", "pulse"])
+        self.assertEqual(get_article(article.id, lang="en", db=self.db).slides_data[0]["elements"][0]
+                         ["animations"][1]["duration"], 2.0)
+
         updated = update_article(article.id, ArticleUpdate(is_published=False), db=self.db)
-        self.assertEqual(updated.slides_data[0]["elements"][0]["content"], slide["elements"][0]["content"])
+        self.assertEqual(updated.slides_data[0]["elements"][0]["animations"][1]["delay"], 0.4)
         self.assertFalse(updated.is_published)
         with self.assertRaises(HTTPException) as invalid:
             update_article(article.id, ArticleUpdate(format=None), db=self.db)
