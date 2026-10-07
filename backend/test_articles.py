@@ -177,6 +177,37 @@ class ArticlesTest(unittest.TestCase):
             for route in app.routes
         ))
 
+    def test_article_list_normalizes_legacy_animation_arrays(self):
+        article = models.Article(
+            title={"uk": "Класифікація віскі"},
+            content={"uk": "Інтерактивний гід"},
+            format="interactive_presentation",
+            slides_data=[{
+                "slide_index": 0,
+                "elements": [
+                    {"id": "intro", "type": "text", "position": {},
+                     "animation": {"type": "fade_in", "delay": 0.1}},
+                    {"id": "grain", "type": "image", "position": {},
+                     "animation": [{"type": "zoom_in", "delay": 1.1},
+                                   {"type": "pulse", "delay": 1.1, "duration": 2.0}]},
+                ],
+            }],
+        )
+        self.db.add(article)
+        self.db.commit()
+
+        page = get_articles(lang="uk", limit=3, offset=0, db=self.db)
+        self.assertEqual(page["total"], 1)
+        elements = page["items"][0].slides_data[0]["elements"]
+        self.assertEqual([item["type"] for item in elements[1]["animations"]], ["zoom_in", "pulse"])
+        self.assertEqual(elements[0]["animations"][0]["type"], "fade_in")
+        self.assertNotIn("animation", elements[1])
+        self.assertEqual(
+            get_article(article.id, lang="uk", db=self.db).slides_data[0]["elements"],
+            elements,
+        )
+        self.assertEqual(len(ArticleResponse.model_validate(article).slides_data[0].elements[1].animations), 2)
+
     def test_article_schema_defaults_and_validation(self):
         first = ArticleCreate(title={"en": "One"})
         second = ArticleCreate(title={"en": "Two"})

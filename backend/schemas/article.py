@@ -51,7 +51,9 @@ class SlideElement(BaseModel):
     @classmethod
     def normalize_legacy_animation(cls, value):
         if isinstance(value, dict) and "animations" not in value and "animation" in value:
-            return {**value, "animations": [value["animation"]] if value["animation"] is not None else []}
+            legacy = value["animation"]
+            return {**value, "animations": legacy if isinstance(legacy, list) else
+                    [legacy] if legacy is not None else []}
         return value
 
 
