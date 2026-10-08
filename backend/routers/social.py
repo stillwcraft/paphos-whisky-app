@@ -573,10 +573,7 @@ def create_global_event(data: GlobalEventCreate, user=Depends(admin()), db: Sess
     return event_json(db, e, uid(user))
 
 
-@router.get("/events")
-def list_events(user=Depends(auth()), db: Session = Depends(get_db)):
-    adults(db, user)
-    viewer = uid(user)
+def visible_event_filter(viewer):
     friendship = exists().where(
         and_(m.SocialFriendRequest.status == "accepted",
              or_(and_(m.SocialFriendRequest.sender_id == viewer,
@@ -590,10 +587,37 @@ def list_events(user=Depends(auth()), db: Session = Depends(get_db)):
         and_(m.SocialBlock.blocker_id == m.SocialEvent.owner_id,
              m.SocialBlock.blocked_id == viewer),
     ))
-    rows = db.query(m.SocialEvent).filter(
+    return (
         m.SocialEvent.expires_at > now(), m.SocialEvent.hidden.is_(False),
         or_(m.SocialEvent.owner_id == viewer,
             and_(~has_block, or_(m.SocialEvent.visibility != "friends", friendship))),
+    )
+
+
+@router.get("/events/map")
+def map_events(user=Depends(auth()), db: Session = Depends(get_db)):
+    adults(db, user)
+    rows = db.query(
+        m.SocialEvent.id, m.SocialEvent.latitude, m.SocialEvent.longitude,
+        m.SocialEvent.event_type, m.SocialEvent.expires_at, m.SocialEvent.starts_at,
+        m.SocialEvent.drink, m.SocialEvent.image_urls,
+    ).filter(*visible_event_filter(uid(user))).order_by(m.SocialEvent.id.desc()).all()
+    return [
+        {
+            "id": e.id, "latitude": e.latitude, "longitude": e.longitude,
+            "event_type": e.event_type, "expires_at": utc(e.expires_at).isoformat(),
+            "starts_at": utc(e.starts_at).isoformat(), "drink": e.drink,
+            "image_url": (e.image_urls or [None])[0] if e.event_type == "global" else None,
+        }
+        for e in rows
+    ]
+
+
+@router.get("/events")
+def list_events(user=Depends(auth()), db: Session = Depends(get_db)):
+    adults(db, user)
+    rows = db.query(m.SocialEvent).filter(
+        *visible_event_filter(uid(user))
     ).order_by(m.SocialEvent.id.desc()).limit(300).all()
     return [event_json(db, e, uid(user)) for e in rows if visible(db, e, uid(user))]
 

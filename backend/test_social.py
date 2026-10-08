@@ -431,6 +431,78 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(self.request("GET", f"/events/{friend_event}").status_code, 200)
         self.assertEqual(self.request("GET", f"/events/{friend_event}/chat").status_code, 200)
 
+    def test_map_markers_are_minimal_and_match_event_detail_visibility(self):
+        self.actor = 4
+        global_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        friend_id = self.request("POST", "/events/global", json=self.global_payload(
+            visibility="friends")).json()["id"]
+        anonymous_id = self.request("POST", "/events/global", json=self.global_payload(
+            visibility="anonymous")).json()["id"]
+        self.actor = 1
+        regular_id = self.create()
+        self.actor = 2
+        result = self.request("GET", "/events/map")
+        self.assertEqual(result.status_code, 200, result.text)
+        markers = {item["id"]: item for item in result.json()}
+        self.assertEqual(set(markers), {global_id, anonymous_id, regular_id})
+        self.assertEqual(set(markers[global_id]), {
+            "id", "latitude", "longitude", "event_type", "expires_at",
+            "starts_at", "drink", "image_url",
+        })
+        self.assertEqual(markers[global_id]["image_url"], self.global_payload()["image_urls"][0])
+        self.assertIsNone(markers[regular_id]["image_url"])
+        self.assertEqual(markers[global_id]["event_type"], "global")
+        self.assertEqual(markers[regular_id]["event_type"], "regular")
+        self.assertEqual(self.request("GET", f"/events/{global_id}").json()["description"], "A global tasting")
+        invite = self.request("POST", "/friend-requests", json={"telegram_id": 4}).json()["id"]
+        self.actor = 4
+        self.request("POST", f"/friend-requests/{invite}/accept")
+        self.assertIn(friend_id, {e["id"] for e in self.request("GET", "/events/map").json()})
+        self.actor = 2
+        self.assertIn(friend_id, {e["id"] for e in self.request("GET", "/events/map").json()})
+        with self.Session() as db:
+            db.get(models.SocialEvent, global_id).expires_at = social.now() - timedelta(seconds=1)
+            db.get(models.SocialEvent, anonymous_id).hidden = True
+            db.commit()
+        self.assertEqual({e["id"] for e in self.request("GET", "/events/map").json()},
+                         {friend_id, regular_id})
+        self.request("POST", "/blocks", json={"telegram_id": 4})
+        self.assertEqual({e["id"] for e in self.request("GET", "/events/map").json()}, {regular_id})
+        self.actor = 4
+        self.request("POST", "/blocks", json={"telegram_id": 1})
+        self.assertNotIn(regular_id, {e["id"] for e in self.request("GET", "/events/map").json()})
+        self.actor = 1
+        with self.Session() as db:
+            db.get(models.SocialEvent, regular_id).hidden = True
+            db.commit()
+        self.actor = 2
+        self.assertEqual(self.request("GET", "/events/map").json(), [])
+
+    def test_map_markers_require_adult_auth_and_do_not_query_per_event(self):
+        self.actor = 5
+        self.assertEqual(self.request("GET", "/events/map").status_code, 403)
+        self.actor = 1
+        ids = [self.create() for _ in range(3)]
+        self.actor = 2
+        self.signed_client.reset_mock()
+        queries = []
+        def count_queries(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                queries.append(statement)
+        sqlalchemy_event.listen(self.engine, "before_cursor_execute", count_queries)
+        try:
+            self.assertEqual({e["id"] for e in self.request("GET", "/events/map").json()}, set(ids))
+        finally:
+            sqlalchemy_event.remove(self.engine, "before_cursor_execute", count_queries)
+        self.assertLessEqual(len(queries), 3)
+        self.signed_client.assert_not_called()
+        with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false"}):
+            self.assertEqual(self.request("GET", "/events/map").status_code, 403)
+        main.app.dependency_overrides[main.get_authenticated_telegram_user] = lambda: (
+            (_ for _ in ()).throw(main.HTTPException(401, "Unauthenticated"))
+        )
+        self.assertEqual(self.request("GET", "/events/map").status_code, 401)
+
     def test_auth_age_friendship_visibility_and_block(self):
         event = self.create("friends")
         self.actor = 2

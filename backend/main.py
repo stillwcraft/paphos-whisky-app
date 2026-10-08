@@ -1135,6 +1135,15 @@ class EventPageResponse(PaginationMetadata):
     items: List[EventSummaryResponse]
 
 
+class EventMapResponse(BaseModel):
+    id: int
+    title: str
+    date: str
+    location: Optional[str]
+    latitude: float
+    longitude: float
+
+
 class BottleTagStatResponse(BaseModel):
     id: int
     name: str
@@ -1803,16 +1812,42 @@ def delete_article(
     return
 
 
+def recent_event_date_filter(current_time: datetime):
+    # An event dated yesterday in a western timezone can still be active in UTC.
+    return (func.substr(func.trim(models.Event.date), 1, 10)
+            >= (current_time - timedelta(days=1)).date().isoformat())
+
+
+def event_is_current_or_upcoming(date: str, current_time: datetime) -> Optional[datetime]:
+    start = parse_event_date_to_utc(date)
+    return start if start is not None and start + timedelta(hours=2) > current_time else None
+
+
 @app.get("/api/events", response_model=EventPageResponse)
 def get_events(
     lang: str = "en",
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    upcoming: bool = False,
     db: Session = Depends(get_db),
 ):
     event_counts = get_event_counts_subquery(db)
     bottle_counts = get_event_bottle_counts_subquery(db)
-    total = db.query(func.count(models.Event.id)).scalar() or 0
+    if upcoming:
+        current_time = datetime.now(timezone.utc)
+        candidate_dates = db.query(models.Event.id, models.Event.date).filter(
+            recent_event_date_filter(current_time)
+        ).all()
+        dated_ids = sorted(
+            ((parsed, event_id) for event_id, date in candidate_dates
+             if (parsed := event_is_current_or_upcoming(date, current_time)) is not None)
+        )
+        total = len(dated_ids)
+        page_ids = [event_id for _, event_id in dated_ids[offset:offset + limit]]
+        if not page_ids:
+            return build_paginated_response([], total, limit, offset)
+    else:
+        total = db.query(func.count(models.Event.id)).scalar() or 0
     events = (
         db.query(
             models.Event,
@@ -1823,11 +1858,13 @@ def get_events(
         .options(joinedload(models.Event.distillery))
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .outerjoin(bottle_counts, models.Event.id == bottle_counts.c.event_id)
-        .order_by(models.Event.date.asc(), models.Event.id.asc())
-        .offset(offset)
-        .limit(limit)
-        .all()
     )
+    if upcoming:
+        events = events.filter(models.Event.id.in_(page_ids)).all()
+        event_order = {event_id: index for index, event_id in enumerate(page_ids)}
+        events.sort(key=lambda row: event_order[row[0].id])
+    else:
+        events = events.order_by(models.Event.date.asc(), models.Event.id.asc()).offset(offset).limit(limit).all()
     return build_paginated_response(
         [
             build_event_summary_response(
@@ -1843,6 +1880,31 @@ def get_events(
         limit,
         offset,
     )
+
+
+@app.get("/api/events/map", response_model=List[EventMapResponse])
+def get_map_events(lang: str = "en", db: Session = Depends(get_db)):
+    current_time = datetime.now(timezone.utc)
+    rows = db.query(
+        models.Event.id, models.Event.title, models.Event.name_i18n,
+        models.Event.date, models.Event.location, models.Event.latitude,
+        models.Event.longitude,
+    ).filter(
+        models.Event.latitude.is_not(None), models.Event.longitude.is_not(None),
+        recent_event_date_filter(current_time),
+    ).all()
+    active = sorted(
+        ((start, row.id, row) for row in rows
+         if (start := event_is_current_or_upcoming(row.date, current_time)) is not None)
+    )
+    return [
+        {
+            "id": row.id, "title": get_localized_string(row.name_i18n, lang, row.title),
+            "date": row.date, "location": row.location,
+            "latitude": row.latitude, "longitude": row.longitude,
+        }
+        for _, _, row in active
+    ]
 
 
 @app.get("/api/events/{event_id}", response_model=EventDetailResponse)

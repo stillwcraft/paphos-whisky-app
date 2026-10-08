@@ -8,18 +8,17 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import { localizedApiUrl } from '@/localization.ts';
 import { eventEndTime, isEventCurrentOrUpcoming } from '@/helpers/eventTime.ts';
-import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft, type SocialEventUpdateDraft } from './social/SocialEventForms.tsx';
 import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, type JoinRequest, type Report } from './social/SocialPanels.tsx';
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 import { CyprusMapLoading } from './CyprusMapLoading.tsx';
+import { cyprusMapCache, type SocialMapMarker } from './cyprusMapCache.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
 const CYPRUS_MAP_BOUNDS = latLngBounds([34.15, 31.8], [36.0, 34.9]);
 const CYPRUS_LOCATION_BOUNDS = latLngBounds([34.55, 32.25], [35.75, 34.65]);
-const PAGE_SIZE = 100;
 const eventIcon = new Icon({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
@@ -36,8 +35,11 @@ const socialIcons: Record<Drink, DivIcon> = Object.fromEntries(
       iconAnchor: [19, 38],
     })]),
 ) as Record<Drink, DivIcon>;
+const globalIcons = new Map<string, DivIcon>();
 
 function globalEventIcon(imageUrl: string): DivIcon {
+  const cached = globalIcons.get(imageUrl);
+  if (cached) return cached;
   const frame = document.createElement('div');
   frame.style.cssText = 'width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;overflow:hidden;background:#141417;box-shadow:0 2px 12px #0009';
   const image = document.createElement('img');
@@ -45,7 +47,9 @@ function globalEventIcon(imageUrl: string): DivIcon {
   image.alt = '';
   image.style.cssText = 'width:100%;height:100%;object-fit:cover';
   frame.appendChild(image);
-  return new DivIcon({ html: frame, className: '', iconSize: [38, 38], iconAnchor: [19, 38] });
+  const icon = new DivIcon({ html: frame, className: '', iconSize: [38, 38], iconAnchor: [19, 38] });
+  globalIcons.set(imageUrl, icon);
+  return icon;
 }
 
 type EventMarker = {
@@ -133,19 +137,28 @@ export function CyprusEventsMap({
 }) {
   const { t, i18n } = useTranslation();
   const initDataRaw = useSignal(initData.raw);
+  const initDataState = useSignal(initData.state);
+  const userId = initDataState?.user?.id ?? null;
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
-  const [events, setEvents] = useState<PositionedEvent[]>([]);
+  const [events, setEvents] = useState<PositionedEvent[]>(() => cyprusMapCache.getEvents(i18n.language)?.items ?? []);
   const [now, setNow] = useState(() => Date.now());
-  const [socialEvents, setSocialEvents] = useState<SocialEvent[]>([]);
+  const [socialEvents, setSocialEvents] = useState<SocialMapMarker[]>(() => cyprusMapCache.getMarkers(userId) ?? []);
+  const [socialDetail, setSocialDetail] = useState<SocialEvent | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const detailRequestId = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [eventsResponseEmpty, setEventsResponseEmpty] = useState(false);
-  const [socialResponseEmpty, setSocialResponseEmpty] = useState(false);
+  const [eventsResponseEmpty, setEventsResponseEmpty] = useState(
+    () => cyprusMapCache.getEvents(i18n.language)?.responseEmpty ?? false,
+  );
+  const [socialResponseEmpty, setSocialResponseEmpty] = useState(
+    () => cyprusMapCache.getMarkers(userId)?.length === 0,
+  );
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
   const [panel, setPanel] = useState<'age' | 'create' | 'edit' | 'chat' | 'reports' | null>(null);
   const [friends, setFriends] = useState<SocialProfile[]>([]);
-  const [profile, setProfile] = useState<SocialProfile | null>(null);
+  const [profile, setProfile] = useState<SocialProfile | null>(() => cyprusMapCache.getProfile(userId) ?? null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -160,11 +173,14 @@ export function CyprusEventsMap({
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const chatCursor = useRef(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSocialLoading, setIsSocialLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => cyprusMapCache.getEvents(i18n.language) === undefined);
+  const [isSocialLoading, setIsSocialLoading] = useState(() => Boolean(api && cyprusMapCache.getMarkers(userId) === undefined));
   const mapLoading = isLoading || isSocialLoading;
-  const activeSocialEvents = socialEvents.filter((event) => new Date(event.expires_at).getTime() > now);
-  const selectedSocial = activeSocialEvents.find((event) => event.id === selectedSocialId) ?? null;
+  const ageConfirmed = profile !== null && (profile.age !== null || isAdmin);
+  const activeSocialEvents = api && ageConfirmed
+    ? socialEvents.filter((event) => new Date(event.expires_at).getTime() > now) : [];
+  const selectedSocial = socialDetail?.id === selectedSocialId && new Date(socialDetail.expires_at).getTime() > now
+    ? socialDetail : null;
   const upcomingEvents = events.filter((event) => isEventCurrentOrUpcoming(event.date, now));
   const activeSelected = selected && upcomingEvents.some((event) => event.id === selected.id) ? selected : null;
 
@@ -239,17 +255,22 @@ export function CyprusEventsMap({
     );
   };
 
-  const reloadSocial = useCallback(async () => {
+  const reloadSocial = useCallback(async (refreshSelected = true) => {
     if (!api) return;
     try {
-      const items = await api.events();
+      const items = await api.mapEvents();
       setSocialEvents(items);
       setSocialResponseEmpty(items.length === 0);
+      cyprusMapCache.setMarkers(userId, items);
+      if (refreshSelected && selectedSocialId !== null) {
+        const detail = await api.event(selectedSocialId);
+        setSocialDetail(detail);
+      }
     } catch (reason) {
       setSocialResponseEmpty(false);
       throw reason;
     }
-  }, [api]);
+  }, [api, selectedSocialId, userId]);
 
   useEffect(() => {
     if (!api) {
@@ -257,46 +278,61 @@ export function CyprusEventsMap({
       return;
     }
     let active = true;
-    setIsSocialLoading(true);
+    const cachedProfile = cyprusMapCache.getProfile(userId);
+    const cachedMarkers = cyprusMapCache.getMarkers(userId);
+    setProfile(cachedProfile ?? null);
+    setSocialEvents(cachedMarkers ?? []);
+    setSocialResponseEmpty(cachedMarkers?.length === 0);
+    setIsSocialLoading(cachedMarkers === undefined);
     void api.profile().then((me) => {
       if (!active) return;
       setProfile(me);
+      cyprusMapCache.setProfile(userId, me);
       if (me.age === null && !isAdmin) {
         setPanel('age');
+        setSocialEvents([]);
+        setSocialResponseEmpty(false);
+        cyprusMapCache.clearMarkers(userId);
         setIsSocialLoading(false);
       } else {
         setPanel((current) => current === 'age' ? null : current);
       }
     }).catch((reason: unknown) => {
       if (active) {
+        cyprusMapCache.clearUser(userId);
+        setProfile(null);
+        setSocialEvents([]);
         setSocialError(reason instanceof Error ? reason.message : t('social.error'));
         setIsSocialLoading(false);
       }
     });
     return () => { active = false; };
-  }, [api, isAdmin, t]);
-
-  const ageConfirmed = profile !== null && (profile.age !== null || isAdmin);
+  }, [api, isAdmin, t, userId]);
 
   useEffect(() => {
     if (!api || !ageConfirmed) return;
     let active = true;
-    setIsSocialLoading(true);
-    void api.events().then((items) => {
+    setIsSocialLoading(cyprusMapCache.getMarkers(userId) === undefined);
+    void api.mapEvents().then((items) => {
       if (active) {
         setSocialEvents(items);
         setSocialResponseEmpty(items.length === 0);
+        cyprusMapCache.setMarkers(userId, items);
         setIsSocialLoading(false);
       }
     }).catch((reason: unknown) => {
       if (active) {
         setSocialResponseEmpty(false);
         setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+        if (reason instanceof SocialApiError && (reason.status === 401 || reason.status === 403)) {
+          cyprusMapCache.clearUser(userId);
+          setSocialEvents([]);
+        }
         setIsSocialLoading(false);
       }
     });
     return () => { active = false; };
-  }, [api, ageConfirmed, t]);
+  }, [api, ageConfirmed, t, userId]);
 
   useEffect(() => {
     if (!api || !ageConfirmed) return;
@@ -314,7 +350,7 @@ export function CyprusEventsMap({
     void api.event(initialSocialEventId).then((event) => {
       if (!active) return;
       setLinkError(null);
-      setSocialEvents((current) => current.some((item) => item.id === event.id) ? current : [...current, event]);
+      setSocialDetail(event);
       setSelectedSocialId(event.id);
       onSocialEventHandled();
     }).catch((reason: unknown) => {
@@ -328,6 +364,29 @@ export function CyprusEventsMap({
     });
     return () => { active = false; };
   }, [api, ageConfirmed, initialSocialEventId, onSocialEventHandled, t]);
+
+  const openSocialEvent = (id: number) => {
+    if (!api) {
+      setSocialError(t('social.auth_required'));
+      return;
+    }
+    const request = ++detailRequestId.current;
+    setSelectedSocialId(id);
+    setSocialDetail(null);
+    setSelected(null);
+    setPanel(null);
+    setDetailLoading(true);
+    void api.event(id).then((event) => {
+      if (request === detailRequestId.current) setSocialDetail(event);
+    }).catch((reason: unknown) => {
+      if (request === detailRequestId.current) {
+        setSelectedSocialId(null);
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      }
+    }).finally(() => {
+      if (request === detailRequestId.current) setDetailLoading(false);
+    });
+  };
 
   useEffect(() => {
     if (!api || !openReports || !isAdmin) return;
@@ -426,27 +485,17 @@ export function CyprusEventsMap({
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setEventsResponseEmpty(false);
+    const cached = cyprusMapCache.getEvents(i18n.language);
+    setEvents(cached?.items ?? []);
+    setEventsResponseEmpty(cached?.responseEmpty ?? false);
+    setIsLoading(cached === undefined);
     const load = async () => {
       try {
-        const items: EventMarker[] = [];
-        let offset = 0;
-        let hasMore = true;
-        while (hasMore) {
-          const response = await fetch(
-            localizedApiUrl(paginatedUrl(`${API_URL}/api/events`, PAGE_SIZE, offset), i18n.language),
-            { signal: controller.signal },
-          );
-          if (!response.ok) throw new Error(`${t('cyprus_map.load_error')} (${response.status})`);
-          const page = normalizePaginatedResponse(
-            await response.json() as PaginatedResponse<EventMarker> | EventMarker[],
-          );
-          items.push(...page.items);
-          hasMore = page.has_more;
-          offset += page.items.length;
-          if (hasMore && page.items.length === 0) throw new Error(t('cyprus_map.load_error'));
-        }
+        const response = await fetch(localizedApiUrl(`${API_URL}/api/events/map`, i18n.language), {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`${t('cyprus_map.load_error')} (${response.status})`);
+        const items = await response.json() as EventMarker[];
         const positioned = items.filter(hasPosition);
         positioned.forEach((event) => {
           if (eventEndTime(event.date) === null) console.warn(`Event ${event.id} has an invalid date: ${event.date}`);
@@ -454,6 +503,7 @@ export function CyprusEventsMap({
         setNow(Date.now());
         setEvents(positioned);
         setEventsResponseEmpty(items.length === 0);
+        cyprusMapCache.setEvents(i18n.language, positioned, items.length === 0);
         setError(null);
         setLoadFailed(false);
       } catch (reason) {
@@ -484,15 +534,15 @@ export function CyprusEventsMap({
         {activeSocialEvents.map((event) => (
           <Marker
             key={`social-${event.id}`}
-            icon={event.event_type === 'global' && event.image_urls[0]
-              ? globalEventIcon(event.image_urls[0])
+            icon={event.event_type === 'global' && event.image_url
+              ? globalEventIcon(event.image_url)
               : socialIcons[event.drink] ?? eventIcon}
             position={[event.latitude, event.longitude]}
-            eventHandlers={{ click: () => { setSelectedSocialId(event.id); setSelected(null); setPanel(null); } }}
+            eventHandlers={{ click: () => openSocialEvent(event.id) }}
           />
         ))}
       </BaseMap>
-      {mapLoading && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
+      {(mapLoading || detailLoading) && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
       {!mapLoading && !panel && !activeSelected && !selectedSocial && (
         <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
           <button
@@ -549,7 +599,7 @@ export function CyprusEventsMap({
           <SocialEventCard
             event={selectedSocial}
             busy={busy}
-            onClose={() => setSelectedSocialId(null)}
+            onClose={() => { ++detailRequestId.current; setSelectedSocialId(null); setSocialDetail(null); }}
             onCheer={() => { if (api) void run(async () => { await api.cheer(selectedSocial.id); await reloadSocial(); }); }}
             onJoin={() => { if (api) void run(async () => {
               const result = await api.join(selectedSocial.id);
@@ -559,13 +609,17 @@ export function CyprusEventsMap({
             onShare={() => share(selectedSocial)}
             onChat={() => openChat(selectedSocial)}
             onReport={(reason) => { if (api) void run(async () => { await api.report(selectedSocial.id, reason); setSocialNotice(t('social.report_sent')); }); }}
-            onBlock={() => { if (api) void run(async () => { await api.blockEvent(selectedSocial.id); setSelectedSocialId(null); await reloadSocial(); }); }}
+            onBlock={() => { if (api) void run(async () => { await api.blockEvent(selectedSocial.id); setSelectedSocialId(null); setSocialDetail(null); await reloadSocial(false); }); }}
             canManage={isAdmin}
             onEdit={() => { setSocialError(null); setPanel('edit'); }}
             onDelete={() => { if (api) void run(async () => {
               await api.deleteEvent(selectedSocial.id);
-              setSocialEvents((current) => current.filter((event) => event.id !== selectedSocial.id));
+              setSocialEvents((current) => current.filter((item) => item.id !== selectedSocial.id));
+              const cachedMarkers = cyprusMapCache.getMarkers(userId);
+              if (cachedMarkers) cyprusMapCache.setMarkers(userId, cachedMarkers.filter((item) => item.id !== selectedSocial.id));
               setSelectedSocialId(null);
+              setSocialDetail(null);
+              await reloadSocial(false);
             }); }}
           />
         </div>
@@ -598,7 +652,8 @@ export function CyprusEventsMap({
             if (!selectedSocial) throw new Error(t('cyprus_map.load_error'));
             const photoKey = photo ? await api.upload(photo, 'event') : undefined;
             const updated = await api.updateEvent(selectedSocial.id, draft, photoKey);
-            setSocialEvents((current) => current.map((event) => event.id === updated.id ? updated : event));
+            setSocialDetail(updated);
+            await reloadSocial();
             setPanel(null);
           })}
         />
@@ -613,6 +668,7 @@ export function CyprusEventsMap({
             void run(async () => {
               const me = await api.updateProfile(profile.display_name, age, null);
               setProfile(me);
+              cyprusMapCache.setProfile(userId, me);
               setPanel(null);
             });
           }} />
@@ -649,7 +705,7 @@ export function CyprusEventsMap({
           onHide={(id) => void run(async () => {
             await api.hideEvent(id);
             setReports(await api.reports());
-            await reloadSocial();
+            await reloadSocial(false);
           })}
           onResolve={(id) => void run(async () => {
             await api.resolveReport(id);

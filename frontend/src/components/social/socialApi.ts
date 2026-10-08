@@ -1,5 +1,6 @@
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import type { SocialEvent, SocialProfile } from './SocialEventCard.tsx';
+import type { SocialMapMarker } from '../cyprusMapCache.ts';
 import type { GlobalEventDraft, RegularEventDraft, SocialEventUpdateDraft } from './SocialEventForms.tsx';
 import type { ChatMessage, FriendRequest, JoinRequest, Report, TagRequest } from './SocialPanels.tsx';
 import { compressSocialImage } from './compressImage.ts';
@@ -42,6 +43,7 @@ export class SocialApi {
   }
 
   events() { return this.request<SocialEvent[]>('/events'); }
+  mapEvents() { return this.request<SocialMapMarker[]>('/events/map'); }
   event(id: number) { return this.request<SocialEvent>(`/events/${id}`); }
   createEvent(draft: RegularEventDraft, photoKey: string) {
     return this.request<SocialEvent & { notifications: Record<string, DeliveryStatus> }>('/events', 'POST', {

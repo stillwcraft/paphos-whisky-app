@@ -1,5 +1,6 @@
 import os
 import unittest
+from datetime import datetime, timedelta, timezone
 
 os.environ["DATABASE_URL"] = "sqlite://"
 
@@ -15,6 +16,7 @@ from main import (
     get_event_members,
     get_events,
     get_map_distilleries,
+    get_map_events,
     get_user_bottle_states,
 )
 
@@ -79,6 +81,71 @@ class PaginationTest(unittest.TestCase):
             get_distilleries(limit=100, offset=2, db=self.db),
             total=3, limit=100, offset=2, size=1, has_more=False,
         )
+
+    def test_upcoming_events_filter_precedes_pagination_and_uses_two_hour_window(self):
+        current = datetime.now(timezone.utc)
+        dates = [
+            (current - timedelta(hours=3)).isoformat(),
+            (current - timedelta(hours=1)).isoformat(),
+            (current + timedelta(hours=1)).isoformat(),
+            (current + timedelta(hours=2)).astimezone(timezone(timedelta(hours=3))).isoformat(),
+            (current + timedelta(hours=3)).astimezone(timezone(-timedelta(hours=5))).isoformat(),
+            "not a date",
+        ]
+        events = [models.Event(title=f"Timed {i}", date=date, description="Test", price=1)
+                  for i, date in enumerate(dates)]
+        self.db.add_all(events)
+        self.db.commit()
+        self.assert_page(get_events(limit=100, offset=0, db=self.db),
+                         total=9, limit=100, offset=0, size=9, has_more=False)
+        first = get_events(limit=1, offset=0, upcoming=True, db=self.db)
+        self.assert_page(first, total=4, limit=1, offset=0, size=1, has_more=True)
+        self.assertEqual(first["items"][0].id, events[1].id)
+        second = get_events(limit=1, offset=1, upcoming=True, db=self.db)
+        self.assert_page(second, total=4, limit=1, offset=1, size=1, has_more=True)
+        self.assertEqual(second["items"][0].id, events[2].id)
+        last = get_events(limit=2, offset=2, upcoming=True, db=self.db)
+        self.assert_page(last, total=4, limit=2, offset=2, size=2, has_more=False)
+        self.assertEqual([item.id for item in last["items"]], [events[3].id, events[4].id])
+        self.assert_page(get_events(limit=1, offset=4, upcoming=True, db=self.db),
+                         total=4, limit=1, offset=4, size=0, has_more=False)
+
+    def test_public_event_map_is_small_localized_and_current(self):
+        current = datetime.now(timezone.utc)
+        rows = [
+            models.Event(
+                title="Ongoing", name_i18n={"en": "Ongoing", "ru": "Продолжается"},
+                date=(current - timedelta(hours=1)).isoformat(),
+                location="Paphos", latitude=34.77, longitude=32.42,
+                description="Do not include this", price=20,
+            ),
+            models.Event(
+                title="Later", date=(current + timedelta(hours=1)).astimezone(
+                    timezone(timedelta(hours=3))).isoformat(),
+                location="Limassol", latitude=34.68, longitude=33.04,
+                description="Do not include this either", price=20,
+            ),
+            models.Event(title="Finished", date=(current - timedelta(hours=3)).isoformat(),
+                         latitude=34.77, longitude=32.42, description="", price=20),
+            models.Event(title="No coordinates", date=(current + timedelta(hours=2)).isoformat(),
+                         description="", price=20),
+            models.Event(title="Invalid", date="not a date", latitude=34.77,
+                         longitude=32.42, description="", price=20),
+        ]
+        self.db.add_all(rows)
+        self.db.commit()
+
+        markers = get_map_events(lang="ru", db=self.db)
+        self.assertEqual(markers, [
+            {"id": rows[0].id, "title": "Продолжается", "date": rows[0].date,
+             "location": "Paphos", "latitude": 34.77, "longitude": 32.42},
+            {"id": rows[1].id, "title": "Later", "date": rows[1].date,
+             "location": "Limassol", "latitude": 34.68, "longitude": 33.04},
+        ])
+        self.assertEqual(get_map_events(lang="en", db=self.db)[0]["title"], "Ongoing")
+        self.assertEqual(get_events(limit=1, offset=0, upcoming=True, db=self.db)["total"], 3)
+        paths = [route.path for route in app.routes]
+        self.assertLess(paths.index("/api/events/map"), paths.index("/api/events/{event_id}"))
 
     def test_distillery_page_is_summary_and_bottles_are_lazy(self):
         page = get_distilleries(limit=1, offset=0, db=self.db)

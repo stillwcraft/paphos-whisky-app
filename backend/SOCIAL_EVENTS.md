@@ -43,6 +43,23 @@ avatar; explicitly sending `avatar_key: null` removes it. Actual changes to
 profile fields reset the manually assigned verification badge.
 Signed image URLs last at most five minutes (and never past event expiry);
 refresh them by fetching `GET /api/social/events` or `GET /api/social/events/{id}`.
+`GET /api/social/events/map` returns all visible, unexpired event markers
+as an array of `{id, latitude, longitude, event_type, starts_at, expires_at,
+drink, image_url}` (UTC ISO timestamps). Global `image_url` is the first
+`image_urls` entry; regular `image_url` is `null` (regular markers use drink
+icons). Fetch the full event detail to get its signed photo URL.
+It has the same social authentication, rollout, adult, friendship, blocking,
+and visibility gates as the full list but contains no descriptions, owners,
+or attendee information. Fetch `/api/social/events/{id}` on marker click for
+full event details. The existing `/api/events` catalog also accepts
+`upcoming=true` to filter to valid event dates whose two-hour window has not
+ended (strictly after the current UTC instant), before applying `limit` and
+`offset`; omitting it preserves the original catalog listing. Public
+`GET /api/events/map?lang=en` returns an unpaginated array of geolocated
+catalog events still within that same window, containing only
+`{id, title, date, location, latitude, longitude}`. `title` uses the same
+language selection and fallback as the catalog; `date` is the stored event
+date string.
 For admin-created global events, apply `migrations/027_global_social_events.sql`
 to existing PostgreSQL databases before deploying the backend. Only an
 authenticated admin can `POST /api/social/events/global` with `location`
