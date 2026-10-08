@@ -72,10 +72,10 @@ def cleanup(db: Session, *, current_time: datetime | None = None, batch_size: in
             break
         for event in events:
             cursor = event.id
-            if not remove(event.photo_key):
+            if event.photo_key and not remove(event.photo_key):
                 failures += 1
                 continue
-            media = db.get(m.SocialMedia, event.photo_key)
+            media = db.get(m.SocialMedia, event.photo_key) if event.photo_key else None
             if media:
                 db.delete(media)
             db.delete(event)

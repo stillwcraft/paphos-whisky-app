@@ -41,6 +41,26 @@ avatar; explicitly sending `avatar_key: null` removes it. Actual changes to
 profile fields reset the manually assigned verification badge.
 Signed image URLs last at most five minutes (and never past event expiry);
 refresh them by fetching `GET /api/social/events` or `GET /api/social/events/{id}`.
+For admin-created global events, apply `migrations/027_global_social_events.sql`
+to existing PostgreSQL databases before deploying the backend. Only an
+authenticated admin can `POST /api/social/events/global` with `location`
+(1–150 characters), `description` (1–5000 characters), Cyprus latitude
+(34–36) and longitude (32–35), existing `drink` and `visibility` values,
+`image_urls` (1–5 HTTPS URLs), and timezone-aware ISO `starts_at` and
+`expires_at` datetimes. The expiry must be in the future and after the start;
+ongoing events with a past start are allowed. Events are listed before their
+start and remain visible until expiry.
+Global events do not require an uploaded `photo_key` and do not accept joins.
+Anyone who can see a global event can read and send chat messages without
+joining; visibility, blocks, hidden status, expiry, and the social access and
+age gates still apply. `friends` visibility requires friendship with the
+admin organizer; `anonymous` hides the organizer as for regular events.
+Event responses add `event_type: "regular" | "global"` and `image_urls`
+(empty for regular events); a global event's `photo_url` is its first URL.
+Global image bytes are never fetched or stored by the backend; URLs are
+persisted and displayed directly in browsers, so unlike private regular photos
+they are not revoked when an event is hidden or expires. Choose trusted image
+hosts accordingly.
 Social API responses use `Cache-Control: private, no-store`.
 Media keys are opaque (`event/<random>.jpg` or `avatar/<random>.jpg`), never
 prefixed with a Telegram ID. Older ID-prefixed media keys are not signed and
@@ -95,9 +115,10 @@ same `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
 bucket; never put the service role key in the frontend. Do not use a SQL-only
 cron to delete files: Storage objects must be removed through the Storage API.
 
-Events and their photos are removed 7 days after expiry. An open report blocks
-deletion; resolved reports keep the event until at least 30 days after the
-latest resolution. Removing an event cascades to its reports, tags, joins,
+Events and their private photos are removed 7 days after expiry. Global events
+with external image URLs are removed without contacting those hosts. An open
+report blocks deletion; resolved reports keep the event until at least 30 days
+after the latest resolution. Removing an event cascades to its reports, tags, joins,
 cheers, and chat. Uploads not referenced by an event or current profile
 avatar are removed 24 hours after upload, including replaced/cleared avatars
 and abandoned event photos. Current avatars are not affected by event expiry.

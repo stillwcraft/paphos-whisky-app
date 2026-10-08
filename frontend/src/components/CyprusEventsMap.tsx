@@ -36,6 +36,17 @@ const socialIcons: Record<Drink, DivIcon> = Object.fromEntries(
     })]),
 ) as Record<Drink, DivIcon>;
 
+function globalEventIcon(imageUrl: string): DivIcon {
+  const frame = document.createElement('div');
+  frame.style.cssText = 'width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;overflow:hidden;background:#141417;box-shadow:0 2px 12px #0009';
+  const image = document.createElement('img');
+  image.src = imageUrl;
+  image.alt = '';
+  image.style.cssText = 'width:100%;height:100%;object-fit:cover';
+  frame.appendChild(image);
+  return new DivIcon({ html: frame, className: '', iconSize: [38, 38], iconAnchor: [19, 38] });
+}
+
 type EventMarker = {
   id: number;
   title: string;
@@ -144,19 +155,23 @@ export function CyprusEventsMap({
   const [locationError, setLocationError] = useState<string | null>(null);
   const chatCursor = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
-  const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
+  const activeSocialEvents = socialEvents.filter((event) => new Date(event.expires_at).getTime() > now);
+  const selectedSocial = activeSocialEvents.find((event) => event.id === selectedSocialId) ?? null;
   const upcomingEvents = events.filter((event) => isEventCurrentOrUpcoming(event.date, now));
   const activeSelected = selected && upcomingEvents.some((event) => event.id === selected.id) ? selected : null;
 
   useEffect(() => {
-    const nextEnd = events.reduce<number | null>((nearest, event) => {
-      const end = eventEndTime(event.date);
+    const expiryTimes = [
+      ...events.map((event) => eventEndTime(event.date)),
+      ...socialEvents.map((event) => new Date(event.expires_at).getTime()),
+    ];
+    const nextEnd = expiryTimes.reduce<number | null>((nearest, end) => {
       return end !== null && end > now && (nearest === null || end < nearest) ? end : nearest;
     }, null);
     if (nextEnd === null) return;
     const timeout = window.setTimeout(() => setNow(Date.now()), Math.min(nextEnd - now + 1, 2_147_483_647));
     return () => window.clearTimeout(timeout);
-  }, [events, now]);
+  }, [events, socialEvents, now]);
 
   useEffect(() => {
     const refresh = () => setNow(Date.now());
@@ -333,7 +348,7 @@ export function CyprusEventsMap({
     void run(async () => {
       const [chat, requests] = await Promise.all([
         api.chatSince(event.id),
-        event.is_owner ? api.joinRequests(event.id) : Promise.resolve([]),
+        event.is_owner && event.event_type !== 'global' ? api.joinRequests(event.id) : Promise.resolve([]),
       ]);
       chatCursor.current = chat.length ? chat[chat.length - 1].id : 0;
       setMessages(chat);
@@ -428,10 +443,12 @@ export function CyprusEventsMap({
             eventHandlers={{ click: () => { setSelected(event); setSelectedSocialId(null); setPanel(null); } }}
           />
         ))}
-        {socialEvents.map((event) => (
+        {activeSocialEvents.map((event) => (
           <Marker
             key={`social-${event.id}`}
-            icon={socialIcons[event.drink] ?? eventIcon}
+            icon={event.event_type === 'global' && event.image_urls[0]
+              ? globalEventIcon(event.image_urls[0])
+              : socialIcons[event.drink] ?? eventIcon}
             position={[event.latitude, event.longitude]}
             eventHandlers={{ click: () => { setSelectedSocialId(event.id); setSelected(null); setPanel(null); } }}
           />
@@ -469,7 +486,7 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || (!loadFailed && upcomingEvents.length === 0 && socialEvents.length === 0)) && (
+      {!error && (isLoading || (!loadFailed && upcomingEvents.length === 0 && activeSocialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
@@ -509,18 +526,24 @@ export function CyprusEventsMap({
       {panel === 'create' && api && (
         <SocialEventForm
           friends={friends}
+          isAdmin={isAdmin}
           LocationPicker={EventLocationPicker}
           busy={busy}
           error={socialError}
           onCancel={() => { setPanel(null); setSocialError(null); }}
-          onSubmit={(draft: SocialEventDraft, photo: File) => void run(async () => {
-            const photoKey = await api.upload(photo, 'event');
-            const created = await api.createEvent(draft, photoKey);
+          onSubmit={(draft: SocialEventDraft, photo?: File) => void run(async () => {
+            if (draft.event_type === 'global') {
+              await api.createGlobalEvent(draft);
+            } else {
+              if (!photo) throw new Error(t('social.photo_and_place_required'));
+              const photoKey = await api.upload(photo, 'event');
+              const created = await api.createEvent(draft, photoKey);
+              if (Object.values(created.notifications).some((status) => status !== 'sent')) {
+                setSocialNotice(t('social.notification_failed'));
+              }
+            }
             await reloadSocial();
             setPanel(null);
-            if (Object.values(created.notifications).some((status) => status !== 'sent')) {
-              setSocialNotice(t('social.notification_failed'));
-            }
           })}
         />
       )}

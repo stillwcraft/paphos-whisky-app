@@ -1,6 +1,6 @@
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import type { SocialEvent, SocialProfile } from './SocialEventCard.tsx';
-import type { SocialEventDraft } from './SocialEventForms.tsx';
+import type { GlobalEventDraft, RegularEventDraft } from './SocialEventForms.tsx';
 import type { ChatMessage, FriendRequest, JoinRequest, Report, TagRequest } from './SocialPanels.tsx';
 import { compressSocialImage } from './compressImage.ts';
 
@@ -43,7 +43,7 @@ export class SocialApi {
 
   events() { return this.request<SocialEvent[]>('/events'); }
   event(id: number) { return this.request<SocialEvent>(`/events/${id}`); }
-  createEvent(draft: SocialEventDraft, photoKey: string) {
+  createEvent(draft: RegularEventDraft, photoKey: string) {
     return this.request<SocialEvent & { notifications: Record<string, DeliveryStatus> }>('/events', 'POST', {
       description: draft.description,
       drink: draft.drink,
@@ -56,6 +56,19 @@ export class SocialApi {
       start: draft.start_mode === 'now' ? 'now' : '20m',
       ttl: draft.duration === 'evening' ? 'today' : draft.duration,
       tagged_friend_ids: draft.tagged_friend_ids,
+    });
+  }
+  createGlobalEvent(draft: GlobalEventDraft) {
+    return this.request<SocialEvent>('/events/global', 'POST', {
+      location: draft.title,
+      description: draft.description,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      drink: draft.drink,
+      visibility: draft.visibility,
+      image_urls: draft.image_urls,
+      starts_at: draft.starts_at,
+      expires_at: draft.expires_at,
     });
   }
   cheer(id: number) { return this.request<SocialEvent>(`/events/${id}/cheer`, 'POST'); }

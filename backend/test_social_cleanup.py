@@ -118,6 +118,25 @@ class SocialCleanupTest(unittest.TestCase):
             self.assertIsNone(db.get(models.SocialEvent, event_id))
             self.assertIsNone(db.get(models.SocialMedia, "event/retry.jpg"))
 
+    def test_global_event_cleanup_does_not_delete_external_images(self):
+        with self.Session() as db:
+            expired = models.SocialEvent(
+                owner_id=4, event_type="global",
+                image_urls=["https://images.example.test/photo.jpg"], photo_key=None,
+                description="Global event", drink="wine", visibility="public",
+                latitude=34.7, longitude=32.4, location="Paphos",
+                starts_at=self.timestamp - timedelta(days=9),
+                expires_at=self.timestamp - timedelta(days=8),
+            )
+            db.add(expired)
+            db.commit()
+            event_id = expired.id
+        with patch("social_cleanup.requests.delete") as delete:
+            with self.Session() as db:
+                self.assertEqual(cleanup(db, current_time=self.timestamp), (1, 0, 0))
+                self.assertIsNone(db.get(models.SocialEvent, event_id))
+            delete.assert_not_called()
+
     def test_failed_upload_remains_trackable_for_cleanup(self):
         from routers import social
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SocialImageCarousel } from './SocialImageCarousel.tsx';
 
 export type Drink = 'beer' | 'wine' | 'spirits' | 'cocktails' | 'coffee';
 export type Visibility = 'public' | 'friends' | 'anonymous';
@@ -12,6 +13,8 @@ export type SocialProfile = {
 };
 export type SocialEvent = {
   id: number;
+  event_type: 'regular' | 'global';
+  image_urls: string[];
   location: string;
   description: string;
   photo_url: string;
@@ -39,6 +42,23 @@ const drinkIcons: Record<Drink, string> = {
   cocktails: '🍸',
   coffee: '☕',
 };
+
+function Description({ text }: { text: string }) {
+  return (
+    <p className="whitespace-pre-wrap break-words text-slate-200">
+      {text.split(/(https?:\/\/[^\s<>]+)/g).map((part, index) => {
+        if (!/^https?:\/\//.test(part)) return part;
+        const url = part.replace(/[.,!?;:)]+$/, '');
+        return (
+          <span key={index}>
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#C5A059] underline underline-offset-2">{url}</a>
+            {part.slice(url.length)}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
 
 function Avatar({ profile, size = 'h-8 w-8' }: { profile: SocialProfile; size?: string }) {
   return profile.avatar_url ? (
@@ -71,14 +91,16 @@ export function SocialEventCard({
   onReport: (reason: 'spam' | 'inappropriate' | 'false_location') => void;
   onBlock: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isGlobal = event.event_type === 'global';
   const [now, setNow] = useState(Date.now());
   const [showReport, setShowReport] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   useEffect(() => {
+    if (isGlobal) return;
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [isGlobal]);
   const remaining = Math.max(0, Math.ceil((new Date(event.expires_at).getTime() - now) / 1000));
   const hours = Math.floor(remaining / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);
@@ -96,15 +118,17 @@ export function SocialEventCard({
   return (
     <article className="pointer-events-auto flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
       <header className="flex shrink-0 items-center gap-2 border-b border-[#C5A059]/20 p-4">
-        <span className="text-2xl" aria-hidden="true">{drinkIcons[event.drink]}</span>
+        {!isGlobal && <span className="text-2xl" aria-hidden="true">{drinkIcons[event.drink]}</span>}
         <h2 className="min-w-0 flex-1 truncate font-serif text-lg text-[#FFE28A]">{event.location}</h2>
-        <span className="shrink-0 text-xs text-[#C5A059]" aria-label={t('social.expires_in', { time: remainingText })}>
+        {!isGlobal && <span className="shrink-0 text-xs text-[#C5A059]" aria-label={t('social.expires_in', { time: remainingText })}>
           ⏳ {remainingText}
-        </span>
+        </span>}
         <button type="button" onClick={onClose} className="ml-1 text-xl text-slate-300" aria-label={t('social.close')}>×</button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full object-cover" />
+        {isGlobal && event.image_urls.length > 0
+          ? <SocialImageCarousel images={event.image_urls} alt={event.location} className="aspect-[3/4] max-h-[60dvh]" />
+          : <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full object-cover" />}
         <div className="space-y-3 p-4 text-sm">
           <div className="flex items-center gap-2">
             {event.owner ? <Avatar profile={event.owner} /> : (
@@ -114,27 +138,33 @@ export function SocialEventCard({
             {event.owner?.verified && (
               <span className="text-xs text-[#C5A059]">✓ {t('social.verified')}</span>
             )}
-            <span className="ml-auto text-xs text-slate-400">
+            {!isGlobal && <span className="ml-auto text-xs text-slate-400">
               {arrivalMinutes > 0
                 ? t('social.arriving_in', { count: arrivalMinutes })
                 : t('social.already_here')}
-            </span>
+            </span>}
           </div>
-          <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>
-          <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>
+          {isGlobal && (
+            <p className="text-xs text-slate-300">
+              {t('social.start')}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.starts_at))}<br />
+              {t('social.global_end')}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.expires_at))}
+            </p>
+          )}
+          {isGlobal ? <Description text={event.description} /> : <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>}
+          {!isGlobal && <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>}
           <p className="text-xs text-slate-400">{t(`social.visibility_${event.visibility}`)}</p>
-          {event.tagged_friends.length > 0 && (
+          {!isGlobal && event.tagged_friends.length > 0 && (
             <p className="text-slate-300">{t('social.drinking_with')}: {event.tagged_friends.map((friend) => friend.display_name).join(', ')}</p>
           )}
-          <div className="flex items-center gap-2 text-slate-300">
+          {!isGlobal && <div className="flex items-center gap-2 text-slate-300">
             <span>{t('social.joined', { count: Math.max(0, event.attendee_count - 1) })}</span>
             {participants.slice(0, 4).map((person) => <Avatar key={person.telegram_id} profile={person} size="h-7 w-7" />)}
             {event.capacity !== null && <span className="ml-auto text-xs">{event.attendee_count}/{event.capacity}</span>}
-          </div>
+          </div>}
         </div>
       </div>
       <footer className="max-h-[50%] shrink-0 space-y-2 overflow-y-auto border-t border-[#C5A059]/20 bg-[#141417] p-3 text-sm">
-        {showReport && (
+        {!isGlobal && showReport && (
           <div className="flex flex-wrap gap-2 rounded-lg border border-red-400/30 p-2 text-xs">
             {(['spam', 'inappropriate', 'false_location'] as const).map((reason) => (
               <button key={reason} type="button" disabled={busy} onClick={() => { onReport(reason); setShowReport(false); }} className="rounded-md border border-red-400/40 px-2 py-1 text-red-300">
@@ -143,7 +173,7 @@ export function SocialEventCard({
             ))}
           </div>
         )}
-        {showBlock && (
+        {!isGlobal && showBlock && (
           <div className="flex items-center justify-between gap-2 text-xs text-red-300">
             {t('social.confirm_block')}
             <button type="button" disabled={busy} onClick={onBlock} className="rounded-md border border-red-400/40 px-2 py-1">{t('social.confirm')}</button>
@@ -151,7 +181,7 @@ export function SocialEventCard({
           </div>
         )}
         <div className="grid grid-cols-2 gap-2">
-          {!event.is_owner && (
+          {!isGlobal && !event.is_owner && (
             <>
               <button type="button" disabled={busy || remaining === 0} onClick={onCheer} className="rounded-xl border border-[#C5A059]/40 p-2 text-[#C5A059] disabled:opacity-50">
                 🥂 {t('social.cheer')} ({event.cheers}){event.cheered ? ' ✓' : ''}
@@ -161,10 +191,10 @@ export function SocialEventCard({
               </button>
             </>
           )}
-          <button type="button" onClick={onChat} disabled={!event.is_owner && event.join_status !== 'accepted'} title={!event.is_owner && event.join_status !== 'accepted' ? t('social.chat_join_first') : undefined} className="rounded-xl border border-[#C5A059]/40 p-2 text-[#C5A059] disabled:opacity-50">💬 {t('social.chat')}</button>
+          <button type="button" onClick={onChat} disabled={!isGlobal && !event.is_owner && event.join_status !== 'accepted'} title={!isGlobal && !event.is_owner && event.join_status !== 'accepted' ? t('social.chat_join_first') : undefined} className="rounded-xl border border-[#C5A059]/40 p-2 text-[#C5A059] disabled:opacity-50">💬 {t('social.chat')}</button>
           <button type="button" onClick={onShare} className="rounded-xl border border-[#C5A059]/40 p-2 text-[#C5A059]">🔗 {t('social.share')}</button>
         </div>
-        {!event.is_owner && (
+        {!isGlobal && !event.is_owner && (
           <div className="flex justify-end gap-4 pt-1 text-xs text-red-400/70">
             <button type="button" onClick={() => { setShowReport(!showReport); setShowBlock(false); }}>⚑ {t('social.report')}</button>
             <button type="button" onClick={() => { setShowBlock(!showBlock); setShowReport(false); }}>{t('social.block')}</button>

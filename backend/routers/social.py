@@ -5,14 +5,14 @@ import logging
 import os
 import re
 from datetime import datetime, time, timedelta, timezone
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, exists, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -213,6 +213,15 @@ def event_for(db, event_id, viewer):
     return e
 
 
+def event_photo_url(e, moderator=False):
+    if e.event_type == "global":
+        return (e.image_urls or [None])[0]
+    return signed(
+        e.photo_key, 300 if moderator else
+        min(300, max(1, int((utc(e.expires_at) - now()).total_seconds())))
+    )
+
+
 def event_json(db, e, viewer, moderator=False):
     owner_visible = e.visibility != "anonymous" or e.owner_id == viewer or moderator
     joins = db.query(m.SocialJoinRequest).filter_by(event_id=e.id, status="accepted").all()
@@ -221,13 +230,11 @@ def event_json(db, e, viewer, moderator=False):
     # Anonymous event participants cannot infer the organizer through tags or attendee lists.
     return {
         "id": e.id, "description": e.description, "drink": e.drink,
+        "event_type": e.event_type, "image_urls": e.image_urls or [],
         "visibility": e.visibility, "latitude": e.latitude, "longitude": e.longitude,
-        "location": e.location, "photo_url": signed(
-            e.photo_key, 300 if moderator else
-            min(300, max(1, int((utc(e.expires_at) - now()).total_seconds())))
-        ),
+        "location": e.location, "photo_url": event_photo_url(e, moderator),
         "starts_at": utc(e.starts_at).isoformat(), "expires_at": utc(e.expires_at).isoformat(),
-        "capacity": e.capacity, "attendee_count": len(joins) + 1,
+        "capacity": e.capacity, "attendee_count": 0 if e.event_type == "global" else len(joins) + 1,
         "owner": mini(db, e.owner_id) if owner_visible else None,
         "is_owner": e.owner_id == viewer,
         "tagged_friends": [mini(db, t.telegram_id) for t in tags if
@@ -236,12 +243,12 @@ def event_json(db, e, viewer, moderator=False):
                                               and not blocked(db, viewer, t.telegram_id)
                                               and (viewer in (e.owner_id, t.telegram_id)
                                                    or friends(db, viewer, t.telegram_id))))],
-        "attendees": ([mini(db, j.telegram_id) for j in joins
+        "attendees": [] if e.event_type == "global" else ([mini(db, j.telegram_id) for j in joins
                        if moderator or not blocked(db, viewer, j.telegram_id)] +
                       ([mini(db, e.owner_id)] if owner_visible else [])),
         "cheers": cheers,
         "cheered": db.get(m.SocialCheer, (e.id, viewer)) is not None,
-        "join_status": "host" if e.owner_id == viewer else
+        "join_status": None if e.event_type == "global" else "host" if e.owner_id == viewer else
                        (db.query(m.SocialJoinRequest).filter_by(event_id=e.id, telegram_id=viewer).first().status
                         if db.query(m.SocialJoinRequest).filter_by(event_id=e.id, telegram_id=viewer).first()
                         else None),
@@ -270,6 +277,53 @@ class EventCreate(BaseModel):
     start: Literal["now", "20m"]
     ttl: Literal["1h", "3h", "today"]
     tagged_friend_ids: list[int] = Field(default_factory=list, max_length=30)
+
+
+class GlobalEventCreate(BaseModel):
+    location: str = Field(min_length=1, max_length=150)
+    description: str = Field(min_length=1, max_length=5000)
+    latitude: float = Field(ge=34, le=36)
+    longitude: float = Field(ge=32, le=35)
+    drink: Literal["beer", "wine", "spirits", "cocktails", "coffee"]
+    visibility: Literal["public", "friends", "anonymous"]
+    image_urls: list[str] = Field(min_length=1, max_length=5)
+    starts_at: datetime
+    expires_at: datetime
+
+    @field_validator("image_urls")
+    @classmethod
+    def validate_image_urls(cls, urls):
+        for url in urls:
+            if len(url) > 2048 or any(c.isspace() or ord(c) < 32 or c == "\\" for c in url):
+                raise ValueError("Images must be valid HTTPS URLs")
+            try:
+                parsed = urlsplit(url)
+                valid = (parsed.scheme == "https" and bool(parsed.hostname)
+                         and "%" not in parsed.netloc
+                         and parsed.username is None and parsed.password is None)
+                _ = parsed.port
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError("Images must be valid HTTPS URLs")
+        return urls
+
+    @field_validator("starts_at", "expires_at", mode="before")
+    @classmethod
+    def iso_datetime_required(cls, value):
+        if not isinstance(value, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})",
+            value,
+        ):
+            raise ValueError("An ISO datetime string with a timezone is required")
+        return value
+
+    @field_validator("starts_at", "expires_at")
+    @classmethod
+    def timezone_required(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("A timezone offset is required")
+        return value
 
 
 class Message(BaseModel):
@@ -480,6 +534,21 @@ def create_event(data: EventCreate, user=Depends(auth()), db: Session = Depends(
     return result
 
 
+@router.post("/events/global", status_code=201)
+def create_global_event(data: GlobalEventCreate, user=Depends(admin()), db: Session = Depends(get_db)):
+    if data.expires_at <= now() or data.expires_at <= data.starts_at:
+        fail(422, "Event must expire in the future and after it starts")
+    e = m.SocialEvent(
+        owner_id=uid(user), event_type="global", image_urls=data.image_urls,
+        description=data.description, drink=data.drink, visibility=data.visibility,
+        latitude=data.latitude, longitude=data.longitude, location=data.location,
+        starts_at=data.starts_at, expires_at=data.expires_at,
+    )
+    db.add(e)
+    commit(db)
+    return event_json(db, e, uid(user))
+
+
 @router.get("/events")
 def list_events(user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
@@ -556,6 +625,8 @@ def cheer(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
 def join(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     e = event_for(db, event_id, uid(user))
+    if e.event_type == "global":
+        fail(403, "Global events do not accept joins")
     if e.owner_id == uid(user):
         fail(409, "Host already attends")
     existing = db.query(m.SocialJoinRequest).filter_by(event_id=event_id, telegram_id=uid(user)).first()
@@ -571,6 +642,8 @@ def join(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
 @router.get("/events/{event_id}/join-requests")
 def join_requests(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     e = event_for(db, event_id, uid(user))
+    if e.event_type == "global":
+        fail(403, "Global events do not accept joins")
     if e.owner_id != uid(user):
         fail(403, "Host only")
     rows = db.query(m.SocialJoinRequest).filter_by(event_id=event_id, status="pending").all()
@@ -587,6 +660,8 @@ def accept_join(event_id: int, request_id: int, user=Depends(auth()), db: Sessio
     e = query.with_for_update().first() if db.bind.dialect.name != "sqlite" else query.first()
     if not visible(db, e, uid(user)) or e.owner_id != uid(user):
         fail(404, "Event not found")
+    if e.event_type == "global":
+        fail(403, "Global events do not accept joins")
     r = db.query(m.SocialJoinRequest).filter_by(id=request_id, event_id=event_id, status="pending").first()
     if not r or blocked(db, uid(user), r.telegram_id):
         fail(404, "Join request not found")
@@ -600,7 +675,7 @@ def accept_join(event_id: int, request_id: int, user=Depends(auth()), db: Sessio
 
 def chat_access(db, event_id, user):
     e = event_for(db, event_id, uid(user))
-    if uid(user) != e.owner_id and not db.query(m.SocialJoinRequest).filter_by(
+    if e.event_type != "global" and uid(user) != e.owner_id and not db.query(m.SocialJoinRequest).filter_by(
         event_id=event_id, telegram_id=uid(user), status="accepted").first():
         fail(403, "Accepted attendees only")
     return e
@@ -616,6 +691,8 @@ def chat_json(db, item, e, viewer):
 @router.get("/events/{event_id}/chat")
 def chat(event_id: int, after_id: int = Query(0, ge=0), user=Depends(auth()), db: Session = Depends(get_db)):
     e = chat_access(db, event_id, user)
+    if e.event_type == "global":
+        adults(db, user)
     rows = db.query(m.SocialChatMessage).filter(
         m.SocialChatMessage.event_id == event_id, m.SocialChatMessage.id > after_id
     ).order_by(m.SocialChatMessage.id).limit(100).all()
@@ -657,7 +734,7 @@ def reports(user=Depends(admin()), db: Session = Depends(get_db)):
              "status": r.status,
              "resolved_at": utc(r.resolved_at).isoformat() if r.resolved_at else None,
              "resolved_by": r.resolved_by,
-             "photo_url": signed(e.photo_key) if e and e.photo_key else None}
+             "photo_url": event_photo_url(e, moderator=True) if e else None}
             for r in db.query(m.SocialReport).order_by(m.SocialReport.id.desc()).limit(500)]
 
 

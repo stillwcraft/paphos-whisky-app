@@ -23,7 +23,7 @@ class SocialTest(unittest.TestCase):
         self.social_flag = patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "true"})
         self.social_flag.start()
         self.signed_mock = patch.object(social, "signed", return_value="https://example.test/signed-image")
-        self.signed_mock.start()
+        self.signed_client = self.signed_mock.start()
         self.notify_mock = patch.object(social, "notify", return_value="not_configured")
         self.notify_client = self.notify_mock.start()
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -77,6 +77,172 @@ class SocialTest(unittest.TestCase):
         })
         self.assertEqual(r.status_code, 201, r.text)
         return r.json()["id"]
+
+    def global_payload(self, **updates):
+        start = social.now() + timedelta(hours=2)
+        return {
+            "location": "Paphos", "description": "A global tasting",
+            "latitude": 34.77, "longitude": 32.42, "drink": "spirits",
+            "visibility": "public",
+            "image_urls": ["https://images.example.test/one.jpg", "https://images.example.test/two.jpg"],
+            "starts_at": start.isoformat(),
+            "expires_at": (start + timedelta(hours=3)).isoformat(),
+            **updates,
+        }
+
+    def test_global_admin_only_and_regular_event_regression(self):
+        payload = self.global_payload()
+        self.assertEqual(self.request("POST", "/events/global", json=payload).status_code, 403)
+        main.app.dependency_overrides.pop(main.get_authenticated_telegram_user)
+        self.assertEqual(self.request("POST", "/events/global", json=payload).status_code, 401)
+        main.app.dependency_overrides[main.get_authenticated_telegram_user] = self.current_user
+        self.actor = 4
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "4", "SOCIAL_EVENTS_ENABLED": "false"}):
+            result = self.request("POST", "/events/global", json=payload)
+        self.assertEqual(result.status_code, 201, result.text)
+        created = result.json()
+        event_id = created["id"]
+        self.assertEqual(created["event_type"], "global")
+        self.assertEqual(created["image_urls"], payload["image_urls"])
+        self.assertEqual(created["photo_url"], payload["image_urls"][0])
+        self.signed_client.assert_not_called()
+        self.assertEqual(created["attendee_count"], 0)
+        self.assertEqual(created["attendees"], [])
+        self.assertIsNone(created["join_status"])
+        with self.Session() as db:
+            event = db.get(models.SocialEvent, event_id)
+            self.assertIsNone(event.photo_key)
+            self.assertEqual(event.owner_id, 4)
+            self.assertEqual(event.image_urls, payload["image_urls"])
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{event_id}").json()["photo_url"], payload["image_urls"][0])
+        self.assertIn(event_id, [e["id"] for e in self.request("GET", "/events").json()])
+        regular = self.create()
+        details = self.request("GET", f"/events/{regular}").json()
+        self.assertEqual(details["event_type"], "regular")
+        self.assertEqual(details["image_urls"], [])
+        self.assertEqual(details["photo_url"], "https://example.test/signed-image")
+        self.assertEqual(details["attendee_count"], 1)
+        self.assertEqual(details["join_status"], "host")
+        self.assertIsNotNone(self.request("POST", "/events", json={
+            "description": "Coffee", "drink": "coffee", "visibility": "public",
+            "latitude": 34.77, "longitude": 32.42, "location": "Paphos",
+            "start": "now", "ttl": "1h", "photo_key": self.uploaded_photo(),
+            "event_type": "global", "image_urls": ["https://images.example.test/other.jpg"],
+        }).json()["photo_url"])
+
+    def test_global_validation(self):
+        self.actor = 4
+        payload = self.global_payload()
+        invalid = [
+            {"image_urls": []}, {"image_urls": ["https://images.example.test/1"] * 6},
+            *({"image_urls": [url]} for url in (
+                "http://images.example.test/a", "javascript:alert(1)", "data:image/png;base64,abcd",
+                "//images.example.test/a", "https://", "https://user:password@images.example.test/a",
+                "https://images.example.test\\@evil.test/a", "https://images.example.test:bad/a",
+                "https://images.example.test/a\n", "https://images.example.test/" + "a" * 2049,
+            )),
+            {"starts_at": "2026-10-01T12:00:00"},
+            {"starts_at": "1234567890"},
+            {"expires_at": "2026-10-01T12:00:00"},
+            {"expires_at": (social.now() - timedelta(seconds=1)).isoformat()},
+            {"expires_at": payload["starts_at"]},
+            {"starts_at": 1234567890},
+            {"description": "a" * 5001},
+            {"latitude": 37}, {"longitude": 31}, {"drink": "soda"},
+            {"visibility": "secret"}, {"location": ""},
+        ]
+        for update in invalid:
+            with self.subTest(update=update):
+                response = self.request("POST", "/events/global", json={**payload, **update})
+                self.assertEqual(response.status_code, 422, response.text)
+        with self.Session() as db:
+            self.assertEqual(db.query(models.SocialEvent).count(), 0)
+        result = self.request("POST", "/events/global", json=self.global_payload(
+            description="a" * 5000, image_urls=["https://images.example.test/one.jpg"],
+        ))
+        self.assertEqual(result.status_code, 201, result.text)
+
+    def test_global_ongoing_and_upcoming_events_are_visible_and_chat_without_join(self):
+        self.actor = 4
+        ongoing = self.request("POST", "/events/global", json=self.global_payload(
+            starts_at=(social.now() - timedelta(hours=1)).isoformat(),
+            expires_at=(social.now() + timedelta(hours=1)).isoformat(),
+        ))
+        self.assertEqual(ongoing.status_code, 201, ongoing.text)
+        upcoming = self.request("POST", "/events/global", json=self.global_payload())
+        self.assertEqual(upcoming.status_code, 201, upcoming.text)
+        self.actor = 1
+        listed = {event["id"] for event in self.request("GET", "/events").json()}
+        for event_id in (ongoing.json()["id"], upcoming.json()["id"]):
+            with self.subTest(event_id=event_id):
+                self.assertIn(event_id, listed)
+                self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 200)
+                self.assertEqual(self.request("GET", f"/events/{event_id}/chat").status_code, 200)
+                self.assertEqual(self.request("POST", f"/events/{event_id}/chat",
+                                              json={"body": "Hello"}).status_code, 200)
+                with self.Session() as db:
+                    self.assertIsNone(db.query(models.SocialJoinRequest).filter_by(
+                        event_id=event_id, telegram_id=1).first())
+
+    def test_global_chat_visibility_block_and_moderation(self):
+        self.actor = 4
+        event = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        self.actor = 5
+        self.assertEqual(self.request("GET", f"/events/{event}/chat").status_code, 403)
+        self.assertEqual(self.request("POST", f"/events/{event}/chat",
+                                      json={"body": "Hello"}).status_code, 403)
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{event}/chat").json(), [])
+        self.assertEqual(self.request("POST", f"/events/{event}/join").status_code, 403)
+        self.assertEqual(self.request("POST", f"/events/{event}/chat", json={"body": "Hello"}).status_code, 200)
+        self.assertEqual(self.request("POST", f"/events/{event}/report",
+                                      json={"category": "spam"}).status_code, 200)
+        self.actor = 2
+        self.assertEqual(self.request("GET", f"/events/{event}/chat").json()[0]["body"], "Hello")
+        self.assertEqual(self.request("POST", f"/events/{event}/chat", json={"body": "Hi"}).status_code, 200)
+        self.assertEqual(self.request("POST", f"/events/{event}/block").status_code, 200)
+        self.assertEqual(self.request("GET", f"/events/{event}").status_code, 404)
+        self.assertEqual(self.request("GET", f"/events/{event}/chat").status_code, 404)
+        self.assertEqual(self.request("POST", f"/events/{event}/chat", json={"body": "No"}).status_code, 404)
+        self.actor = 4
+        self.assertEqual(self.request("GET", f"/events/{event}/join-requests").status_code, 403)
+        self.assertEqual(self.request("GET", "/admin/reports").json()[0]["photo_url"],
+                         self.global_payload()["image_urls"][0])
+        self.assertEqual(self.request("GET", f"/admin/events/{event}").json()["photo_url"],
+                         self.global_payload()["image_urls"][0])
+        self.assertEqual(self.request("POST", f"/admin/events/{event}/hide").status_code, 200)
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{event}").status_code, 404)
+        self.assertEqual(self.request("GET", f"/events/{event}/chat").status_code, 404)
+        self.assertEqual(self.request("GET", "/events").json(), [])
+        self.actor = 4
+        second = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        with self.Session() as db:
+            db.get(models.SocialEvent, second).expires_at = social.now() - timedelta(seconds=1)
+            db.commit()
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{second}").status_code, 404)
+        self.assertEqual(self.request("GET", f"/events/{second}/chat").status_code, 404)
+        self.assertEqual(self.request("GET", "/events").json(), [])
+
+    def test_global_visibility_friends_and_anonymous(self):
+        self.actor = 4
+        friend_event = self.request("POST", "/events/global", json=self.global_payload(
+            visibility="friends")).json()["id"]
+        anonymous_event = self.request("POST", "/events/global", json=self.global_payload(
+            visibility="anonymous")).json()["id"]
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{friend_event}").status_code, 404)
+        self.assertIsNone(self.request("GET", f"/events/{anonymous_event}").json()["owner"])
+        self.assertEqual(self.request("POST", f"/events/{anonymous_event}/chat",
+                                      json={"body": "Hello"}).status_code, 200)
+        req = self.request("POST", "/friend-requests", json={"telegram_id": 4}).json()["id"]
+        self.actor = 4
+        self.request("POST", f"/friend-requests/{req}/accept")
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{friend_event}").status_code, 200)
+        self.assertEqual(self.request("GET", f"/events/{friend_event}/chat").status_code, 200)
 
     def test_auth_age_friendship_visibility_and_block(self):
         event = self.create("friends")

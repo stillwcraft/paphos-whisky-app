@@ -109,15 +109,22 @@ class SocialBlock(Base):
 
 class SocialEvent(Base):
     __tablename__ = "social_events"
+    __table_args__ = (
+        CheckConstraint("event_type IN ('regular', 'global')", name="social_events_event_type"),
+        CheckConstraint("event_type = 'global' OR photo_key IS NOT NULL",
+                        name="social_events_regular_photo"),
+    )
     id = Column(Integer, primary_key=True)
     owner_id = Column(BigInteger, nullable=False, index=True)
-    description = Column(String(400), nullable=False)
+    description = Column(String(5000), nullable=False)
+    event_type = Column(String(10), nullable=False, default="regular", server_default="regular")
+    image_urls = Column(I18N_JSON, nullable=False, default=list, server_default="[]")
     drink = Column(String(12), nullable=False)
     visibility = Column(String(12), nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     location = Column(String(150), nullable=False)
-    photo_key = Column(String(256), nullable=False, unique=True)
+    photo_key = Column(String(256), nullable=True, unique=True)
     starts_at = Column(DateTime(timezone=True), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
     capacity = Column(Integer, nullable=True)
