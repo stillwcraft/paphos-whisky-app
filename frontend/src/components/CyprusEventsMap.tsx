@@ -135,6 +135,8 @@ export function CyprusEventsMap({
   const [socialEvents, setSocialEvents] = useState<SocialEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [eventsResponseEmpty, setEventsResponseEmpty] = useState(false);
+  const [socialResponseEmpty, setSocialResponseEmpty] = useState(false);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
   const [panel, setPanel] = useState<'age' | 'create' | 'chat' | 'reports' | null>(null);
@@ -233,8 +235,14 @@ export function CyprusEventsMap({
 
   const reloadSocial = useCallback(async () => {
     if (!api) return;
-    const items = await api.events();
-    setSocialEvents(items);
+    try {
+      const items = await api.events();
+      setSocialEvents(items);
+      setSocialResponseEmpty(items.length === 0);
+    } catch (reason) {
+      setSocialResponseEmpty(false);
+      throw reason;
+    }
   }, [api]);
 
   useEffect(() => {
@@ -257,9 +265,15 @@ export function CyprusEventsMap({
     if (!api || !ageConfirmed) return;
     let active = true;
     void api.events().then((items) => {
-      if (active) setSocialEvents(items);
+      if (active) {
+        setSocialEvents(items);
+        setSocialResponseEmpty(items.length === 0);
+      }
     }).catch((reason: unknown) => {
-      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      if (active) {
+        setSocialResponseEmpty(false);
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      }
     });
     return () => { active = false; };
   }, [api, ageConfirmed, t]);
@@ -392,6 +406,7 @@ export function CyprusEventsMap({
 
   useEffect(() => {
     const controller = new AbortController();
+    setEventsResponseEmpty(false);
     const load = async () => {
       try {
         const items: EventMarker[] = [];
@@ -417,10 +432,12 @@ export function CyprusEventsMap({
         });
         setNow(Date.now());
         setEvents(positioned);
+        setEventsResponseEmpty(items.length === 0);
         setError(null);
         setLoadFailed(false);
       } catch (reason) {
         if (controller.signal.aborted) return;
+        setEventsResponseEmpty(false);
         setError(reason instanceof Error ? reason.message : t('cyprus_map.load_error'));
         setLoadFailed(true);
       } finally {
@@ -486,7 +503,8 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || (!loadFailed && upcomingEvents.length === 0 && activeSocialEvents.length === 0)) && (
+      {!error && (isLoading || (!loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
+        && upcomingEvents.length === 0 && activeSocialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>

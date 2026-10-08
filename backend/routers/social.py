@@ -25,6 +25,7 @@ from social_storage import storage_config
 log = logging.getLogger(__name__)
 OPAQUE_MEDIA_KEY = re.compile(r"^(event|avatar)/[0-9a-f]{32}\.jpg$")
 MAX_SOCIAL_IMAGE_BYTES = 1024 * 1024
+MAP_TESTER_TELEGRAM_ID = 369764930
 
 
 def auth():
@@ -49,7 +50,8 @@ def is_admin(user):
 
 
 def require_social_access(response: Response, user=Depends(auth())):
-    if is_admin(user) or os.getenv("SOCIAL_EVENTS_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}:
+    if (is_admin(user) or user.telegram_id == MAP_TESTER_TELEGRAM_ID
+            or os.getenv("SOCIAL_EVENTS_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}):
         response.headers["Cache-Control"] = "private, no-store"
         return user
     raise HTTPException(status_code=403, detail="Social events are not enabled")

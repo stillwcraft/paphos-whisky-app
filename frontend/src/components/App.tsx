@@ -20,6 +20,7 @@ const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').th
 type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
+const MAP_TESTER_TELEGRAM_ID = 369764930;
 
 type Tab = {
   id: TabId;
@@ -104,7 +105,8 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
-  const showCyprusMapTab = import.meta.env.DEV || isAdmin;
+  const showCyprusMapTab = import.meta.env.DEV || isAdmin
+    || initDataState?.user?.id === MAP_TESTER_TELEGRAM_ID;
   const activeCyprusMap = activeTab === 'cyprus-map' && showCyprusMapTab;
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);

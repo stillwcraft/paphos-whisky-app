@@ -154,11 +154,16 @@ export function SocialEventForm({
   return (
     <form onSubmit={submit} className="absolute inset-x-3 bottom-3 top-[calc(1rem+env(safe-area-inset-top))] z-[1100] mx-auto max-w-md space-y-4 overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-4 text-sm text-[#F4F4F5] shadow-2xl">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-3">
-          <button type="button" onClick={() => { setEventType('regular'); setPhotoError(null); }} aria-current={eventType === 'regular' ? 'page' : undefined} className={`font-serif text-base ${eventType === 'regular' ? 'text-[#FFE28A]' : 'text-slate-400'}`}>{t('social.create_title')}</button>
-          {isAdmin && <button type="button" onClick={() => { setEventType('global'); setPhotoError(null); }} aria-current={eventType === 'global' ? 'page' : undefined} className={`border-b pb-1 text-sm ${eventType === 'global' ? 'border-[#C5A059] text-[#FFE28A]' : 'border-transparent text-slate-400'}`}>{t('social.global_title')}</button>}
+        <div className="flex min-w-0 items-center gap-2 font-serif text-[clamp(0.8rem,3.7vw,1rem)] text-[#C5A059]">
+          <button type="button" onClick={() => { setEventType('regular'); setPhotoError(null); }} aria-current={eventType === 'regular' ? 'page' : undefined} className={`whitespace-nowrap border-b pb-1 ${eventType === 'regular' ? 'border-[#C5A059]' : 'border-transparent'}`}>{t('social.create_title')}</button>
+          {isAdmin && (
+            <>
+              <span aria-hidden="true">|</span>
+              <button type="button" onClick={() => { setEventType('global'); setPhotoError(null); }} aria-current={eventType === 'global' ? 'page' : undefined} className={`whitespace-nowrap border-b pb-1 ${eventType === 'global' ? 'border-[#C5A059]' : 'border-transparent'}`}>{t('social.global_title')}</button>
+            </>
+          )}
         </div>
-        <button type="button" onClick={onCancel} aria-label={t('social.close')} className="text-2xl text-[#C5A059]">×</button>
+        <button type="button" onClick={onCancel} aria-label={t('social.close')} className="shrink-0 text-2xl text-[#C5A059]">×</button>
       </div>
       <input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className={inputStyle} placeholder={t(eventType === 'global' ? 'social.global_name' : 'social.place')} aria-label={t(eventType === 'global' ? 'social.global_name' : 'social.place')} />
       {eventType === 'global' ? (
@@ -203,12 +208,12 @@ export function SocialEventForm({
         <span className="block text-right text-xs text-slate-400">{description.length}/{eventType === 'global' ? 5000 : 400}</span>
       </label>
       <LocationPicker latitude={latitude} longitude={longitude} onChange={(lat, lng) => { setLatitude(lat); setLongitude(lng); }} expandOnSelect />
-      <label className="block space-y-1">
+      {eventType === 'regular' && <label className="block space-y-1">
         <span>{t('social.drink')}</span>
         <select value={drink} onChange={(event) => setDrink(event.target.value as Drink)} className={inputStyle}>
           {(['beer', 'wine', 'spirits', 'cocktails', 'coffee'] as const).map((value) => <option key={value} value={value}>{t(`social.drink_${value}`)}</option>)}
         </select>
-      </label>
+      </label>}
       <label className="block space-y-1">
         <span>{t('social.visibility')}</span>
         <select value={visibility} onChange={(event) => setVisibility(event.target.value as Visibility)} className={inputStyle}>

@@ -90,6 +90,24 @@ class SocialTest(unittest.TestCase):
             **updates,
         }
 
+    def test_map_tester_can_create_regular_but_not_global_events(self):
+        with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
+            self.actor = 2
+            self.assertEqual(self.request("GET", "/profile").status_code, 403)
+
+            self.actor = social.MAP_TESTER_TELEGRAM_ID
+            self.assertEqual(self.request("PUT", "/profile", json={
+                "display_name": "Map tester", "age": 21,
+            }).status_code, 200)
+            event_id = self.create()
+            self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 200)
+            self.assertIn(event_id, [event["id"] for event in self.request("GET", "/events").json()])
+            self.assertEqual(self.request("POST", "/events/global", json=self.global_payload()).status_code, 403)
+            self.assertEqual(self.request("GET", "/admin/reports").status_code, 403)
+
+            self.actor = 4
+            self.assertEqual(self.request("GET", "/profile").status_code, 200)
+
     def test_global_admin_only_and_regular_event_regression(self):
         payload = self.global_payload()
         self.assertEqual(self.request("POST", "/events/global", json=payload).status_code, 403)

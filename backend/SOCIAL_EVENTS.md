@@ -1,19 +1,21 @@
 # Social map backend rollout
 
 All `/api/social/*` routes require authenticated Telegram Mini App initData. By
-default, they also require the caller's Telegram ID to equal `ADMIN_TELEGRAM_ID`.
-This includes profile, friend, event, chat, report, media, and admin routes;
-hiding the frontend tab is **not** an access control. Admin-only operations
-continue to require their own admin authorization. The configured admin can
-inspect events even before entering a social-profile age; ordinary users must
-enter an age of at least 18 to use the relevant social actions.
+default, they also require the caller's Telegram ID to equal `ADMIN_TELEGRAM_ID`
+or the temporary map tester ID `369764930`. The tester can use regular social
+events but has no admin privileges or access to global event creation. This
+includes profile, friend, event, chat, report, media, and admin routes; hiding
+the frontend tab is **not** an access control. Admin-only operations continue
+to require their own admin authorization. The configured admin can inspect
+events even before entering a social-profile age; ordinary users, including
+the tester, must enter an age of at least 18 to use the relevant social actions.
 
 For an intentional local-development rollout, set `SOCIAL_EVENTS_ENABLED=true`
 in the **backend** environment. The default (unset, empty, or `false`) denies
-non-admin access with HTTP 403. Other explicit true values are `1`, `yes`, and
-`on` (case-insensitive). Do not enable this flag in production until the social
-feature is ready for all authenticated users. Frontend `Vite DEV` settings do
-not affect backend authorization.
+everyone except the admin and map tester with HTTP 403. Other explicit true
+values are `1`, `yes`, and `on` (case-insensitive). Do not enable this flag in
+production until the social feature is ready for all authenticated users.
+Frontend `Vite DEV` settings do not affect backend authorization.
 
 For image support, configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
 `SUPABASE_SOCIAL_BUCKET` with a **private** Supabase Storage bucket. Apply
