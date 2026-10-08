@@ -31,6 +31,7 @@ export function SocialEventForm({
     latitude: number | null;
     longitude: number | null;
     onChange: (latitude: number | null, longitude: number | null) => void;
+    expandOnSelect?: boolean;
   }>;
   busy: boolean;
   error: string | null;
@@ -114,7 +115,7 @@ export function SocialEventForm({
         <textarea required maxLength={400} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className={inputStyle} />
         <span className="block text-right text-xs text-slate-400">{description.length}/400</span>
       </label>
-      <LocationPicker latitude={latitude} longitude={longitude} onChange={(lat, lng) => { setLatitude(lat); setLongitude(lng); }} />
+      <LocationPicker latitude={latitude} longitude={longitude} onChange={(lat, lng) => { setLatitude(lat); setLongitude(lng); }} expandOnSelect />
       <label className="block space-y-1">
         <span>{t('social.drink')}</span>
         <select value={drink} onChange={(event) => setDrink(event.target.value as Drink)} className={inputStyle}>

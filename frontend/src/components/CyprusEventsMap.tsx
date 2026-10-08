@@ -547,8 +547,22 @@ export function CyprusEventsMap({
   );
 }
 
-function LocationClickHandler({ onChange }: { onChange: (latitude: number, longitude: number) => void }) {
-  useMapEvents({ click: (event) => onChange(event.latlng.lat, event.latlng.lng) });
+function LocationClickHandler({
+  onChange,
+  onInteractionStart,
+  onInteractionEnd,
+}: {
+  onChange: (latitude: number, longitude: number) => void;
+  onInteractionStart: () => void;
+  onInteractionEnd: () => void;
+}) {
+  useMapEvents({
+    click: (event) => onChange(event.latlng.lat, event.latlng.lng),
+    movestart: onInteractionStart,
+    moveend: onInteractionEnd,
+    zoomstart: onInteractionStart,
+    zoomend: onInteractionEnd,
+  });
   return null;
 }
 
@@ -564,23 +578,106 @@ export function EventLocationPicker({
   latitude,
   longitude,
   onChange,
+  expandOnSelect = false,
 }: {
   latitude: number | null;
   longitude: number | null;
   onChange: (latitude: number | null, longitude: number | null) => void;
+  expandOnSelect?: boolean;
 }) {
   const { t } = useTranslation();
+  const mapFrameRef = useRef<HTMLDivElement>(null);
+  const idleTimer = useRef<number | null>(null);
+  const expandedRef = useRef(false);
+  const [formBounds, setFormBounds] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const expanded = formBounds !== null;
+
+  const stopIdleTimer = () => {
+    if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+    idleTimer.current = null;
+  };
+  const collapse = () => {
+    stopIdleTimer();
+    expandedRef.current = false;
+    setFormBounds(null);
+  };
+  const scheduleCollapse = () => {
+    if (!expandedRef.current) return;
+    stopIdleTimer();
+    idleTimer.current = window.setTimeout(() => {
+      expandedRef.current = false;
+      setFormBounds(null);
+      idleTimer.current = null;
+    }, 1500);
+  };
+
+  useEffect(() => () => {
+    if (idleTimer.current !== null) window.clearTimeout(idleTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const form = mapFrameRef.current?.closest('form');
+    if (!form) return;
+    const updateBounds = () => {
+      if (!expandedRef.current) return;
+      const { top, left, width, height } = form.getBoundingClientRect();
+      setFormBounds({ top, left, width, height });
+    };
+    const observer = new ResizeObserver(updateBounds);
+    observer.observe(form);
+    window.addEventListener('resize', updateBounds);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateBounds);
+    };
+  }, [expanded]);
+
+  const selectLocation = (lat: number, lng: number) => {
+    onChange(lat, lng);
+    if (!expandOnSelect) return;
+    const form = mapFrameRef.current?.closest('form');
+    if (!form) {
+      console.error('The event location picker must be inside a form to expand.');
+      return;
+    }
+    const { top, left, width, height } = form.getBoundingClientRect();
+    expandedRef.current = true;
+    setFormBounds({ top, left, width, height });
+    scheduleCollapse();
+  };
+
   return (
     <div className="space-y-2">
       <p className="text-sm text-[#C5A059]">{t('cyprus_map.pick_location')}</p>
-      <div className="h-56 overflow-hidden rounded-xl border border-[#C5A059]/30">
+      <div
+        ref={mapFrameRef}
+        className={`${expanded ? 'fixed z-[1200]' : 'h-56'} overflow-hidden rounded-xl border border-[#C5A059]/30 bg-[#141417]`}
+        style={formBounds ?? undefined}
+        onPointerDownCapture={stopIdleTimer}
+        onPointerUpCapture={scheduleCollapse}
+        onPointerCancelCapture={scheduleCollapse}
+        onWheelCapture={scheduleCollapse}
+      >
         <BaseMap className="h-full w-full">
           <FocusLocation latitude={latitude} longitude={longitude} />
-          <LocationClickHandler onChange={onChange} />
+          <LocationClickHandler onChange={selectLocation} onInteractionStart={stopIdleTimer} onInteractionEnd={scheduleCollapse} />
           {latitude !== null && longitude !== null && (
             <Marker icon={eventIcon} position={[latitude, longitude]} />
           )}
         </BaseMap>
+        {expanded && (
+          <button
+            type="button"
+            aria-label={t('cyprus_map.finish_location')}
+            onClick={collapse}
+            className="absolute right-4 top-4 z-[1000] flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md"
+          >
+            <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M6 6 18 18M18 6 6 18" />
+            </svg>
+          </button>
+        )}
       </div>
       {latitude !== null && longitude !== null && (
         <div className="flex items-center justify-between gap-2 text-xs text-slate-300">

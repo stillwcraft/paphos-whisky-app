@@ -27,6 +27,7 @@
     "location_unavailable": "Could not determine your location. Try again.",
     "location_outside": "Your location is outside Cyprus. Showing the island instead.",
     "pick_location": "Tap the map to set the event location (optional)",
+    "finish_location": "Finish choosing a location",
     "clear_location": "Remove pin",
     "load_error": "Could not load events on the map",
     "empty": "No events have been placed on the map yet."
