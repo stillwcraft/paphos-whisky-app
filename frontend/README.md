@@ -67,6 +67,15 @@ backend URL before starting Vite. The backend must separately set
 use its social API. See `backend/SOCIAL_EVENTS.md` for the private photo-storage
 setup. This feature remains hidden from regular users in production.
 
+The events map and event location picker use Stadia Maps Alidade Smooth Dark
+raster tiles. For production, register the Mini App's deployed web domain with
+Stadia Maps and use a commercial subscription; browser requests use domain
+authentication, so no API key is stored in the frontend. Localhost development
+works without a key but is rate-limited. If tiles return 401, check the
+registered domain and the browser's `Origin`/`Referer` headers (including
+preview domains and any `Referrer-Policy` setting). Keep the map attribution
+visible.
+
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),
 > launching the dev mode for the first time, you may see sudo password request.
