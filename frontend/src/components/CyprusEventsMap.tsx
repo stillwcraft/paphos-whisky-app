@@ -13,6 +13,7 @@ import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } fro
 import { SocialEventForm, type SocialEventDraft, type SocialEventUpdateDraft } from './social/SocialEventForms.tsx';
 import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, type JoinRequest, type Report } from './social/SocialPanels.tsx';
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
+import { CyprusMapLoading } from './CyprusMapLoading.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
@@ -452,7 +453,7 @@ export function CyprusEventsMap({
   }, [i18n.language, t]);
 
   return (
-    <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')}>
+    <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')} aria-busy={isLoading}>
       <BaseMap className="cyprus-events-map h-full w-full" mapRef={mapRef} attributionPosition="topright">
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         {upcomingEvents.map((event) => (
@@ -474,6 +475,7 @@ export function CyprusEventsMap({
           />
         ))}
       </BaseMap>
+      {isLoading && <CyprusMapLoading className="pointer-events-none absolute inset-0 z-[900]" />}
       {!panel && !activeSelected && !selectedSocial && (
         <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
           <button
@@ -506,10 +508,10 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || (!loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
-        && upcomingEvents.length === 0 && activeSocialEvents.length === 0)) && (
+      {!error && !isLoading && !loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
+        && upcomingEvents.length === 0 && activeSocialEvents.length === 0 && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
-          {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
+          {t('cyprus_map.empty')}
         </p>
       )}
       {(locationError || linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{locationError || linkError || socialError}</p>}

@@ -12,6 +12,44 @@
   }
 }
 
+@keyframes cyprus-map-shimmer {
+  from {
+    background-position: 180% 0;
+  }
+  to {
+    background-position: -80% 0;
+  }
+}
+
+.cyprus-map-shimmer {
+  background: linear-gradient(
+    110deg,
+    rgb(197 160 89 / 16%) 20%,
+    rgb(197 160 89 / 38%) 42%,
+    rgb(255 226 138 / 88%) 50%,
+    rgb(197 160 89 / 38%) 58%,
+    rgb(197 160 89 / 16%) 80%
+  );
+  background-size: 220% 100%;
+  clip-path: polygon(
+    2% 49%, 5% 40%, 10% 37%, 13% 28%, 19% 25%, 24% 30%, 31% 27%,
+    38% 31%, 45% 29%, 52% 34%, 59% 32%, 66% 38%, 73% 38%, 79% 43%,
+    85% 42%, 90% 46%, 95% 43%, 99% 37%, 100% 41%, 97% 48%, 92% 52%,
+    88% 59%, 82% 62%, 78% 68%, 71% 67%, 65% 73%, 59% 75%, 53% 80%,
+    47% 77%, 41% 81%, 35% 76%, 29% 77%, 24% 71%, 18% 70%, 13% 64%,
+    8% 64%, 5% 58%, 2% 57%
+  );
+  animation: cyprus-map-shimmer 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 10px rgb(197 160 89 / 28%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyprus-map-shimmer {
+    animation: none;
+    background-position: center;
+  }
+}
+
 @theme {
   --color-main: #0D0D0E;
   --color-card: #16161A;

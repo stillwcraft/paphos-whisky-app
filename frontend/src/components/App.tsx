@@ -9,6 +9,7 @@ import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
 import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
+import { CyprusMapLoading } from '@/components/CyprusMapLoading.tsx';
 import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
@@ -233,7 +234,7 @@ export function App() {
           ) : activeTab === 'profile' ? (
             <ProfileTab />
           ) : activeTab === 'cyprus-map' ? (
-            <Suspense fallback={<p className="p-5 text-slate-300">{t('common.loading')}</p>}>
+            <Suspense fallback={<CyprusMapLoading className="h-full w-full" />}>
               <CyprusEventsMap
                 isAdmin={isAdmin}
                 initialSocialEventId={selectedSocialEventId}
