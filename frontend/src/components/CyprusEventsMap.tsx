@@ -161,6 +161,8 @@ export function CyprusEventsMap({
   const [locationError, setLocationError] = useState<string | null>(null);
   const chatCursor = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSocialLoading, setIsSocialLoading] = useState(true);
+  const mapLoading = isLoading || isSocialLoading;
   const activeSocialEvents = socialEvents.filter((event) => new Date(event.expires_at).getTime() > now);
   const selectedSocial = activeSocialEvents.find((event) => event.id === selectedSocialId) ?? null;
   const upcomingEvents = events.filter((event) => isEventCurrentOrUpcoming(event.date, now));
@@ -250,15 +252,26 @@ export function CyprusEventsMap({
   }, [api]);
 
   useEffect(() => {
-    if (!api) return;
+    if (!api) {
+      setIsSocialLoading(false);
+      return;
+    }
     let active = true;
+    setIsSocialLoading(true);
     void api.profile().then((me) => {
       if (!active) return;
       setProfile(me);
-      if (me.age === null && !isAdmin) setPanel('age');
-      else setPanel((current) => current === 'age' ? null : current);
+      if (me.age === null && !isAdmin) {
+        setPanel('age');
+        setIsSocialLoading(false);
+      } else {
+        setPanel((current) => current === 'age' ? null : current);
+      }
     }).catch((reason: unknown) => {
-      if (active) setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+      if (active) {
+        setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+        setIsSocialLoading(false);
+      }
     });
     return () => { active = false; };
   }, [api, isAdmin, t]);
@@ -268,15 +281,18 @@ export function CyprusEventsMap({
   useEffect(() => {
     if (!api || !ageConfirmed) return;
     let active = true;
+    setIsSocialLoading(true);
     void api.events().then((items) => {
       if (active) {
         setSocialEvents(items);
         setSocialResponseEmpty(items.length === 0);
+        setIsSocialLoading(false);
       }
     }).catch((reason: unknown) => {
       if (active) {
         setSocialResponseEmpty(false);
         setSocialError(reason instanceof Error ? reason.message : t('social.error'));
+        setIsSocialLoading(false);
       }
     });
     return () => { active = false; };
@@ -410,6 +426,7 @@ export function CyprusEventsMap({
 
   useEffect(() => {
     const controller = new AbortController();
+    setIsLoading(true);
     setEventsResponseEmpty(false);
     const load = async () => {
       try {
@@ -453,7 +470,7 @@ export function CyprusEventsMap({
   }, [i18n.language, t]);
 
   return (
-    <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')} aria-busy={isLoading}>
+    <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')} aria-busy={mapLoading}>
       <BaseMap className="cyprus-events-map h-full w-full" mapRef={mapRef} attributionPosition="topright">
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         {upcomingEvents.map((event) => (
@@ -475,8 +492,8 @@ export function CyprusEventsMap({
           />
         ))}
       </BaseMap>
-      {isLoading && <CyprusMapLoading className="pointer-events-none absolute inset-0 z-[900]" />}
-      {!panel && !activeSelected && !selectedSocial && (
+      {mapLoading && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
+      {!mapLoading && !panel && !activeSelected && !selectedSocial && (
         <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
           <button
             type="button"
@@ -508,7 +525,7 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && !isLoading && !loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
+      {!error && !mapLoading && !loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
         && upcomingEvents.length === 0 && activeSocialEvents.length === 0 && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t('cyprus_map.empty')}
