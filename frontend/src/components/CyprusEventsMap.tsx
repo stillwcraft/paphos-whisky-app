@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref, type SetStateAction } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
-import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { AttributionControl, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import { useTranslation } from 'react-i18next';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -85,10 +85,11 @@ function useAutoDismissError(message: string | null, setMessage: Dispatch<SetSta
   }, [message, setMessage, enabled]);
 }
 
-function BaseMap({ children, className, mapRef }: {
+function BaseMap({ children, className, mapRef, attributionPosition = 'bottomright' }: {
   children: ReactNode;
   className: string;
   mapRef?: Ref<LeafletMap>;
+  attributionPosition?: 'topright' | 'bottomright';
 }) {
   return (
     <MapContainer
@@ -100,9 +101,11 @@ function BaseMap({ children, className, mapRef }: {
       maxBounds={CYPRUS_MAP_BOUNDS}
       scrollWheelZoom
       zoomControl={false}
+      attributionControl={false}
       className={className}
     >
       <ResizeMap />
+      <AttributionControl position={attributionPosition} />
       <TileLayer
         attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
@@ -450,7 +453,7 @@ export function CyprusEventsMap({
 
   return (
     <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')}>
-      <BaseMap className="h-full w-full" mapRef={mapRef}>
+      <BaseMap className="cyprus-events-map h-full w-full" mapRef={mapRef} attributionPosition="topright">
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         {upcomingEvents.map((event) => (
           <Marker

@@ -45,6 +45,10 @@ body {
   margin: 0;
 }
 
+.cyprus-events-map .leaflet-top.leaflet-right {
+  top: env(safe-area-inset-top);
+}
+
 .markdown-content strong,
 .markdown-content b {
   color: #fff;
