@@ -238,6 +238,8 @@
     "cancel_reservation": "Cancel reservation"
   },
   "profile": {
+    "screens": "Profile screens",
+    "whisky_journey": "Whisky journey",
     "default_name": "Whisky Club Member",
     "telegram_user": "Telegram user",
     "avatar": "Avatar",

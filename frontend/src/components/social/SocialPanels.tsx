@@ -58,7 +58,7 @@ export function SocialProfilePanel({
   tagRequests,
   busy,
   error,
-  onClose,
+  notice,
   onSave,
   onInvite,
   onAccept,
@@ -71,7 +71,7 @@ export function SocialProfilePanel({
   tagRequests: TagRequest[];
   busy: boolean;
   error: string | null;
-  onClose: () => void;
+  notice: string | null;
   onSave: (name: string, avatar: File | null) => void;
   onInvite: (telegramId: number) => void;
   onAccept: (requestId: number) => void;
@@ -94,10 +94,9 @@ export function SocialProfilePanel({
   };
 
   return (
-    <aside className="absolute inset-x-3 bottom-3 top-[calc(1rem+env(safe-area-inset-top))] z-[1100] mx-auto max-w-md space-y-5 overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-4 text-sm text-white shadow-2xl">
-      <header className="flex items-center justify-between">
+    <section className="h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-4 text-sm text-white shadow-2xl">
+      <header className="mb-5 flex items-center justify-between">
         <h2 className="font-serif text-xl text-[#FFE28A]">{t('social.profile')}</h2>
-        <button type="button" onClick={onClose} aria-label={t('social.close')} className="text-2xl text-[#C5A059]">×</button>
       </header>
       <form onSubmit={save} className="space-y-3">
         {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="h-16 w-16 rounded-full object-cover" />}
@@ -120,7 +119,7 @@ export function SocialProfilePanel({
         {profile?.verified && <p className="text-[#C5A059]">✓ {t('social.verified')}</p>}
         <button type="submit" disabled={busy} className={actionStyle}>{t('social.save_profile')}</button>
       </form>
-      <section className="space-y-2 border-t border-[#C5A059]/20 pt-4">
+      <section className="mt-5 space-y-2 border-t border-[#C5A059]/20 pt-4">
         <h3 className="font-serif text-[#FFE28A]">{t('social.friends')}</h3>
         {profile && (
           <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
@@ -145,7 +144,7 @@ export function SocialProfilePanel({
         ))}
       </section>
       {tagRequests.length > 0 && (
-        <section className="space-y-2 border-t border-[#C5A059]/20 pt-4">
+        <section className="mt-5 space-y-2 border-t border-[#C5A059]/20 pt-4">
           <h3 className="font-serif text-[#FFE28A]">{t('social.tag_requests')}</h3>
           {tagRequests.map((request) => (
             <div key={request.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#1A1A1E] p-2">
@@ -156,8 +155,9 @@ export function SocialProfilePanel({
           ))}
         </section>
       )}
+      {notice && <p role="status" className="mt-4 text-[#FFE28A]">{notice}</p>}
       {(avatarError || copyError || error) && <p role="alert" className="text-red-300">{avatarError || copyError || error}</p>}
-    </aside>
+    </section>
   );
 }
 

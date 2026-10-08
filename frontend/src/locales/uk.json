@@ -240,6 +240,8 @@
     "cancel_reservation": "Скасувати резервування"
   },
   "profile": {
+    "screens": "Екрани профілю",
+    "whisky_journey": "Віскі-подорож",
     "default_name": "Учасник Whisky Club",
     "telegram_user": "Користувач Telegram",
     "avatar": "Аватар",

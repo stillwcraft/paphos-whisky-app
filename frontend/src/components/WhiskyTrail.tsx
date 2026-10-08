@@ -5,11 +5,9 @@ import { localizedApiUrl } from '@/localization.ts';
 import { publicUrl } from '@/helpers/publicUrl.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
-const CARD_WIDTH = 360;
-const CARD_HEIGHT = 520;
 const NODE_SPACING = 120;
 const TRAIL_EXTENSION = 60;
-const CENTER_X = CARD_WIDTH / 2;
+const TRAIL_X = 64;
 const trailTranslations = {
   en: { attended: 'Attended', missed: 'Missed', reserve: 'Reserve', tastedBottles: 'Tasted bottles' },
   ru: { attended: 'Был', missed: 'Пропущено', reserve: 'Забронировать', tastedBottles: 'Продегустировано бутылок' },
@@ -171,6 +169,7 @@ export function WhiskyTrail({
   firstName?: string;
 }) {
   const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
+  const cardRef = useRef<HTMLElement | null>(null);
   const [trail, setTrail] = useState<WhiskyTrailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<EventNode | null>(null);
@@ -211,7 +210,7 @@ export function WhiskyTrail({
   }, [initDataRaw, language, telegramId]);
 
   const points = useMemo(() => trail?.nodes.map((node, index) => ({
-    x: node.type === 'milestone' ? CENTER_X : CENTER_X + (index % 2 === 0 ? 60 : -60),
+    x: node.type === 'milestone' ? TRAIL_X : TRAIL_X + (index % 2 === 0 ? 8 : -8),
     y: TRAIL_EXTENSION + index * NODE_SPACING,
   })) ?? [], [trail?.nodes]);
   const canvasHeight = Math.max(1, Math.max(0, points.length - 1) * NODE_SPACING + TRAIL_EXTENSION * 2);
@@ -237,14 +236,14 @@ export function WhiskyTrail({
   }, [canvasHeight, points]);
 
   useEffect(() => {
-    if (!focusedPoint || !transformRef.current) {
+    if (!focusedPoint || !transformRef.current || !cardRef.current) {
       return;
     }
 
     const frame = window.requestAnimationFrame(() => {
       transformRef.current?.setTransform(
-        CARD_WIDTH / 2 - CENTER_X,
-        CARD_HEIGHT / 2 - focusedPoint.y,
+        0,
+        (cardRef.current?.clientHeight ?? 0) / 2 - focusedPoint.y,
         1,
         0,
       );
@@ -304,12 +303,12 @@ export function WhiskyTrail({
   };
 
   if (error) {
-    return <p className="text-center text-sm text-red-300">{error}</p>;
+    return <p role="alert" className="flex h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full items-center justify-center rounded-2xl border border-[#C5A059]/30 bg-[#141417] p-8 text-center text-sm text-red-300">{error}</p>;
   }
 
   if (!trail || trail.status === 'empty') {
     return (
-      <article className="flex h-[520px] w-full max-w-sm items-center justify-center rounded-2xl border border-[#C5A059]/30 bg-[#141417] p-8 text-center shadow-2xl">
+      <article className="flex h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full items-center justify-center rounded-2xl border border-[#C5A059]/30 bg-[#141417] p-8 text-center shadow-2xl">
         <div className="flex h-32 w-32 flex-col items-center justify-center rounded-[2rem] border border-[#C5A059]/60 bg-[#C5A059]/10 text-[#C5A059] shadow-[0_0_32px_rgba(197,160,89,0.2)]">
           <span className="text-4xl">♜</span>
           <span className="mt-2 text-sm font-semibold">{trail?.message ?? 'Начало пути'}</span>
@@ -320,11 +319,11 @@ export function WhiskyTrail({
 
   return (
     <>
-      <article className="relative h-[520px] w-full max-w-sm overflow-hidden rounded-2xl border border-[#C5A059]/30 bg-[#141417] shadow-2xl">
-        <TransformWrapper ref={transformRef} centerOnInit={false} initialScale={1} limitToBounds maxScale={1.8} minScale={0.6} panning={{ excluded: ['button'] }} wheel={{ step: 0.15 }}>
-          <TransformComponent wrapperClass="!h-full !w-full" contentClass="!h-auto !w-auto">
-            <div className="relative" style={{ height: canvasHeight, width: CARD_WIDTH }}>
-              <svg aria-hidden="true" className="absolute inset-0 overflow-visible" height={canvasHeight} width={CARD_WIDTH}>
+      <article ref={cardRef} className="relative h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-hidden rounded-2xl border border-[#C5A059]/30 bg-[#141417] shadow-2xl">
+        <TransformWrapper ref={transformRef} centerOnInit={false} initialScale={1} limitToBounds maxScale={1.8} minScale={0.6} panning={{ excluded: ['button'], lockAxisX: true }} wheel={{ step: 0.15 }}>
+          <TransformComponent wrapperClass="!h-full !w-full" contentClass="!h-auto !w-full">
+            <div className="relative w-full" style={{ height: canvasHeight }}>
+              <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
                 <defs>
                   <linearGradient id="copperGradient" x1="0" x2="1" y1="0" y2="1">
                     <stop offset="0%" stopColor="#75451f" />
@@ -349,16 +348,15 @@ export function WhiskyTrail({
 
                 const isMissed = node.status === 'missed';
                 const isUpcoming = node.status === 'upcoming';
-                const labelOnLeft = point.x > CENTER_X;
                 return (
-                  <div key={node.id} className="absolute z-10" style={{ left: point.x, top: point.y }}>
-                    <button aria-label={node.title} className="group absolute -translate-x-1/2 -translate-y-1/2" onClick={() => void openNode(node)} type="button">
+                  <div key={node.id} className="absolute inset-x-0 z-10" style={{ top: point.y }}>
+                    <button aria-label={node.title} className="group absolute -translate-x-1/2 -translate-y-1/2" style={{ left: point.x }} onClick={() => void openNode(node)} type="button">
                       {isUpcoming && <span className="absolute inset-0 rounded-full border-2 border-[#C5A059] animate-ping" />}
                       <span className={`relative flex h-12 w-12 overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] ${isMissed ? '' : 'shadow-[0_0_16px_rgba(197,160,89,0.7)]'}`}>
                         {node.image_url ? <img alt="" className={`h-full w-full object-cover ${isMissed ? 'grayscale opacity-40' : ''}`} src={node.image_url} /> : <span className={`m-auto text-lg text-[#C5A059] ${isMissed ? 'opacity-40 grayscale' : ''}`}>🥃</span>}
                       </span>
                     </button>
-                    <div className={`pointer-events-none absolute top-1/2 w-36 -translate-y-1/2 ${labelOnLeft ? 'right-9 text-right' : 'left-9 text-left'}`}>
+                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-left" style={{ left: point.x + 36 }}>
                       <p className={`text-sm font-semibold leading-tight ${isMissed ? 'text-slate-500' : 'text-white'}`}>{node.title}</p>
                       <p className="mt-1 text-[11px] text-slate-400">{formatEventDate(node.date, language)}</p>
                       {isMissed ? <span className="mt-1 inline-block rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">{trailText.missed}</span> : isUpcoming ? <span className="mt-1 inline-block rounded-full bg-[#C5A059]/20 px-2 py-0.5 text-[10px] text-[#e4c47f]">{trailText.reserve}</span> : <span className="mt-1 inline-block rounded-full bg-[#C5A059]/15 px-2 py-0.5 text-[10px] text-[#C5A059]">{trailText.attended} · {node.bottles_count}</span>}

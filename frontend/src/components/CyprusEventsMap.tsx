@@ -10,7 +10,7 @@ import { localizedApiUrl } from '@/localization.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
-import { SocialAgeGate, SocialChatPanel, SocialProfilePanel, SocialReportsPanel, type ChatMessage, type FriendRequest, type JoinRequest, type Report, type TagRequest } from './social/SocialPanels.tsx';
+import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, type JoinRequest, type Report } from './social/SocialPanels.tsx';
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
@@ -103,11 +103,9 @@ export function CyprusEventsMap({
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
-  const [panel, setPanel] = useState<'age' | 'create' | 'profile' | 'chat' | 'reports' | null>(null);
+  const [panel, setPanel] = useState<'age' | 'create' | 'chat' | 'reports' | null>(null);
   const [friends, setFriends] = useState<SocialProfile[]>([]);
   const [profile, setProfile] = useState<SocialProfile | null>(null);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
-  const [tagRequests, setTagRequests] = useState<TagRequest[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
@@ -222,20 +220,6 @@ export function CyprusEventsMap({
       busyRef.current = false;
       setBusy(false);
     }
-  };
-
-  const openProfile = () => {
-    if (!api) { setSocialError(t('social.auth_required')); return; }
-    void run(async () => {
-      const [me, contacts, requests, tags] = await Promise.all([
-        api.profile(), api.friends(), api.friendRequests(), api.tagRequests(),
-      ]);
-      setProfile(me);
-      setFriends(contacts);
-      setFriendRequests(requests);
-      setTagRequests(tags);
-      setPanel('profile');
-    });
   };
 
   const openCreate = () => {
@@ -356,7 +340,6 @@ export function CyprusEventsMap({
       <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000] flex justify-end">
         <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
           <button type="button" disabled={busy} onClick={openCreate} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.create')}</button>
-          <button type="button" disabled={busy} onClick={openProfile} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.profile')}</button>
         </div>
       </div>
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
@@ -412,42 +395,6 @@ export function CyprusEventsMap({
             if (Object.values(created.notifications).some((status) => status !== 'sent')) {
               setSocialNotice(t('social.notification_failed'));
             }
-          })}
-        />
-      )}
-      {panel === 'profile' && api && (
-        <SocialProfilePanel
-          profile={profile}
-          friends={friends}
-          requests={friendRequests}
-          tagRequests={tagRequests}
-          busy={busy}
-          error={socialError}
-          onClose={() => { setPanel(null); setSocialError(null); }}
-          onSave={(name, avatar) => void run(async () => {
-            const key = avatar ? await api.upload(avatar, 'avatar') : null;
-            setProfile(await api.updateProfile(name, profile?.age ?? null, key));
-            await reloadSocial();
-          })}
-          onInvite={(id) => void run(async () => {
-            const result = await api.invite(id);
-            setSocialNotice(t(result.notification_status === 'sent' ? 'social.friend_invited' : 'social.friend_notification_failed'));
-          })}
-          onAccept={(id) => void run(async () => {
-            await api.acceptFriend(id);
-            const [contacts, requests] = await Promise.all([api.friends(), api.friendRequests()]);
-            setFriends(contacts);
-            setFriendRequests(requests);
-          })}
-          onAcceptTag={(id) => void run(async () => {
-            await api.acceptTag(id);
-            setTagRequests(await api.tagRequests());
-            await reloadSocial();
-          })}
-          onDeclineTag={(id) => void run(async () => {
-            await api.declineTag(id);
-            setTagRequests(await api.tagRequests());
-            await reloadSocial();
           })}
         />
       )}
