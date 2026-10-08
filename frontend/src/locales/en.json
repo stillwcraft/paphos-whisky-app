@@ -55,6 +55,8 @@
     "global_admin_only": "Only administrators can create global events.",
     "global_end": "End time",
     "image_number": "Image #{{number}}",
+    "expand_image": "Expand image #{{number}}",
+    "collapse_image": "Collapse image #{{number}}",
     "place": "Meeting place",
     "description": "Description (up to 400 characters)",
     "photo": "Event photo",

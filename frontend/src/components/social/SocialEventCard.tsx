@@ -139,7 +139,7 @@ export function SocialEventCard({
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {isGlobal && event.image_urls.length > 0
-          ? <SocialImageCarousel images={event.image_urls} alt={event.location} className="aspect-[3/4] max-h-[60dvh]" />
+          ? <SocialImageCarousel key={event.id} images={event.image_urls} alt={event.location} className="aspect-[3/4] max-h-[60dvh]" expandable />
           : <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full object-cover" />}
         <div className="space-y-3 p-4 text-sm">
           <div className="flex items-center gap-2">
