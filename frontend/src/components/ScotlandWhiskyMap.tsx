@@ -141,7 +141,8 @@ export function ScotlandWhiskyMap({
     if (event.type === 'dblclick' || event.type === 'touchend') {
       return false;
     }
-    return event.type === 'touchstart'
+    return event.type === 'wheel'
+      || event.type === 'touchstart'
       || (event instanceof MouseEvent
         && event.type === 'mousedown'
         && !event.ctrlKey

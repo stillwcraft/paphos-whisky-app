@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref, type SetStateAction } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
@@ -65,6 +65,14 @@ function DismissSelectedOnMapClick({ onClick }: { onClick: () => void }) {
   return null;
 }
 
+function useAutoDismissError(message: string | null, setMessage: Dispatch<SetStateAction<string | null>>, enabled = true) {
+  useEffect(() => {
+    if (!message || !enabled) return;
+    const timeout = window.setTimeout(() => setMessage(null), 3000);
+    return () => window.clearTimeout(timeout);
+  }, [message, setMessage, enabled]);
+}
+
 function BaseMap({ children, className, mapRef }: {
   children: ReactNode;
   className: string;
@@ -78,7 +86,7 @@ function BaseMap({ children, className, mapRef }: {
       minZoom={7}
       maxZoom={18}
       maxBounds={CYPRUS_MAP_BOUNDS}
-      scrollWheelZoom={false}
+      scrollWheelZoom
       zoomControl={false}
       className={className}
     >
@@ -113,6 +121,7 @@ export function CyprusEventsMap({
   const [events, setEvents] = useState<PositionedEvent[]>([]);
   const [socialEvents, setSocialEvents] = useState<SocialEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
   const [panel, setPanel] = useState<'age' | 'create' | 'chat' | 'reports' | null>(null);
@@ -134,6 +143,11 @@ export function CyprusEventsMap({
   const chatCursor = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
+
+  useAutoDismissError(error, setError);
+  useAutoDismissError(linkError, setLinkError);
+  useAutoDismissError(locationError, setLocationError);
+  useAutoDismissError(socialError, setSocialError, panel === null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -262,12 +276,6 @@ export function CyprusEventsMap({
     return () => { active = false; };
   }, [api, openReports, isAdmin, onReportsHandled, t]);
 
-  useEffect(() => {
-    if (!linkError) return;
-    const timeout = window.setTimeout(() => setLinkError(null), 5000);
-    return () => window.clearTimeout(timeout);
-  }, [linkError]);
-
   const run = async (action: () => Promise<void>) => {
     if (busyRef.current) return false;
     busyRef.current = true;
@@ -370,9 +378,11 @@ export function CyprusEventsMap({
         }
         setEvents(items.filter(hasPosition));
         setError(null);
+        setLoadFailed(false);
       } catch (reason) {
         if (controller.signal.aborted) return;
         setError(reason instanceof Error ? reason.message : t('cyprus_map.load_error'));
+        setLoadFailed(true);
       } finally {
         if (!controller.signal.aborted) setIsLoading(false);
       }
@@ -434,7 +444,7 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || (events.length === 0 && socialEvents.length === 0)) && (
+      {!error && (isLoading || (!loadFailed && events.length === 0 && socialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
