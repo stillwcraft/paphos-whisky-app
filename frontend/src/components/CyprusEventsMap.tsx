@@ -488,7 +488,7 @@ export function CyprusEventsMap({
         </button>
       )}
       {selectedSocial && !panel && (
-        <div className="absolute bottom-4 left-3 right-3 top-[calc(7rem+env(safe-area-inset-top))] z-[1100] mx-auto flex max-w-md flex-col justify-end">
+        <div className="absolute bottom-4 left-3 right-3 top-[calc(1rem+env(safe-area-inset-top))] z-[1100] mx-auto flex max-w-md flex-col">
           <SocialEventCard
             event={selectedSocial}
             busy={busy}

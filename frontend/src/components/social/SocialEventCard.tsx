@@ -94,7 +94,7 @@ export function SocialEventCard({
   const duration = durationSeconds === 3600 ? '1h' : durationSeconds === 10800 ? '3h' : 'evening';
 
   return (
-    <article className="pointer-events-auto flex max-h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
+    <article className="pointer-events-auto flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
       <header className="flex shrink-0 items-center gap-2 border-b border-[#C5A059]/20 p-4">
         <span className="text-2xl" aria-hidden="true">{drinkIcons[event.drink]}</span>
         <h2 className="min-w-0 flex-1 truncate font-serif text-lg text-[#FFE28A]">{event.location}</h2>
@@ -103,8 +103,8 @@ export function SocialEventCard({
         </span>
         <button type="button" onClick={onClose} className="ml-1 text-xl text-slate-300" aria-label={t('social.close')}>×</button>
       </header>
-      <div className="min-h-0 overflow-y-auto overscroll-contain">
-        <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full bg-[#0D0D10] object-contain" />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <img src={event.photo_url} alt={event.location} className="aspect-[3/4] max-h-[60dvh] w-full object-cover" />
         <div className="space-y-3 p-4 text-sm">
           <div className="flex items-center gap-2">
             {event.owner ? <Avatar profile={event.owner} /> : (
