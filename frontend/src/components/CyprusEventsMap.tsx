@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import { DivIcon, Icon, type LatLngTuple } from 'leaflet';
+import { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import { useTranslation } from 'react-i18next';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -15,6 +15,8 @@ import { SocialApi, SocialApiError } from './social/socialApi.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
+const CYPRUS_MAP_BOUNDS = latLngBounds([34.15, 31.8], [36.0, 34.9]);
+const CYPRUS_LOCATION_BOUNDS = latLngBounds([34.55, 32.25], [35.75, 34.65]);
 const PAGE_SIZE = 100;
 const eventIcon = new Icon({
   iconUrl: markerIcon,
@@ -58,14 +60,24 @@ function ResizeMap() {
   return null;
 }
 
-function BaseMap({ children, className }: { children: ReactNode; className: string }) {
+function DismissSelectedOnMapClick({ onClick }: { onClick: () => void }) {
+  useMapEvents({ click: onClick });
+  return null;
+}
+
+function BaseMap({ children, className, mapRef }: {
+  children: ReactNode;
+  className: string;
+  mapRef?: Ref<LeafletMap>;
+}) {
   return (
     <MapContainer
+      ref={mapRef}
       center={CYPRUS_CENTER}
       zoom={8}
       minZoom={7}
       maxZoom={18}
-      maxBounds={[[34.15, 31.8], [36.0, 34.9]]}
+      maxBounds={CYPRUS_MAP_BOUNDS}
       scrollWheelZoom={false}
       zoomControl={false}
       className={className}
@@ -114,9 +126,61 @@ export function CyprusEventsMap({
   const [socialNotice, setSocialNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
+  const mapRef = useRef<LeafletMap>(null);
+  const locatingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const chatCursor = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const centerOnUser = () => {
+    setLocationError(null);
+    if (!navigator.geolocation) {
+      setLocationError(t('cyprus_map.location_unsupported'));
+      mapRef.current?.flyTo(CYPRUS_CENTER, 8);
+      return;
+    }
+    if (locatingRef.current) return;
+    locatingRef.current = true;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        if (!mountedRef.current) return;
+        locatingRef.current = false;
+        setLocating(false);
+        if (!mapRef.current) {
+          setLocationError(t('cyprus_map.location_unavailable'));
+          return;
+        }
+        if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)
+          || !CYPRUS_LOCATION_BOUNDS.contains([coords.latitude, coords.longitude])) {
+          mapRef.current.flyTo(CYPRUS_CENTER, 8);
+          setLocationError(t('cyprus_map.location_outside'));
+          return;
+        }
+        mapRef.current.flyTo([coords.latitude, coords.longitude], 14);
+      },
+      (reason) => {
+        if (!mountedRef.current) return;
+        locatingRef.current = false;
+        setLocating(false);
+        mapRef.current?.flyTo(CYPRUS_CENTER, 8);
+        setLocationError(t(reason.code === reason.PERMISSION_DENIED
+          ? 'cyprus_map.location_denied'
+          : reason.code === reason.TIMEOUT
+            ? 'cyprus_map.location_timeout'
+            : 'cyprus_map.location_unavailable'));
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  };
 
   const reloadSocial = useCallback(async () => {
     if (!api) return;
@@ -319,7 +383,8 @@ export function CyprusEventsMap({
 
   return (
     <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')}>
-      <BaseMap className="h-full w-full">
+      <BaseMap className="h-full w-full" mapRef={mapRef}>
+        <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         {events.map((event) => (
           <Marker
             key={event.id}
@@ -337,18 +402,44 @@ export function CyprusEventsMap({
           />
         ))}
       </BaseMap>
-      <div className="pointer-events-none absolute left-4 right-4 top-[calc(1rem+env(safe-area-inset-top))] z-[1000] flex justify-end">
-        <div className="pointer-events-auto flex flex-wrap justify-end gap-1">
-          <button type="button" disabled={busy} onClick={openCreate} className="rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-2 py-2 text-xs text-[#C5A059]">{t('social.create')}</button>
+      {!panel && !selected && !selectedSocial && (
+        <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
+          <button
+            type="button"
+            aria-label={t('cyprus_map.my_location')}
+            title={t('cyprus_map.my_location')}
+            aria-busy={locating}
+            disabled={locating}
+            onClick={centerOnUser}
+            className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+          >
+            <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="7" />
+              <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+              <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label={t('social.create')}
+            title={t('social.create')}
+            disabled={busy}
+            onClick={openCreate}
+            className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+          >
+            <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
         </div>
-      </div>
+      )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
       {!error && (isLoading || (events.length === 0 && socialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
       )}
-      {(linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{linkError || socialError}</p>}
+      {(locationError || linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{locationError || linkError || socialError}</p>}
       {socialNotice && <p role="status" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl border border-[#C5A059]/40 bg-[#141417] p-3 text-sm text-[#FFE28A]">{socialNotice}</p>}
       {selected && !panel && (
         <button
