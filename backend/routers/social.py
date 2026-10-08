@@ -11,8 +11,9 @@ from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.exceptions import RequestValidationError
 from PIL import Image, UnidentifiedImageError
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 from sqlalchemy import and_, exists, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -281,16 +282,36 @@ class EventCreate(BaseModel):
     tagged_friend_ids: list[int] = Field(default_factory=list, max_length=30)
 
 
-class GlobalEventCreate(BaseModel):
+class ScheduledEventFields(BaseModel):
     location: str = Field(min_length=1, max_length=150)
     description: str = Field(min_length=1, max_length=5000)
     latitude: float = Field(ge=34, le=36)
     longitude: float = Field(ge=32, le=35)
     drink: Literal["beer", "wine", "spirits", "cocktails", "coffee"]
     visibility: Literal["public", "friends", "anonymous"]
-    image_urls: list[str] = Field(min_length=1, max_length=5)
     starts_at: datetime
     expires_at: datetime
+
+    @field_validator("starts_at", "expires_at", mode="before")
+    @classmethod
+    def iso_datetime_required(cls, value):
+        if not isinstance(value, str) or not re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})",
+            value,
+        ):
+            raise ValueError("An ISO datetime string with a timezone is required")
+        return value
+
+    @field_validator("starts_at", "expires_at")
+    @classmethod
+    def timezone_required(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("A timezone offset is required")
+        return value
+
+
+class GlobalEventCreate(ScheduledEventFields):
+    image_urls: list[str] = Field(min_length=1, max_length=5)
 
     @field_validator("image_urls")
     @classmethod
@@ -310,22 +331,23 @@ class GlobalEventCreate(BaseModel):
                 raise ValueError("Images must be valid HTTPS URLs")
         return urls
 
-    @field_validator("starts_at", "expires_at", mode="before")
+
+class RegularEventUpdate(ScheduledEventFields):
+    model_config = ConfigDict(extra="forbid")
+    description: str = Field(min_length=1, max_length=400)
+    capacity: Optional[int] = Field(ge=2, le=100)
+    photo_key: Optional[str] = Field(default=None, min_length=1, max_length=256)
+
+    @field_validator("photo_key", mode="before")
     @classmethod
-    def iso_datetime_required(cls, value):
-        if not isinstance(value, str) or not re.fullmatch(
-            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})",
-            value,
-        ):
-            raise ValueError("An ISO datetime string with a timezone is required")
+    def non_null_photo(cls, value):
+        if value is None:
+            raise ValueError("Omit photo_key to keep the existing photo")
         return value
 
-    @field_validator("starts_at", "expires_at")
-    @classmethod
-    def timezone_required(cls, value):
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("A timezone offset is required")
-        return value
+
+class GlobalEventUpdate(GlobalEventCreate):
+    model_config = ConfigDict(extra="forbid")
 
 
 class Message(BaseModel):
@@ -746,6 +768,55 @@ def review_event(event_id: int, user=Depends(admin()), db: Session = Depends(get
     if not e:
         fail(404, "Event not found")
     return {**event_json(db, e, uid(user), moderator=True), "hidden": e.hidden}
+
+
+@router.put("/admin/events/{event_id}")
+def update_admin_event(event_id: int, data: dict, user=Depends(admin()), db: Session = Depends(get_db)):
+    if db.bind.dialect.name == "sqlite":
+        from sqlalchemy import text
+        db.execute(text("BEGIN IMMEDIATE"))
+    e = db.query(m.SocialEvent).filter_by(id=event_id).with_for_update().first()
+    if not e:
+        fail(404, "Event not found")
+    try:
+        update = (GlobalEventUpdate if e.event_type == "global" else RegularEventUpdate).model_validate(data)
+    except ValidationError as exc:
+        raise RequestValidationError([{"type": error["type"], "loc": ("body", *error["loc"]),
+                                       "msg": error["msg"], "input": error.get("input")}
+                                      for error in exc.errors()]) from exc
+    if update.expires_at <= now() or update.expires_at <= update.starts_at:
+        fail(422, "Event must expire in the future and after it starts")
+    if e.event_type == "regular":
+        if update.capacity is not None:
+            accepted = db.query(m.SocialJoinRequest).filter_by(event_id=e.id, status="accepted").count()
+            if update.capacity < accepted + 1:
+                fail(422, "Capacity cannot be less than accepted attendees and host")
+        if update.photo_key is not None and update.photo_key != e.photo_key:
+            media = db.query(m.SocialMedia).filter_by(key=update.photo_key).with_for_update().first()
+            if (not OPAQUE_MEDIA_KEY.fullmatch(update.photo_key)
+                    or not media or media.owner_id != uid(user) or media.kind != "event"):
+                fail(422, "Upload your event photo first")
+            if db.query(m.SocialEvent).filter_by(photo_key=update.photo_key).first():
+                fail(409, "Photo already used")
+            e.photo_key = update.photo_key
+        e.capacity = update.capacity
+    else:
+        e.image_urls = update.image_urls
+    for field in ("location", "description", "latitude", "longitude", "drink",
+                  "visibility", "starts_at", "expires_at"):
+        setattr(e, field, getattr(update, field))
+    commit(db)
+    return event_json(db, e, uid(user), moderator=True)
+
+
+@router.delete("/admin/events/{event_id}", status_code=204)
+def delete_admin_event(event_id: int, user=Depends(admin()), db: Session = Depends(get_db)):
+    e = db.get(m.SocialEvent, event_id)
+    if not e:
+        fail(404, "Event not found")
+    db.delete(e)
+    commit(db)
+    return Response(status_code=204)
 
 
 @router.post("/admin/events/{event_id}/hide")

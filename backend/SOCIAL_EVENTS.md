@@ -101,6 +101,23 @@ list/detail/chat/join/report/block routes for everyone, including the owner.
 moderator decisions. Signed URLs issued before hiding can remain usable until
 their short expiration; they cannot be individually revoked by Supabase Storage.
 
+`PUT /api/social/admin/events/{event_id}` replaces an existing regular or global
+social map event's editable fields and returns its updated event JSON. Supply
+`location`, `description`, `latitude`, `longitude`, `drink`, `visibility`, and
+timezone-aware ISO `starts_at` and `expires_at` (future expiry after start).
+Regular events additionally require `capacity` (`null` for unlimited; otherwise
+2–100 and no less than accepted attendees plus host), permit up to 400
+description characters, and optionally accept `photo_key`: omit it to retain
+the existing image, or supply a new unused event photo uploaded by the admin.
+Global events require `image_urls` (1–5 HTTPS URLs) and permit up to 5000
+description characters. The event owner and existing tags, joins, chat, reports,
+and cheers are not changed. Only the authenticated admin can edit events,
+including those owned by other users, regardless of the social feature flag.
+`DELETE /api/social/admin/events/{event_id}` hard-deletes either type and its
+related records and returns HTTP 204. Deleted or replaced regular photos become
+unreferenced uploads; the daily cleanup job removes them after their 24-hour
+upload-age threshold, not immediately at edit or deletion.
+
 ## Media retention
 
 Apply `migrations/023_social_media_retention.sql` before deploying this backend

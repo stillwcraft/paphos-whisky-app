@@ -10,7 +10,7 @@ import { localizedApiUrl } from '@/localization.ts';
 import { eventEndTime, isEventCurrentOrUpcoming } from '@/helpers/eventTime.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
-import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
+import { SocialEventForm, type SocialEventDraft, type SocialEventUpdateDraft } from './social/SocialEventForms.tsx';
 import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, type JoinRequest, type Report } from './social/SocialPanels.tsx';
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 
@@ -142,7 +142,7 @@ export function CyprusEventsMap({
   const [socialResponseEmpty, setSocialResponseEmpty] = useState(false);
   const [selected, setSelected] = useState<PositionedEvent | null>(null);
   const [selectedSocialId, setSelectedSocialId] = useState<number | null>(null);
-  const [panel, setPanel] = useState<'age' | 'create' | 'chat' | 'reports' | null>(null);
+  const [panel, setPanel] = useState<'age' | 'create' | 'edit' | 'chat' | 'reports' | null>(null);
   const [friends, setFriends] = useState<SocialProfile[]>([]);
   const [profile, setProfile] = useState<SocialProfile | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -541,11 +541,20 @@ export function CyprusEventsMap({
             onChat={() => openChat(selectedSocial)}
             onReport={(reason) => { if (api) void run(async () => { await api.report(selectedSocial.id, reason); setSocialNotice(t('social.report_sent')); }); }}
             onBlock={() => { if (api) void run(async () => { await api.blockEvent(selectedSocial.id); setSelectedSocialId(null); await reloadSocial(); }); }}
+            canManage={isAdmin}
+            onEdit={() => { setSocialError(null); setPanel('edit'); }}
+            onDelete={() => { if (api) void run(async () => {
+              await api.deleteEvent(selectedSocial.id);
+              setSocialEvents((current) => current.filter((event) => event.id !== selectedSocial.id));
+              setSelectedSocialId(null);
+            }); }}
           />
         </div>
       )}
-      {panel === 'create' && api && (
+      {(panel === 'create' || (panel === 'edit' && selectedSocial)) && api && (
         <SocialEventForm
+          key={panel === 'edit' ? `edit-${selectedSocial?.id}` : 'create'}
+          editingEvent={panel === 'edit' ? selectedSocial : undefined}
           friends={friends}
           isAdmin={isAdmin}
           LocationPicker={EventLocationPicker}
@@ -564,6 +573,13 @@ export function CyprusEventsMap({
               }
             }
             await reloadSocial();
+            setPanel(null);
+          })}
+          onUpdate={(draft: SocialEventUpdateDraft, photo?: File) => void run(async () => {
+            if (!selectedSocial) throw new Error(t('cyprus_map.load_error'));
+            const photoKey = photo ? await api.upload(photo, 'event') : undefined;
+            const updated = await api.updateEvent(selectedSocial.id, draft, photoKey);
+            setSocialEvents((current) => current.map((event) => event.id === updated.id ? updated : event));
             setPanel(null);
           })}
         />

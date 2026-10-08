@@ -1,6 +1,6 @@
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import type { SocialEvent, SocialProfile } from './SocialEventCard.tsx';
-import type { GlobalEventDraft, RegularEventDraft } from './SocialEventForms.tsx';
+import type { GlobalEventDraft, RegularEventDraft, SocialEventUpdateDraft } from './SocialEventForms.tsx';
 import type { ChatMessage, FriendRequest, JoinRequest, Report, TagRequest } from './SocialPanels.tsx';
 import { compressSocialImage } from './compressImage.ts';
 
@@ -71,6 +71,23 @@ export class SocialApi {
       expires_at: draft.expires_at,
     });
   }
+  updateEvent(id: number, draft: SocialEventUpdateDraft, photoKey?: string) {
+    return this.request<SocialEvent>(`/admin/events/${id}`, 'PUT', {
+      location: draft.title,
+      description: draft.description,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      drink: draft.drink,
+      visibility: draft.visibility,
+      starts_at: draft.starts_at,
+      expires_at: draft.expires_at,
+      ...(draft.event_type === 'global' ? { image_urls: draft.image_urls } : {
+        capacity: draft.capacity,
+        ...(photoKey ? { photo_key: photoKey } : {}),
+      }),
+    });
+  }
+  deleteEvent(id: number) { return this.request<void>(`/admin/events/${id}`, 'DELETE'); }
   cheer(id: number) { return this.request<SocialEvent>(`/events/${id}/cheer`, 'POST'); }
   join(id: number) { return this.request<{ id: number; status: string; notification_status: DeliveryStatus }>(`/events/${id}/join`, 'POST'); }
   report(id: number, reason: 'spam' | 'inappropriate' | 'false_location') {

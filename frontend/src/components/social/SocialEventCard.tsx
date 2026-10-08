@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SocialImageCarousel } from './SocialImageCarousel.tsx';
 
@@ -80,6 +80,9 @@ export function SocialEventCard({
   onChat,
   onReport,
   onBlock,
+  canManage,
+  onEdit,
+  onDelete,
 }: {
   event: SocialEvent;
   busy: boolean;
@@ -90,12 +93,21 @@ export function SocialEventCard({
   onChat: () => void;
   onReport: (reason: 'spam' | 'inappropriate' | 'false_location') => void;
   onBlock: () => void;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const isGlobal = event.event_type === 'global';
   const [now, setNow] = useState(Date.now());
   const [showReport, setShowReport] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null);
+  const closeDeleteConfirm = () => {
+    setShowDeleteConfirm(false);
+    deleteTriggerRef.current?.focus();
+  };
   useEffect(() => {
     if (isGlobal) return;
     const interval = window.setInterval(() => setNow(Date.now()), 1000);
@@ -113,10 +125,10 @@ export function SocialEventCard({
   const participants = event.attendees.filter((person) => person.telegram_id !== event.owner?.telegram_id);
   const full = event.capacity !== null && event.attendee_count >= event.capacity;
   const durationSeconds = Math.round((new Date(event.expires_at).getTime() - new Date(event.starts_at).getTime()) / 1000);
-  const duration = durationSeconds === 3600 ? '1h' : durationSeconds === 10800 ? '3h' : 'evening';
+  const duration = durationSeconds === 3600 ? '1h' : durationSeconds === 10800 ? '3h' : null;
 
   return (
-    <article className="pointer-events-auto flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
+    <article className="pointer-events-auto relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-2xl border border-[#C5A059]/40 bg-[#141417] text-[#F4F4F5] shadow-2xl">
       <header className="flex shrink-0 items-center gap-2 border-b border-[#C5A059]/20 p-4">
         {!isGlobal && <span className="text-2xl" aria-hidden="true">{drinkIcons[event.drink]}</span>}
         <h2 className="min-w-0 flex-1 truncate font-serif text-lg text-[#FFE28A]">{event.location}</h2>
@@ -144,14 +156,14 @@ export function SocialEventCard({
                 : t('social.already_here')}
             </span>}
           </div>
-          {isGlobal && (
+          {(isGlobal || duration === null) && (
             <p className="text-xs text-slate-300">
               {t('social.start')}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.starts_at))}<br />
               {t('social.global_end')}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.expires_at))}
             </p>
           )}
           {isGlobal ? <Description text={event.description} /> : <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>}
-          {!isGlobal && <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>}
+          {!isGlobal && duration && <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>}
           <p className="text-xs text-slate-400">{t(`social.visibility_${event.visibility}`)}</p>
           {!isGlobal && event.tagged_friends.length > 0 && (
             <p className="text-slate-300">{t('social.drinking_with')}: {event.tagged_friends.map((friend) => friend.display_name).join(', ')}</p>
@@ -200,7 +212,39 @@ export function SocialEventCard({
             <button type="button" onClick={() => { setShowBlock(!showBlock); setShowReport(false); }}>{t('social.block')}</button>
           </div>
         )}
+        {canManage && (
+          <div className="grid grid-cols-2 gap-2 border-t border-[#C5A059]/20 pt-3">
+            <button type="button" disabled={busy} onClick={onEdit} className="rounded-xl border border-[#C5A059]/40 p-2 text-[#C5A059] disabled:opacity-50">{t('social.edit_event')}</button>
+            <button ref={deleteTriggerRef} type="button" disabled={busy} onClick={() => setShowDeleteConfirm(true)} className="rounded-xl border border-red-400/40 p-2 text-red-400 disabled:opacity-50">{t('social.delete_event')}</button>
+          </div>
+        )}
       </footer>
+      {showDeleteConfirm && (
+        <div role="alertdialog" aria-modal="true" aria-labelledby="delete-event-title" aria-describedby="delete-event-description" className="absolute inset-0 z-10 flex items-center justify-center bg-[#0A0A0B]/85 p-4" onKeyDown={(event) => {
+          if (event.key === 'Escape' && !busy) closeDeleteConfirm();
+          if (event.key === 'Tab') {
+            const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
+            if (!buttons.length) {
+              event.preventDefault();
+            } else if (event.shiftKey && document.activeElement === buttons[0]) {
+              event.preventDefault();
+              buttons[buttons.length - 1].focus();
+            } else if (!event.shiftKey && document.activeElement === buttons[buttons.length - 1]) {
+              event.preventDefault();
+              buttons[0].focus();
+            }
+          }
+        }}>
+          <div className="w-full rounded-2xl border border-[#C5A059]/40 bg-[#1A1A1E] p-5 shadow-2xl">
+            <h3 id="delete-event-title" className="font-serif text-lg text-[#FFE28A]">{t('social.delete_event')}</h3>
+            <p id="delete-event-description" className="mt-3 text-sm text-slate-200">{t('social.delete_event_confirm')}</p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button type="button" autoFocus disabled={busy} onClick={closeDeleteConfirm} className="rounded-xl border border-[#C5A059]/40 px-3 py-2 text-[#C5A059] disabled:opacity-50">{t('common.cancel')}</button>
+              <button type="button" disabled={busy} onClick={onDelete} className="rounded-xl border border-red-400/50 px-3 py-2 text-red-300 disabled:opacity-50">{t('social.delete_event')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

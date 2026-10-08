@@ -8,7 +8,7 @@ from uuid import uuid4
 os.environ["DATABASE_URL"] = "sqlite://"
 from fastapi.testclient import TestClient
 from PIL import Image
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event as sqlalchemy_event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -27,6 +27,9 @@ class SocialTest(unittest.TestCase):
         self.notify_mock = patch.object(social, "notify", return_value="not_configured")
         self.notify_client = self.notify_mock.start()
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        @sqlalchemy_event.listens_for(self.engine, "connect")
+        def enable_foreign_keys(connection, record):
+            connection.execute("PRAGMA foreign_keys=ON")
         models.Base.metadata.create_all(self.engine)
         self.Session = sessionmaker(bind=self.engine, autoflush=False)
         def db_override():
@@ -89,6 +92,172 @@ class SocialTest(unittest.TestCase):
             "expires_at": (start + timedelta(hours=3)).isoformat(),
             **updates,
         }
+
+    def regular_update(self, **updates):
+        return {
+            **{k: v for k, v in self.global_payload().items() if k != "image_urls"},
+            "capacity": 3, **updates,
+        }
+
+    def test_admin_updates_regular_event_without_changing_owner_or_relations(self):
+        invite = self.request("POST", "/friend-requests", json={"telegram_id": 2}).json()["id"]
+        self.actor = 2
+        self.request("POST", f"/friend-requests/{invite}/accept")
+        self.actor = 1
+        event_id = self.create(capacity=2, tagged=[2])
+        original_key = self.request("GET", f"/admin/events/{event_id}").status_code
+        self.assertEqual(original_key, 403)
+        self.actor = 2
+        self.request("POST", f"/events/{event_id}/tags/accept")
+        join_id = self.request("POST", f"/events/{event_id}/join").json()["id"]
+        self.actor = 1
+        self.request("POST", f"/events/{event_id}/join-requests/{join_id}/accept")
+        self.request("POST", f"/events/{event_id}/chat", json={"body": "Hello"})
+        self.actor = 4
+        with self.Session() as db:
+            original_photo = db.get(models.SocialEvent, event_id).photo_key
+        payload = self.regular_update(description="Updated", visibility="anonymous", capacity=2)
+        with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
+            response = self.request("PUT", f"/admin/events/{event_id}", json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["description"], "Updated")
+        self.assertEqual(response.json()["attendee_count"], 2)
+        self.assertEqual(response.json()["tagged_friends"][0]["telegram_id"], 2)
+        self.assertEqual(response.json()["owner"]["telegram_id"], 1)
+        self.assertEqual(response.json()["photo_url"], "https://example.test/signed-image")
+        with self.Session() as db:
+            row = db.get(models.SocialEvent, event_id)
+            self.assertEqual(row.photo_key, original_photo)
+            self.assertEqual(row.owner_id, 1)
+            self.assertEqual(row.capacity, 2)
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{event_id}/chat").json()[0]["body"], "Hello")
+        self.actor = 4
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(
+            photo_key=original_photo, capacity=None)).status_code, 200)
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(
+            description="a" * 400)).status_code, 200)
+        replacement = self.uploaded_photo()
+        replaced = self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(
+            photo_key=replacement))
+        self.assertEqual(replaced.status_code, 200, replaced.text)
+        with self.Session() as db:
+            self.assertEqual(db.get(models.SocialEvent, event_id).photo_key, replacement)
+            self.assertIsNotNone(db.get(models.SocialMedia, original_photo))
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(
+            photo_key=original_photo)).status_code, 422)
+
+    def test_admin_updates_global_event_and_rejects_invalid_replacements(self):
+        self.actor = 4
+        event_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        valid = self.global_payload(description="Changed", image_urls=["https://images.example.test/new.jpg"])
+        response = self.request("PUT", f"/admin/events/{event_id}", json=valid)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["photo_url"], valid["image_urls"][0])
+        self.assertEqual(response.json()["description"], "Changed")
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json={
+            **valid, "description": "a" * 5000,
+        }).status_code, 200)
+        invalid = [
+            {"image_urls": []}, {"image_urls": ["https://images.example.test/a"] * 6},
+            {"image_urls": ["http://images.example.test/a"]},
+            {"starts_at": "2026-10-01T12:00:00"},
+            {"expires_at": (social.now() - timedelta(seconds=1)).isoformat()},
+            {"expires_at": valid["starts_at"]}, {"description": "a" * 5001},
+            {"capacity": 3}, {"photo_key": self.uploaded_photo()}, {"owner_id": 1},
+            {"latitude": 37}, {"drink": "soda"}, {"visibility": "secret"},
+        ]
+        for update in invalid:
+            with self.subTest(update=update):
+                result = self.request("PUT", f"/admin/events/{event_id}", json={**valid, **update})
+                self.assertEqual(result.status_code, 422, result.text)
+        self.assertEqual(self.request("GET", f"/admin/events/{event_id}").json()["description"], "a" * 5000)
+        with self.Session() as db:
+            self.assertEqual(db.get(models.SocialEvent, event_id).owner_id, 4)
+
+    def test_admin_regular_update_rejects_invalid_photo_capacity_and_fields(self):
+        event_id = self.create(capacity=3)
+        self.actor = 2
+        join_id = self.request("POST", f"/events/{event_id}/join").json()["id"]
+        self.actor = 1
+        self.request("POST", f"/events/{event_id}/join-requests/{join_id}/accept")
+        foreign_key = self.uploaded_photo()
+        self.actor = 4
+        another_event = self.create()
+        with self.Session() as db:
+            used_key = db.get(models.SocialEvent, another_event).photo_key
+        self.actor = 4
+        invalid = [
+            {"capacity": 1}, {"description": "a" * 401}, {"image_urls": []},
+            {"owner_id": 4}, {"event_type": "global"}, {"photo_key": foreign_key},
+            {"photo_key": "event/" + "a" * 32 + ".jpg"}, {"photo_key": None},
+            {"photo_key": "https://example.test/photo.jpg"},
+            {"expires_at": (social.now() - timedelta(seconds=1)).isoformat()},
+            {"starts_at": "2026-10-01T12:00:00"}, {"expires_at": self.regular_update()["starts_at"]},
+        ]
+        for update in invalid:
+            with self.subTest(update=update):
+                result = self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(**update))
+                self.assertEqual(result.status_code, 422, result.text)
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=self.regular_update(
+            photo_key=used_key)).status_code, 409)
+        missing_capacity = self.regular_update()
+        del missing_capacity["capacity"]
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=missing_capacity).status_code, 422)
+        with self.Session() as db:
+            row = db.get(models.SocialEvent, event_id)
+            self.assertEqual(row.owner_id, 1)
+            self.assertEqual(row.capacity, 3)
+
+    def test_admin_deletes_regular_and_global_events_with_cascade(self):
+        event_id = self.create()
+        self.actor = 2
+        join_id = self.request("POST", f"/events/{event_id}/join").json()["id"]
+        self.request("POST", f"/events/{event_id}/report", json={"category": "spam"})
+        self.request("POST", f"/events/{event_id}/cheer")
+        self.actor = 1
+        self.request("POST", f"/events/{event_id}/join-requests/{join_id}/accept")
+        self.request("POST", f"/events/{event_id}/chat", json={"body": "Hello"})
+        self.actor = 4
+        global_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        self.request("POST", f"/events/{global_id}/chat", json={"body": "Welcome"})
+        with self.Session() as db:
+            key = db.get(models.SocialEvent, event_id).photo_key
+        for deleted_id in (event_id, global_id):
+            response = self.request("DELETE", f"/admin/events/{deleted_id}")
+            self.assertEqual(response.status_code, 204, response.text)
+            self.assertEqual(response.content, b"")
+            self.assertEqual(self.request("DELETE", f"/admin/events/{deleted_id}").status_code, 404)
+            self.assertEqual(self.request("PUT", f"/admin/events/{deleted_id}", json=self.regular_update()).status_code, 404)
+        with self.Session() as db:
+            for model in (models.SocialTag, models.SocialJoinRequest, models.SocialChatMessage,
+                          models.SocialCheer, models.SocialReport):
+                self.assertEqual(db.query(model).filter(model.event_id.in_((event_id, global_id))).count(), 0)
+            self.assertIsNotNone(db.get(models.SocialMedia, key))
+
+    def test_admin_edit_delete_forbidden_to_tester_and_unauthenticated(self):
+        event_id = self.create()
+        self.actor = 4
+        global_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "true", "ADMIN_TELEGRAM_ID": "4"}):
+            for actor in (1, social.MAP_TESTER_TELEGRAM_ID):
+                self.actor = actor
+                for event in (event_id, global_id):
+                    self.assertEqual(self.request("PUT", f"/admin/events/{event}",
+                                                  json=self.regular_update()).status_code, 403)
+                    self.assertEqual(self.request("DELETE", f"/admin/events/{event}").status_code, 403)
+            main.app.dependency_overrides.pop(main.get_authenticated_telegram_user)
+            self.assertEqual(self.request("DELETE", f"/admin/events/{event_id}").status_code, 401)
+            self.assertEqual(self.request("PUT", f"/admin/events/{global_id}",
+                                          json=self.global_payload()).status_code, 401)
+            main.app.dependency_overrides[main.get_authenticated_telegram_user] = self.current_user
+        self.actor = 1
+        self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 200)
+        self.actor = social.MAP_TESTER_TELEGRAM_ID
+        with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
+            self.assertEqual(self.request("DELETE", f"/admin/events/{event_id}").status_code, 403)
+            self.assertEqual(self.request("PUT", f"/admin/events/{event_id}",
+                                          json=self.regular_update()).status_code, 403)
 
     def test_map_tester_can_create_regular_but_not_global_events(self):
         with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
