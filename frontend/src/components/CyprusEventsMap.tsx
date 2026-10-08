@@ -7,6 +7,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
 import { localizedApiUrl } from '@/localization.ts';
+import { eventEndTime, isEventCurrentOrUpcoming } from '@/helpers/eventTime.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse } from '@/pagination.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft } from './social/SocialEventForms.tsx';
@@ -119,6 +120,7 @@ export function CyprusEventsMap({
   const initDataRaw = useSignal(initData.raw);
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
   const [events, setEvents] = useState<PositionedEvent[]>([]);
+  const [now, setNow] = useState(() => Date.now());
   const [socialEvents, setSocialEvents] = useState<SocialEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -143,6 +145,24 @@ export function CyprusEventsMap({
   const chatCursor = useRef(0);
   const [isLoading, setIsLoading] = useState(true);
   const selectedSocial = socialEvents.find((event) => event.id === selectedSocialId) ?? null;
+  const upcomingEvents = events.filter((event) => isEventCurrentOrUpcoming(event.date, now));
+  const activeSelected = selected && upcomingEvents.some((event) => event.id === selected.id) ? selected : null;
+
+  useEffect(() => {
+    const nextEnd = events.reduce<number | null>((nearest, event) => {
+      const end = eventEndTime(event.date);
+      return end !== null && end > now && (nearest === null || end < nearest) ? end : nearest;
+    }, null);
+    if (nextEnd === null) return;
+    const timeout = window.setTimeout(() => setNow(Date.now()), Math.min(nextEnd - now + 1, 2_147_483_647));
+    return () => window.clearTimeout(timeout);
+  }, [events, now]);
+
+  useEffect(() => {
+    const refresh = () => setNow(Date.now());
+    document.addEventListener('visibilitychange', refresh);
+    return () => document.removeEventListener('visibilitychange', refresh);
+  }, []);
 
   useAutoDismissError(error, setError);
   useAutoDismissError(linkError, setLinkError);
@@ -376,7 +396,12 @@ export function CyprusEventsMap({
           offset += page.items.length;
           if (hasMore && page.items.length === 0) throw new Error(t('cyprus_map.load_error'));
         }
-        setEvents(items.filter(hasPosition));
+        const positioned = items.filter(hasPosition);
+        positioned.forEach((event) => {
+          if (eventEndTime(event.date) === null) console.warn(`Event ${event.id} has an invalid date: ${event.date}`);
+        });
+        setNow(Date.now());
+        setEvents(positioned);
         setError(null);
         setLoadFailed(false);
       } catch (reason) {
@@ -395,7 +420,7 @@ export function CyprusEventsMap({
     <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')}>
       <BaseMap className="h-full w-full" mapRef={mapRef}>
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
-        {events.map((event) => (
+        {upcomingEvents.map((event) => (
           <Marker
             key={event.id}
             icon={eventIcon}
@@ -412,7 +437,7 @@ export function CyprusEventsMap({
           />
         ))}
       </BaseMap>
-      {!panel && !selected && !selectedSocial && (
+      {!panel && !activeSelected && !selectedSocial && (
         <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
           <button
             type="button"
@@ -444,21 +469,21 @@ export function CyprusEventsMap({
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && (isLoading || (!loadFailed && events.length === 0 && socialEvents.length === 0)) && (
+      {!error && (isLoading || (!loadFailed && upcomingEvents.length === 0 && socialEvents.length === 0)) && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t(isLoading ? 'common.loading' : 'cyprus_map.empty')}
         </p>
       )}
       {(locationError || linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{locationError || linkError || socialError}</p>}
       {socialNotice && <p role="status" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl border border-[#C5A059]/40 bg-[#141417] p-3 text-sm text-[#FFE28A]">{socialNotice}</p>}
-      {selected && !panel && (
+      {activeSelected && !panel && (
         <button
           type="button"
           className="absolute bottom-[calc(2.5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[1000] mx-auto flex max-w-md flex-col rounded-xl border border-[#C5A059]/50 bg-[#141417]/95 p-4 text-left text-[#F4F4F5] shadow-xl backdrop-blur-md"
-          onClick={() => onSelectEvent(selected.id)}
+          onClick={() => onSelectEvent(activeSelected.id)}
         >
-          <span className="font-serif text-[#FFE28A]">{selected.title}</span>
-          <span className="text-sm text-slate-300">{[selected.date, selected.location].filter(Boolean).join(' · ')}</span>
+          <span className="font-serif text-[#FFE28A]">{activeSelected.title}</span>
+          <span className="text-sm text-slate-300">{[activeSelected.date, activeSelected.location].filter(Boolean).join(' · ')}</span>
           <span className="mt-1 text-xs text-[#C5A059]">{t('cyprus_map.open_event')}</span>
         </button>
       )}

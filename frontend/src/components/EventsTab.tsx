@@ -9,6 +9,7 @@ import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 import { eventsCacheKey } from '@/eventsCache.ts';
+import { EVENT_DURATION_MS } from '@/helpers/eventTime.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 const EVENTS_PAGE_SIZE = 8;
@@ -201,7 +202,7 @@ function formatEventBannerDate(
 function calendarUrl(event: EventSummary): string | null {
   const start = new Date(event.date);
   if (Number.isNaN(start.valueOf())) return null;
-  const end = new Date(start.valueOf() + 2 * 60 * 60 * 1000);
+  const end = new Date(start.valueOf() + EVENT_DURATION_MS);
   const calendarDate = (date: Date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const params = new URLSearchParams({
     action: 'TEMPLATE',
