@@ -6,7 +6,6 @@ import { AdminTab } from '@/components/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
 import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
 import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
-import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { ProfileTab } from '@/components/ProfileTab.tsx';
 import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
 import { CyprusMapLoading } from '@/components/CyprusMapLoading.tsx';
@@ -18,7 +17,7 @@ const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').th
   ({ CyprusEventsMap: Map }) => ({ default: Map }),
 ));
 
-type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'favorites' | 'profile' | 'admin';
+type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 const MAP_TESTER_TELEGRAM_ID = 369764930;
@@ -33,7 +32,6 @@ const tabs: Tab[] = [
   { id: 'events', labelKey: 'tabs.events', iconSrc: '/assets/nav/Events.webp' },
   { id: 'distilleries', labelKey: 'tabs.distilleries', iconSrc: '/assets/nav/Dist.webp' },
   { id: 'bottles', labelKey: 'tabs.bottles', iconSrc: '/assets/nav/Bottles.webp' },
-  { id: 'favorites', labelKey: 'tabs.favorites', iconSrc: '/assets/nav/Fav.webp' },
   { id: 'profile', labelKey: 'tabs.profile', iconSrc: '/assets/nav/Profile.webp' },
 ];
 const articlesTab: Tab = { id: 'articles', labelKey: 'tabs.articles', iconSrc: '/assets/nav/News.webp' };
@@ -229,8 +227,6 @@ export function App() {
             )
           ) : activeTab === 'bottles' ? (
             <BottlesSamplesTab />
-          ) : activeTab === 'favorites' ? (
-            <FavoritesTab />
           ) : activeTab === 'profile' ? (
             <ProfileTab />
           ) : activeTab === 'cyprus-map' ? (

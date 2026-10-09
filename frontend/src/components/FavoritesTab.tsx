@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
@@ -82,6 +82,7 @@ export function FavoritesTab() {
   const [isPhotoExpanded, setIsPhotoExpanded] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [reviewRevision, setReviewRevision] = useState(0);
+  const scrollRef = useRef<HTMLElement>(null);
 
   const loadFavorites = useCallback(async (offset: number, replace = false) => {
     if (!telegramId) {
@@ -116,7 +117,7 @@ export function FavoritesTab() {
   const loadMore = useCallback(() => {
     if (hasMore && !isLoadingMore) void loadFavorites(favoriteBottles.length);
   }, [favoriteBottles.length, hasMore, isLoadingMore, loadFavorites]);
-  const sentinelRef = useInfiniteScroll(loadMore, hasMore && !isLoading && !isLoadingMore);
+  const sentinelRef = useInfiniteScroll(loadMore, hasMore && !isLoading && !isLoadingMore, scrollRef);
 
   const closeBottle = () => {
     setIsPhotoExpanded(false);
@@ -160,44 +161,50 @@ export function FavoritesTab() {
     }
   };
 
-  if (!telegramId) {
-    return <section className="flex min-h-[calc(100vh-7rem)] items-center justify-center"><p className="max-w-xs text-center text-sm leading-6 text-slate-400">{t('bottle.open_telegram_to_view_favorites')}</p></section>;
-  }
-  if (isLoading) return <p className="pt-12 text-center text-sm text-slate-400">{t('common.loading')}</p>;
-  if (error && favoriteBottles.length === 0) return <p className="pt-12 text-center text-sm text-red-300">{error}</p>;
-
   return (
-    <section className="mx-auto w-full max-w-md pt-[calc(env(safe-area-inset-top)+1rem)]">
-      {error && <p className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{error}</p>}
-      {favoriteBottles.length === 0 ? (
-        <div className="flex min-h-[calc(100vh-14rem)] items-center justify-center text-center">
-          <div className="max-w-xs"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-3xl text-slate-500">☆</div><h2 className="text-xl font-semibold text-white">{t('favorites.empty_title')}</h2><p className="mt-3 text-sm leading-6 text-slate-400">{t('favorites.empty_description')}</p></div>
-        </div>
+    <section ref={scrollRef} className="h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-4 text-sm text-white shadow-2xl">
+      <h2 className="mb-5 text-center font-serif text-xl text-[#FFE28A]">{t('tabs.favorites')}</h2>
+      {!telegramId ? (
+        <p className="pt-12 text-center text-sm text-slate-400">{t('bottle.open_telegram_to_view_favorites')}</p>
+      ) : isLoading ? (
+        <p role="status" className="pt-12 text-center text-sm text-slate-400">{t('common.loading')}</p>
+      ) : error && favoriteBottles.length === 0 ? (
+        <p role="alert" className="pt-12 text-center text-sm text-red-300">{error}</p>
       ) : (
-        <ul className="space-y-3">
-          {favoriteBottles.map((bottle) => (
-            <li key={bottle.id}>
-              <button
-                className="relative w-full overflow-hidden rounded-2xl border border-amber-400/15 bg-slate-800/70 text-left transition-colors hover:bg-slate-800"
-                onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); setIsReviewOpen(false); }}
-                type="button"
-              >
-                {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-6 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
-                <span className="relative z-10 flex items-center gap-3 p-4">
-                  <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
-                  <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distillery_name ?? t('bottle.independent')}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
-                  <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
-                </span>
-              </button>
-            </li>
-          ))}
-          {hasMore && <li ref={sentinelRef} className="h-px" aria-hidden="true" />}
-          {isLoadingMore && <li className="text-center text-sm text-slate-400">{t('common.loading')}</li>}
-        </ul>
+        <>
+          {error && <p role="alert" className="mb-5 rounded-xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300">{error}</p>}
+          {favoriteBottles.length === 0 ? (
+            <div className="flex min-h-[20rem] items-center justify-center text-center">
+              <div className="max-w-xs"><div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-3xl text-slate-500">☆</div><h3 className="text-xl font-semibold text-white">{t('favorites.empty_title')}</h3><p className="mt-3 text-sm leading-6 text-slate-400">{t('favorites.empty_description')}</p></div>
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {favoriteBottles.map((bottle) => (
+                <li key={bottle.id}>
+                  <button
+                    className="relative w-full overflow-hidden rounded-2xl border border-amber-400/15 bg-slate-800/70 text-left transition-colors hover:bg-slate-800"
+                    onClick={() => { setIsPhotoExpanded(false); setExpandedBottleId(bottle.id); setIsReviewOpen(false); }}
+                    type="button"
+                  >
+                    {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-6 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                    <span className="relative z-10 flex items-center gap-3 p-4">
+                      <BottleImage alt="" className="h-14 w-12 shrink-0 rounded-lg object-cover" imageUrl={bottle.image_url} />
+                      <span className="min-w-0 flex-1"><span className="block truncate text-base font-semibold text-white">{bottle.name}</span><span className="mt-1 block text-sm text-amber-400">{bottle.distillery_name ?? t('bottle.independent')}</span><span className="mt-2 block text-xs text-slate-400">{[bottle.age, bottle.abv].filter(Boolean).join(' · ')}</span></span>
+                      <span aria-label={t('bottle.favorite')} className="text-xl text-amber-400">★</span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+              {hasMore && <li ref={sentinelRef} className="h-px" aria-hidden="true" />}
+              {isLoadingMore && <li className="text-center text-sm text-slate-400">{t('common.loading')}</li>}
+            </ul>
+          )}
+        </>
       )}
 
       {expandedBottle && (
         <div
+          data-profile-swipe-ignore
           className="fixed inset-x-0 bottom-0 z-40 bg-slate-950/95 p-4 backdrop-blur-sm"
           onClick={() => { if (isPhotoExpanded) setIsPhotoExpanded(false); }}
           style={{ top: '40px', height: 'calc(100vh - 40px)' }}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { WhiskyTrail } from '@/components/WhiskyTrail.tsx';
+import { FavoritesTab } from '@/components/FavoritesTab.tsx';
 import { SocialProfilePanel, type TagRequest } from './social/SocialPanels.tsx';
 import { SocialApi } from './social/socialApi.ts';
 import type { SocialProfile } from './social/SocialEventCard.tsx';
@@ -47,6 +48,7 @@ export function ProfileTab() {
   const userId = initDataState?.user?.id ?? rawUser?.id;
   const currentLanguage = (i18n.resolvedLanguage ?? i18n.language).toLowerCase().split(/[-_]/, 1)[0];
   const [activeScreen, setActiveScreen] = useState(0);
+  const [favoritesVisited, setFavoritesVisited] = useState(false);
   const carouselRef = useRef<HTMLDivElement | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
@@ -105,7 +107,7 @@ export function ProfileTab() {
 
   const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
     const target = event.target;
-    if (event.touches.length !== 1 || (target instanceof Element && target.closest('button, input, textarea, select, a, label'))) {
+    if (event.touches.length !== 1 || (target instanceof Element && target.closest('button, input, textarea, select, a, label, [data-profile-swipe-ignore]'))) {
       touchStart.current = null;
       return;
     }
@@ -113,6 +115,7 @@ export function ProfileTab() {
   };
 
   const goToScreen = (index: number) => {
+    if (index === 2) setFavoritesVisited(true);
     carouselRef.current?.scrollTo({ left: index * carouselRef.current.clientWidth, behavior: 'smooth' });
   };
 
@@ -123,7 +126,7 @@ export function ProfileTab() {
     const dx = event.changedTouches[0].clientX - start.x;
     const dy = event.changedTouches[0].clientY - start.y;
     if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-      goToScreen(Math.max(0, Math.min(1, activeScreen + (dx < 0 ? 1 : -1))));
+      goToScreen(Math.max(0, Math.min(2, activeScreen + (dx < 0 ? 1 : -1))));
     }
   };
 
@@ -131,7 +134,11 @@ export function ProfileTab() {
     <section className="mx-auto w-full max-w-md pb-8 pt-[env(safe-area-inset-top)]" onTouchStartCapture={handleTouchStart} onTouchEndCapture={handleTouchEnd} onTouchCancelCapture={() => { touchStart.current = null; }}>
       <div ref={carouselRef} className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => {
         const { scrollLeft, clientWidth } = event.currentTarget;
-        if (clientWidth) setActiveScreen(Math.min(1, Math.max(0, Math.round(scrollLeft / clientWidth))));
+        if (clientWidth) {
+          const index = Math.min(2, Math.max(0, Math.round(scrollLeft / clientWidth)));
+          setActiveScreen(index);
+          if (index === 2) setFavoritesVisited(true);
+        }
       }}>
           <div className="min-w-0 w-full shrink-0 snap-start">
             <WhiskyTrail
@@ -175,9 +182,12 @@ export function ProfileTab() {
               <p role="alert" className="rounded-2xl border border-[#C5A059]/30 bg-[#141417] p-5 text-red-300">{error ?? t('social.error')}</p>
             )}
         </div>
+        <div className="min-w-0 w-full shrink-0 snap-start">
+          {favoritesVisited && <FavoritesTab />}
+        </div>
       </div>
       <nav aria-label={t('profile.screens')} className="mt-1 flex justify-center gap-1">
-        {[t('profile.whisky_journey'), t('social.profile')].map((label, index) => (
+        {[t('profile.whisky_journey'), t('social.profile'), t('tabs.favorites')].map((label, index) => (
           <button
             key={label}
             type="button"
