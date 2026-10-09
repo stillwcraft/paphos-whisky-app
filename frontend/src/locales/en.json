@@ -34,6 +34,7 @@
   },
   "social": {
     "create": "Create event",
+    "one_active_event": "You already have an active event. You can create another after it ends.",
     "creating": "Creating event...",
     "create_title": "New event",
     "edit_event": "Edit",

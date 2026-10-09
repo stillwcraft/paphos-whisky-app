@@ -20,8 +20,6 @@ from routers import social
 
 class SocialTest(unittest.TestCase):
     def setUp(self):
-        self.social_flag = patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "true"})
-        self.social_flag.start()
         self.signed_mock = patch.object(social, "signed", return_value="https://example.test/signed-image")
         self.signed_client = self.signed_mock.start()
         self.notify_mock = patch.object(social, "notify", return_value="not_configured")
@@ -51,7 +49,6 @@ class SocialTest(unittest.TestCase):
         self.engine.dispose()
         self.notify_mock.stop()
         self.signed_mock.stop()
-        self.social_flag.stop()
 
     def current_user(self):
         return main.TelegramAuthContext(telegram_id=self.actor, user={"first_name": f"Person{self.actor}"})
@@ -240,7 +237,7 @@ class SocialTest(unittest.TestCase):
         self.actor = 4
         global_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
         with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "true", "ADMIN_TELEGRAM_ID": "4"}):
-            for actor in (1, social.MAP_TESTER_TELEGRAM_ID):
+            for actor in (1, 369764930):
                 self.actor = actor
                 for event in (event_id, global_id):
                     self.assertEqual(self.request("PUT", f"/admin/events/{event}",
@@ -253,20 +250,20 @@ class SocialTest(unittest.TestCase):
             main.app.dependency_overrides[main.get_authenticated_telegram_user] = self.current_user
         self.actor = 1
         self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 200)
-        self.actor = social.MAP_TESTER_TELEGRAM_ID
+        self.actor = 369764930
         with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
             self.assertEqual(self.request("DELETE", f"/admin/events/{event_id}").status_code, 403)
             self.assertEqual(self.request("PUT", f"/admin/events/{event_id}",
                                           json=self.regular_update()).status_code, 403)
 
-    def test_map_tester_can_create_regular_but_not_global_events(self):
+    def test_any_authenticated_adult_can_create_regular_but_not_global_events(self):
         with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false", "ADMIN_TELEGRAM_ID": "4"}):
             self.actor = 2
-            self.assertEqual(self.request("GET", "/profile").status_code, 403)
+            self.assertEqual(self.request("GET", "/profile").status_code, 200)
 
-            self.actor = social.MAP_TESTER_TELEGRAM_ID
+            self.actor = 369764930
             self.assertEqual(self.request("PUT", "/profile", json={
-                "display_name": "Map tester", "age": 21,
+                "display_name": "Map user", "age": 21,
             }).status_code, 200)
             event_id = self.create()
             self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 200)
@@ -311,12 +308,16 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(details["photo_url"], "https://example.test/signed-image")
         self.assertEqual(details["attendee_count"], 1)
         self.assertEqual(details["join_status"], "host")
-        self.assertIsNotNone(self.request("POST", "/events", json={
+        self.actor = 2
+        injected = self.request("POST", "/events", json={
             "description": "Coffee", "drink": "coffee", "visibility": "public",
             "latitude": 34.77, "longitude": 32.42, "location": "Paphos",
             "start": "now", "ttl": "1h", "photo_key": self.uploaded_photo(),
             "event_type": "global", "image_urls": ["https://images.example.test/other.jpg"],
-        }).json()["photo_url"])
+        })
+        self.assertEqual(injected.status_code, 201, injected.text)
+        self.assertEqual(injected.json()["event_type"], "regular")
+        self.assertIsNotNone(injected.json()["photo_url"])
 
     def test_global_validation(self):
         self.actor = 4
@@ -482,7 +483,8 @@ class SocialTest(unittest.TestCase):
         self.actor = 5
         self.assertEqual(self.request("GET", "/events/map").status_code, 403)
         self.actor = 1
-        ids = [self.create() for _ in range(3)]
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "1"}):
+            ids = [self.create() for _ in range(3)]
         self.actor = 2
         self.signed_client.reset_mock()
         queries = []
@@ -497,7 +499,7 @@ class SocialTest(unittest.TestCase):
         self.assertLessEqual(len(queries), 3)
         self.signed_client.assert_not_called()
         with patch.dict(os.environ, {"SOCIAL_EVENTS_ENABLED": "false"}):
-            self.assertEqual(self.request("GET", "/events/map").status_code, 403)
+            self.assertEqual(self.request("GET", "/events/map").status_code, 200)
         main.app.dependency_overrides[main.get_authenticated_telegram_user] = lambda: (
             (_ for _ in ()).throw(main.HTTPException(401, "Unauthenticated"))
         )
@@ -696,11 +698,11 @@ class SocialTest(unittest.TestCase):
             self.assertTrue(self.request("GET", f"/admin/events/{event}").json()["hidden"])
             self.assertEqual(self.request("GET", f"/events/{event}").status_code, 404)
             self.actor = 1
-            self.assertEqual(self.request("GET", "/events").status_code, 403)
+            self.assertEqual(self.request("GET", "/events").status_code, 200)
             self.actor = 2
-            self.assertEqual(self.request("POST", f"/events/{event}/block").status_code, 403)
+            self.assertEqual(self.request("POST", f"/events/{event}/block").status_code, 404)
             self.assertEqual(self.request("POST", "/media?kind=event",
-                                          content=b"invalid").status_code, 403)
+                                          content=b"invalid").status_code, 422)
         self.actor = 1
         self.assertEqual(self.request("GET", f"/events/{event}").status_code, 404)
         self.assertEqual(self.request("GET", "/events").json(), [])
@@ -946,7 +948,8 @@ class SocialTest(unittest.TestCase):
         self.actor = 1
         self.assertEqual(self.request("GET", f"/events/{accepted_event}").json()["tagged_friends"][0]["telegram_id"], 2)
 
-        declined_event = self.create("public", tagged=[2])
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "1"}):
+            declined_event = self.create("public", tagged=[2])
         self.actor = 2
         self.assertEqual(self.request("POST", f"/events/{declined_event}/tags/decline").json(),
                          {"status": "declined"})
@@ -954,7 +957,8 @@ class SocialTest(unittest.TestCase):
         self.actor = 1
         self.assertEqual(self.request("GET", f"/events/{declined_event}").json()["tagged_friends"], [])
 
-        expired_event = self.create("public", tagged=[2])
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "1"}):
+            expired_event = self.create("public", tagged=[2])
         with self.Session() as db:
             db.get(models.SocialEvent, expired_event).expires_at = social.now() - timedelta(seconds=1)
             db.commit()
@@ -963,7 +967,8 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(self.request("POST", f"/events/{expired_event}/tags/accept").status_code, 404)
 
         self.actor = 1
-        hidden_event = self.create("public", tagged=[2])
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "1"}):
+            hidden_event = self.create("public", tagged=[2])
         self.actor = 4
         self.request("POST", f"/admin/events/{hidden_event}/hide")
         self.actor = 2
@@ -971,7 +976,8 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(self.request("POST", f"/events/{hidden_event}/tags/accept").status_code, 404)
 
         self.actor = 1
-        blocked_event = self.create("public", tagged=[2])
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "1"}):
+            blocked_event = self.create("public", tagged=[2])
         self.actor = 2
         self.assertEqual(self.request("POST", f"/events/{blocked_event}/block").status_code, 200)
         self.assertEqual(self.request("GET", "/tag-requests").json(), [])
@@ -999,29 +1005,14 @@ class SocialTest(unittest.TestCase):
         with patch.dict(os.environ, {"BOT_TOKEN": ""}):
             self.assertEqual(social.notify(2, "Вас отметили в событии!"), "not_configured")
 
-    def test_default_off_admin_bypass_and_explicit_opt_in(self):
+    def test_social_access_is_authenticated_not_feature_flagged(self):
         event = self.create()
         with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "4"}):
-            os.environ.pop("SOCIAL_EVENTS_ENABLED")
-            for method, path, options in (
-                ("GET", "/events", {}),
-                ("GET", f"/events/{event}", {}),
-                ("GET", "/profile", {}),
-                ("PUT", "/profile", {"json": {"display_name": "Other", "age": 21}}),
-                ("GET", "/friends", {}),
-                ("GET", "/tag-requests", {}),
-                ("POST", f"/events/{event}/tags/accept", {}),
-                ("POST", f"/events/{event}/tags/decline", {}),
-                ("POST", "/friend-requests", {"json": {"telegram_id": 3}}),
-                ("GET", "/blocks", {}),
-                ("POST", "/blocks", {"json": {"telegram_id": 3}}),
-                ("POST", "/events", {"json": {"description": "Hidden"}}),
-                ("POST", f"/events/{event}/report", {"json": {"category": "spam"}}),
-                ("POST", "/media?kind=event", {"content": b"image"}),
-                ("GET", "/admin/reports", {}),
-            ):
-                with self.subTest(method=method, path=path):
-                    self.assertEqual(self.request(method, path, **options).status_code, 403)
+            os.environ.pop("SOCIAL_EVENTS_ENABLED", None)
+            self.assertEqual(self.request("GET", "/events").status_code, 200)
+            self.assertEqual(self.request("GET", f"/events/{event}").status_code, 200)
+            self.assertEqual(self.request("GET", "/profile").status_code, 200)
+            self.assertEqual(self.request("GET", "/admin/reports").status_code, 403)
             self.actor = 4
             with self.Session() as db:
                 db.get(models.SocialProfile, 4).age = None
@@ -1031,9 +1022,46 @@ class SocialTest(unittest.TestCase):
             self.assertEqual(self.request("GET", "/admin/reports").status_code, 200)
             self.actor = 1
             os.environ["SOCIAL_EVENTS_ENABLED"] = "false"
-            self.assertEqual(self.request("GET", "/events").status_code, 403)
+            self.assertEqual(self.request("GET", "/events").status_code, 200)
             os.environ["SOCIAL_EVENTS_ENABLED"] = "true"
             self.assertEqual(self.request("GET", "/events").status_code, 200)
+            main.app.dependency_overrides.pop(main.get_authenticated_telegram_user)
+            self.assertEqual(self.request("GET", "/events").status_code, 401)
+            main.app.dependency_overrides[main.get_authenticated_telegram_user] = self.current_user
+
+    def test_regular_event_limit_counts_hidden_until_expired_and_exempts_admin(self):
+        self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": False})
+        event_id = self.create()
+        self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": True})
+        first_photo = self.uploaded_photo()
+        payload = {
+            "description": "Another event", "drink": "coffee", "visibility": "public",
+            "latitude": 34.77, "longitude": 32.42, "location": "Paphos",
+            "capacity": 2, "start": "now", "ttl": "1h", "tagged_friend_ids": [],
+            "photo_key": first_photo,
+        }
+        duplicate = self.request("POST", "/events", json=payload)
+        self.assertEqual(duplicate.status_code, 409, duplicate.text)
+        self.assertEqual(duplicate.json()["detail"], "Only one active event is allowed")
+        self.actor = 4
+        self.assertEqual(self.request("POST", "/events/global", json=self.global_payload()).status_code, 201)
+        self.assertEqual(self.request("POST", "/admin/events/" + str(event_id) + "/hide").status_code, 200)
+        self.actor = 1
+        self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": True})
+        self.assertEqual(self.request("POST", "/events", json=payload).status_code, 409)
+        with self.Session() as db:
+            db.get(models.SocialEvent, event_id).expires_at = social.now() - timedelta(seconds=1)
+            db.commit()
+        self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": False})
+        self.assertEqual(self.request("POST", "/events", json=payload).status_code, 201)
+        self.actor = 2
+        self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": False})
+        self.assertEqual(self.request("POST", "/events/global", json=self.global_payload()).status_code, 403)
+        with patch.dict(os.environ, {"ADMIN_TELEGRAM_ID": "4"}):
+            self.actor = 4
+            self.assertEqual(self.request("GET", "/events/mine/active").json(), {"has_active_event": False})
+            self.create()
+            self.create()
 
     def test_media_upload_and_private_signed_event_url(self):
         image = io.BytesIO()

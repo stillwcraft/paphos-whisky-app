@@ -427,6 +427,10 @@ export function CyprusEventsMap({
     if (!profile) { setSocialError(t('common.loading')); return; }
     if (!ageConfirmed) { setPanel('age'); return; }
     void run(async () => {
+      if (!isAdmin && (await api.activeEventStatus()).has_active_event) {
+        setSocialError(t('social.one_active_event'));
+        return;
+      }
       const [me, contacts] = await Promise.all([api.profile(), api.friends()]);
       setFriends(contacts);
       setProfile(me);
@@ -640,7 +644,13 @@ export function CyprusEventsMap({
             } else {
               if (!photo) throw new Error(t('social.photo_and_place_required'));
               const photoKey = await api.upload(photo, 'event');
-              const created = await api.createEvent(draft, photoKey);
+              const created = await api.createEvent(draft, photoKey).catch((reason: unknown) => {
+                if (reason instanceof SocialApiError && reason.status === 409
+                    && reason.message === 'Only one active event is allowed') {
+                  throw new Error(t('social.one_active_event'));
+                }
+                throw reason;
+              });
               if (Object.values(created.notifications).some((status) => status !== 'sent')) {
                 setSocialNotice(t('social.notification_failed'));
               }

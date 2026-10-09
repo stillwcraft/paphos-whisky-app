@@ -44,6 +44,7 @@ export class SocialApi {
 
   events() { return this.request<SocialEvent[]>('/events'); }
   mapEvents() { return this.request<SocialMapMarker[]>('/events/map'); }
+  activeEventStatus() { return this.request<{ has_active_event: boolean }>('/events/mine/active'); }
   event(id: number) { return this.request<SocialEvent>(`/events/${id}`); }
   createEvent(draft: RegularEventDraft, photoKey: string) {
     return this.request<SocialEvent & { notifications: Record<string, DeliveryStatus> }>('/events', 'POST', {

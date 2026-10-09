@@ -26,7 +26,6 @@ from social_storage import storage_config
 log = logging.getLogger(__name__)
 OPAQUE_MEDIA_KEY = re.compile(r"^(event|avatar)/[0-9a-f]{32}\.jpg$")
 MAX_SOCIAL_IMAGE_BYTES = 1024 * 1024
-MAP_TESTER_TELEGRAM_ID = 369764930
 
 
 def auth():
@@ -51,11 +50,8 @@ def is_admin(user):
 
 
 def require_social_access(response: Response, user=Depends(auth())):
-    if (is_admin(user) or user.telegram_id == MAP_TESTER_TELEGRAM_ID
-            or os.getenv("SOCIAL_EVENTS_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}):
-        response.headers["Cache-Control"] = "private, no-store"
-        return user
-    raise HTTPException(status_code=403, detail="Social events are not enabled")
+    response.headers["Cache-Control"] = "private, no-store"
+    return user
 
 
 router = APIRouter(
@@ -533,6 +529,20 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
     return {"key": key}
 
 
+def has_active_regular_event(db, owner_id):
+    return db.query(m.SocialEvent.id).filter(
+        m.SocialEvent.owner_id == owner_id,
+        m.SocialEvent.event_type == "regular",
+        m.SocialEvent.expires_at > now(),
+    ).first() is not None
+
+
+@router.get("/events/mine/active")
+def active_event_status(user=Depends(auth()), db: Session = Depends(get_db)):
+    adults(db, user)
+    return {"has_active_event": False if is_admin(user) else has_active_regular_event(db, uid(user))}
+
+
 @router.post("/events", status_code=201)
 def create_event(data: EventCreate, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
@@ -554,6 +564,11 @@ def create_event(data: EventCreate, user=Depends(auth()), db: Session = Depends(
                    tzinfo=ZoneInfo("Asia/Nicosia")).astimezone(timezone.utc))
     if expires <= start:
         fail(422, "Event would expire before it starts")
+    if not is_admin(user):
+        # Serialize the check and insert for this owner across PostgreSQL workers.
+        db.query(m.SocialProfile).filter_by(telegram_id=uid(user)).with_for_update().one()
+        if has_active_regular_event(db, uid(user)):
+            fail(409, "Only one active event is allowed")
     e = m.SocialEvent(owner_id=uid(user), description=data.description, drink=data.drink,
                       visibility=data.visibility, latitude=data.latitude, longitude=data.longitude,
                       location=data.location, photo_key=data.photo_key, capacity=data.capacity,

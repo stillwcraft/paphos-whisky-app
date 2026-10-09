@@ -1,21 +1,18 @@
-# Social map backend rollout
+# Social map backend
 
-All `/api/social/*` routes require authenticated Telegram Mini App initData. By
-default, they also require the caller's Telegram ID to equal `ADMIN_TELEGRAM_ID`
-or the temporary map tester ID `369764930`. The tester can use regular social
-events but has no admin privileges or access to global event creation. This
-includes profile, friend, event, chat, report, media, and admin routes; hiding
-the frontend tab is **not** an access control. Admin-only operations continue
-to require their own admin authorization. The configured admin can inspect
-events even before entering a social-profile age; ordinary users, including
-the tester, must enter an age of at least 18 to use the relevant social actions.
+All `/api/social/*` routes require authenticated Telegram Mini App initData.
+The map tab and social API are available to all authenticated users regardless
+of `SOCIAL_EVENTS_ENABLED` (the former rollout flag is no longer used).
+Admin-only operations still require separate server-side admin authorization;
+ordinary users cannot create global events. The configured admin can inspect
+events even before entering a social-profile age; ordinary users must enter an
+age of at least 18 to use the relevant social actions.
 
-For an intentional local-development rollout, set `SOCIAL_EVENTS_ENABLED=true`
-in the **backend** environment. The default (unset, empty, or `false`) denies
-everyone except the admin and map tester with HTTP 403. Other explicit true
-values are `1`, `yes`, and `on` (case-insensitive). Do not enable this flag in
-production until the social feature is ready for all authenticated users.
-Frontend `Vite DEV` settings do not affect backend authorization.
+Ordinary users can create one unexpired regular event at a time, including
+events hidden by moderation. Once it expires they can create another. The
+server serializes creation per user and returns HTTP 409 when a current event
+already exists. `GET /api/social/events/mine/active` returns
+`{"has_active_event": boolean}` for the creation UI. Admins have no quota.
 
 For image support, configure `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
 `SUPABASE_SOCIAL_BUCKET` with a **private** Supabase Storage bucket. Apply
@@ -53,7 +50,7 @@ as an array of `{id, latitude, longitude, event_type, starts_at, expires_at,
 drink, image_url}` (UTC ISO timestamps). Global `image_url` is the first
 `image_urls` entry; regular `image_url` is `null` (regular markers use drink
 icons). Fetch the full event detail to get its signed photo URL.
-It has the same social authentication, rollout, adult, friendship, blocking,
+It has the same social authentication, adult, friendship, blocking,
 and visibility gates as the full list but contains no descriptions, owners,
 or attendee information. Fetch `/api/social/events/{id}` on marker click for
 full event details. The existing `/api/events` catalog also accepts
@@ -76,7 +73,7 @@ ongoing events with a past start are allowed. Events are listed before their
 start and remain visible until expiry.
 Global events do not require an uploaded `photo_key` and do not accept joins.
 Anyone who can see a global event can read and send chat messages without
-joining; visibility, blocks, hidden status, expiry, and the social access and
+joining; visibility, blocks, hidden status, expiry, and the social authentication and
 age gates still apply. `friends` visibility requires friendship with the
 admin organizer; `anonymous` hides the organizer as for regular events.
 Event responses add `event_type: "regular" | "global"` and `image_urls`
@@ -134,7 +131,7 @@ the existing image, or supply a new unused event photo uploaded by the admin.
 Global events require `image_urls` (1–5 HTTPS URLs) and permit up to 5000
 description characters. The event owner and existing tags, joins, chat, reports,
 and cheers are not changed. Only the authenticated admin can edit events,
-including those owned by other users, regardless of the social feature flag.
+including those owned by other users.
 `DELETE /api/social/admin/events/{event_id}` hard-deletes either type and its
 related records and returns HTTP 204. Deleted or replaced regular photos become
 unreferenced uploads; the daily cleanup job removes them after their 24-hour

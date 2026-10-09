@@ -20,7 +20,6 @@ const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').th
 type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
-const MAP_TESTER_TELEGRAM_ID = 369764930;
 
 type Tab = {
   id: TabId;
@@ -43,21 +42,20 @@ type FooterProps = {
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
   showArticlesTab: boolean;
-  showCyprusMapTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showCyprusMapTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
-    ...(showCyprusMapTab ? [cyprusMapTab] : []),
+    cyprusMapTab,
     ...(showArticlesTab ? [articlesTab] : []),
     ...tabs.slice(1),
     ...(isAdmin ? [adminTab] : []),
   ];
 
   return (
-    <footer className={`${activeTab === 'cyprus-map' && showCyprusMapTab ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
+    <footer className={`${activeTab === 'cyprus-map' ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
       <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
         {visibleTabs.map(({ id, labelKey, iconSrc }) => {
           const isActive = activeTab === id;
@@ -104,9 +102,7 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
-  const showCyprusMapTab = import.meta.env.DEV || isAdmin
-    || initDataState?.user?.id === MAP_TESTER_TELEGRAM_ID;
-  const activeCyprusMap = activeTab === 'cyprus-map' && showCyprusMapTab;
+  const activeCyprusMap = activeTab === 'cyprus-map';
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedSocialEvent = useCallback(() => setSelectedSocialEventId(null), []);
@@ -142,10 +138,6 @@ export function App() {
       && initDataState?.user?.id === ADMIN_TELEGRAM_ID,
     );
   }, [initDataState]);
-
-  useEffect(() => {
-    if (activeTab === 'cyprus-map' && !showCyprusMapTab) setActiveTab('events');
-  }, [activeTab, showCyprusMapTab]);
 
   useEffect(() => {
     initAnalytics(initDataState?.user);
@@ -185,14 +177,13 @@ export function App() {
       return;
     }
 
-    const matchingTab = [...tabs, articlesTab].find((tab) => tab.id === startParam);
+    const matchingTab = [...tabs, articlesTab, cyprusMapTab].find((tab) => tab.id === startParam);
     if (matchingTab) {
       setActiveTab(matchingTab.id);
     }
   }, []);
 
   useEffect(() => {
-    if (!showCyprusMapTab) return;
     const startParam = retrieveLaunchParams().tgWebAppStartParam
       ?? window.Telegram?.WebApp?.initDataUnsafe?.start_param;
     const match = /^social_event_(\d+)$/.exec(startParam ?? '');
@@ -200,12 +191,12 @@ export function App() {
       setSelectedSocialEventId(Number(match[1]));
       setActiveTab('cyprus-map');
     }
-  }, [showCyprusMapTab]);
+  }, []);
 
   return (
     <div className={`${activeCyprusMap ? 'flex h-[100dvh] flex-col' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
       <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
-          {activeTab === 'events' || (activeTab === 'cyprus-map' && !showCyprusMapTab) ? (
+          {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
               onSelectedEventHandled={clearSelectedEvent}
@@ -266,7 +257,6 @@ export function App() {
           onTabChange={setActiveTab}
           isAdmin={isAdmin}
           showArticlesTab={showArticlesTab}
-          showCyprusMapTab={showCyprusMapTab}
         />
       )}
     </div>
