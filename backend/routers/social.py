@@ -181,7 +181,8 @@ def mini(db, person_id):
     return {"telegram_id": person_id, "display_name": p.display_name if p else "Member",
             "verified": p.verified if p else False,
             "age": None,
-            "avatar_url": signed(p.avatar_key) if p and p.avatar_key else None}
+            "avatar_url": signed(p.avatar_key) if p and p.avatar_key and not p.avatar_hidden else None,
+            "avatar_hidden": p.avatar_hidden if p else False}
 
 
 def notify(person_id, message):
@@ -262,6 +263,7 @@ class ProfileUpdate(BaseModel):
     display_name: str = Field(min_length=1, max_length=100)
     age: Optional[int] = Field(ge=18, le=120)
     avatar_key: Optional[str] = None
+    avatar_hidden: Optional[bool] = None
 
 
 class FriendInvite(BaseModel):
@@ -372,8 +374,15 @@ def get_profile(user=Depends(auth()), db: Session = Depends(get_db)):
 def put_profile(data: ProfileUpdate, user=Depends(auth()), db: Session = Depends(get_db)):
     if data.age is None and not is_admin(user):
         fail(422, "Enter an age of at least 18 in your social profile")
+    if data.avatar_hidden and data.avatar_key is not None:
+        fail(422, "Cannot hide an uploaded avatar in the same request")
     p = profile(db, user)
     avatar_key = data.avatar_key if "avatar_key" in data.model_fields_set else p.avatar_key
+    avatar_hidden = data.avatar_hidden if data.avatar_hidden is not None else p.avatar_hidden
+    if "avatar_key" in data.model_fields_set and data.avatar_key is not None:
+        avatar_hidden = False
+    if avatar_hidden:
+        avatar_key = None
     if "avatar_key" in data.model_fields_set and avatar_key is not None:
         media = db.query(m.SocialMedia).filter_by(key=data.avatar_key).with_for_update().first()
         if (not OPAQUE_MEDIA_KEY.fullmatch(data.avatar_key)
@@ -382,9 +391,9 @@ def put_profile(data: ProfileUpdate, user=Depends(auth()), db: Session = Depends
     name = data.display_name.strip()
     if not name:
         fail(422, "Display name cannot be blank")
-    if (p.display_name, p.age, p.avatar_key) != (name, data.age, avatar_key):
+    if (p.display_name, p.age, p.avatar_key, p.avatar_hidden) != (name, data.age, avatar_key, avatar_hidden):
         p.verified = False
-    p.display_name, p.age, p.avatar_key = name, data.age, avatar_key
+    p.display_name, p.age, p.avatar_key, p.avatar_hidden = name, data.age, avatar_key, avatar_hidden
     commit(db)
     return get_profile(user, db)
 

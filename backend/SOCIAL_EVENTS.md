@@ -41,6 +41,11 @@ The moderator reports entry is in the admin tab, not on the map.
 For `PUT /api/social/profile`, omitting `avatar_key` preserves the current
 avatar; explicitly sending `avatar_key: null` removes it. Actual changes to
 profile fields reset the manually assigned verification badge.
+Apply `migrations/028_social_profile_avatar_hidden.sql` before deploying the
+profile photo controls to an existing database. New profiles may use the
+Telegram WebApp photo as a client-side fallback. Sending `avatar_hidden: true`
+with `avatar_key: null` hides that fallback and clears an uploaded avatar;
+uploading a new avatar restores it.
 Signed image URLs last at most five minutes (and never past event expiry);
 refresh them by fetching `GET /api/social/events` or `GET /api/social/events/{id}`.
 `GET /api/social/events/map` returns all visible, unexpired event markers

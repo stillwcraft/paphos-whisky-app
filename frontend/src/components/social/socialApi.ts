@@ -97,8 +97,12 @@ export class SocialApi {
   }
   blockEvent(id: number) { return this.request<void>(`/events/${id}/block`, 'POST'); }
   profile() { return this.request<SocialProfile>('/profile'); }
-  updateProfile(displayName: string, age: number | null, photoKey: string | null) {
-    return this.request<SocialProfile>('/profile', 'PUT', { display_name: displayName, age, ...(photoKey ? { avatar_key: photoKey } : {}) });
+  updateProfile(displayName: string, age: number | null, photoKey?: string | null, removeAvatar = false) {
+    return this.request<SocialProfile>('/profile', 'PUT', {
+      display_name: displayName, age,
+      ...(photoKey ? { avatar_key: photoKey } : {}),
+      ...(removeAvatar ? { avatar_key: null, avatar_hidden: true } : {}),
+    });
   }
   friends() { return this.request<SocialProfile[]>('/friends'); }
   friendRequests() { return this.request<FriendRequest[]>('/friend-requests'); }

@@ -9,6 +9,7 @@ export type SocialProfile = {
   display_name: string;
   age: number | null;
   avatar_url: string | null;
+  avatar_hidden: boolean;
   verified: boolean;
 };
 export type SocialEvent = {

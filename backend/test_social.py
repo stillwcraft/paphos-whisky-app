@@ -582,6 +582,34 @@ class SocialTest(unittest.TestCase):
         with self.Session() as db:
             self.assertIsNone(db.get(models.SocialProfile, 1).avatar_key)
 
+    def test_profile_avatar_removal_overrides_telegram_fallback_and_upload_restores(self):
+        self.assertFalse(self.request("GET", "/profile").json()["avatar_hidden"])
+        avatar_key = f"avatar/{uuid4().hex}.jpg"
+        with self.Session() as db:
+            db.add(models.SocialMedia(key=avatar_key, owner_id=1, kind="avatar"))
+            db.commit()
+        self.assertEqual(self.request("PUT", "/profile", json={
+            "display_name": "Person1", "age": 21, "avatar_key": avatar_key,
+        }).status_code, 200)
+        removed = self.request("PUT", "/profile", json={
+            "display_name": "Person1", "age": 21, "avatar_key": None, "avatar_hidden": True,
+        })
+        self.assertEqual(removed.status_code, 200, removed.text)
+        self.assertTrue(removed.json()["avatar_hidden"])
+        self.assertIsNone(removed.json()["avatar_url"])
+        self.assertTrue(self.request("GET", "/profile").json()["avatar_hidden"])
+        with self.Session() as db:
+            self.assertIsNone(db.get(models.SocialProfile, 1).avatar_key)
+        self.assertEqual(self.request("PUT", "/profile", json={
+            "display_name": "Person1", "age": 21, "avatar_hidden": True, "avatar_key": avatar_key,
+        }).status_code, 422)
+        restored = self.request("PUT", "/profile", json={
+            "display_name": "Person1", "age": 21, "avatar_key": avatar_key,
+        })
+        self.assertEqual(restored.status_code, 200, restored.text)
+        self.assertFalse(restored.json()["avatar_hidden"])
+        self.assertIsNotNone(restored.json()["avatar_url"])
+
     def test_anonymous_join_capacity_chat_expiry_report(self):
         event = self.create("anonymous")
         self.actor = 2

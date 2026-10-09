@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { WhiskyTrail } from '@/components/WhiskyTrail.tsx';
-import { SocialProfilePanel, type FriendRequest, type TagRequest } from './social/SocialPanels.tsx';
+import { SocialProfilePanel, type TagRequest } from './social/SocialPanels.tsx';
 import { SocialApi } from './social/socialApi.ts';
 import type { SocialProfile } from './social/SocialEventCard.tsx';
 
@@ -11,6 +11,7 @@ type TelegramUser = {
   first_name?: string;
   username?: string;
   photo_url?: string;
+  language_code?: string;
 };
 
 declare global {
@@ -50,8 +51,6 @@ export function ProfileTab() {
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
   const [profile, setProfile] = useState<SocialProfile | null>(null);
-  const [friends, setFriends] = useState<SocialProfile[]>([]);
-  const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [tagRequests, setTagRequests] = useState<TagRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -60,15 +59,22 @@ export function ProfileTab() {
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
+    if (localStorage.getItem('app_lang')) return;
+    const language = initDataState?.user?.language_code ?? rawUser?.language_code;
+    const supported = language?.toLowerCase().split(/[-_]/, 1)[0];
+    if (supported === 'en' || supported === 'uk' || supported === 'ru') {
+      void i18n.changeLanguage(supported);
+    }
+  }, [initDataState?.user?.language_code, rawUser?.language_code, i18n]);
+
+  useEffect(() => {
     if (activeScreen !== 1 || !api) return;
     let active = true;
     setLoading(true);
-    void Promise.all([api.profile(), api.friends(), api.friendRequests(), api.tagRequests()])
-      .then(([me, contacts, incoming, tags]) => {
+    void Promise.all([api.profile(), api.tagRequests()])
+      .then(([me, tags]) => {
         if (!active) return;
         setProfile(me);
-        setFriends(contacts);
-        setRequests(incoming);
         setTagRequests(tags);
         setError(null);
       })
@@ -144,25 +150,17 @@ export function ProfileTab() {
             ) : profile ? (
               <SocialProfilePanel
                 profile={profile}
-                friends={friends}
-                requests={requests}
                 tagRequests={tagRequests}
+                telegramAvatarUrl={initDataState?.user?.photo_url ?? rawUser?.photo_url}
                 busy={busy}
                 error={error}
                 notice={notice}
                 onSave={(name, avatar) => void run(async () => {
-                  const key = avatar ? await api.upload(avatar, 'avatar') : null;
+                  const key = avatar ? await api.upload(avatar, 'avatar') : undefined;
                   setProfile(await api.updateProfile(name, profile.age, key));
                 })}
-                onInvite={(id) => void run(async () => {
-                  const result = await api.invite(id);
-                  setNotice(t(result.notification_status === 'sent' ? 'social.friend_invited' : 'social.friend_notification_failed'));
-                })}
-                onAccept={(id) => void run(async () => {
-                  await api.acceptFriend(id);
-                  const [contacts, incoming] = await Promise.all([api.friends(), api.friendRequests()]);
-                  setFriends(contacts);
-                  setRequests(incoming);
+                onRemoveAvatar={() => void run(async () => {
+                  setProfile(await api.updateProfile(profile.display_name, profile.age, undefined, true));
                 })}
                 onAcceptTag={(id) => void run(async () => {
                   await api.acceptTag(id);

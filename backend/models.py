@@ -80,6 +80,7 @@ class SocialProfile(Base):
     age = Column(Integer, nullable=True)
     verified = Column(Boolean, nullable=False, default=False)
     avatar_key = Column(String(256), nullable=True)
+    avatar_hidden = Column(Boolean, nullable=False, default=False)
 
 
 class SocialMedia(Base):

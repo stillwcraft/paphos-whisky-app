@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SocialProfile } from './SocialEventCard.tsx';
 import { MAX_SOURCE_IMAGE_BYTES, SOCIAL_IMAGE_TYPES } from './compressImage.ts';
@@ -53,96 +53,127 @@ export function SocialAgeGate({
 
 export function SocialProfilePanel({
   profile,
-  friends,
-  requests,
   tagRequests,
+  telegramAvatarUrl,
   busy,
   error,
   notice,
   onSave,
-  onInvite,
-  onAccept,
+  onRemoveAvatar,
   onAcceptTag,
   onDeclineTag,
 }: {
-  profile: SocialProfile | null;
-  friends: SocialProfile[];
-  requests: FriendRequest[];
+  profile: SocialProfile;
   tagRequests: TagRequest[];
+  telegramAvatarUrl?: string;
   busy: boolean;
   error: string | null;
   notice: string | null;
   onSave: (name: string, avatar: File | null) => void;
-  onInvite: (telegramId: number) => void;
-  onAccept: (requestId: number) => void;
+  onRemoveAvatar: () => void;
   onAcceptTag: (eventId: number) => void;
   onDeclineTag: (eventId: number) => void;
 }) {
-  const { t } = useTranslation();
-  const [name, setName] = useState(profile?.display_name ?? '');
+  const { t, i18n } = useTranslation();
+  const [name, setName] = useState(profile.display_name);
   const [avatar, setAvatar] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [avatarError, setAvatarError] = useState<string | null>(null);
-  const [copyError, setCopyError] = useState<string | null>(null);
-  const [friendId, setFriendId] = useState('');
   useEffect(() => {
-    setName(profile?.display_name ?? '');
+    setName(profile.display_name);
+    setAvatar(null);
   }, [profile]);
+  useEffect(() => {
+    if (!avatar) {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(avatar);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatar]);
 
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     onSave(name.trim(), avatar);
   };
+  const currentLanguage = (i18n.resolvedLanguage ?? i18n.language).split(/[-_]/, 1)[0];
+  const nextLanguage = currentLanguage === 'en' ? 'uk' : currentLanguage === 'uk' ? 'ru' : 'en';
+  const avatarUrl = previewUrl ?? (profile.avatar_hidden ? null : profile.avatar_url ?? telegramAvatarUrl);
+  const visibleAvatarUrl = avatarUrl === failedAvatarUrl ? null : avatarUrl;
 
   return (
     <section className="h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#141417] p-4 text-sm text-white shadow-2xl">
-      <header className="mb-5 flex items-center justify-between">
+      <header className="relative mb-5 flex min-h-10 items-center justify-center">
         <h2 className="font-serif text-xl text-[#FFE28A]">{t('social.profile')}</h2>
+        <button
+          type="button"
+          aria-label={t('social.switch_language', { language: nextLanguage.toUpperCase() })}
+          onClick={() => {
+            localStorage.setItem('app_lang', nextLanguage);
+            void i18n.changeLanguage(nextLanguage);
+          }}
+          className="absolute right-0 rounded-lg border border-[#C5A059]/40 px-2.5 py-1.5 font-semibold tracking-wider text-[#C5A059]"
+        >{currentLanguage.toUpperCase()}</button>
       </header>
       <form onSubmit={save} className="space-y-3">
-        {profile?.avatar_url && <img src={profile.avatar_url} alt="" className="h-16 w-16 rounded-full object-cover" />}
+        <div className="flex flex-col items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            aria-label={t('social.avatar')}
+            className="sr-only"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              if (file && (file.size > MAX_SOURCE_IMAGE_BYTES || !SOCIAL_IMAGE_TYPES.includes(file.type))) {
+                setAvatar(null);
+                setAvatarError(t('social.invalid_photo'));
+                event.target.value = '';
+              } else {
+                setAvatar(file);
+                setAvatarError(null);
+              }
+            }}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => fileRef.current?.click()}
+            aria-label={t('social.change_avatar')}
+            className="relative h-28 w-28 rounded-full border-2 border-[#C5A059]/50 bg-[#29272B] text-[#C5A059] disabled:opacity-50"
+          >
+            {visibleAvatarUrl
+              ? <img src={visibleAvatarUrl} alt="" onError={() => setFailedAvatarUrl(visibleAvatarUrl)} className="h-full w-full rounded-full object-cover" />
+              : <span aria-hidden="true" className="flex h-full w-full items-center justify-center">
+                <svg className="h-12 w-12" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <circle cx="12" cy="8" r="4" />
+                  <path strokeLinecap="round" d="M4 21a8 8 0 0 1 16 0" />
+                </svg>
+              </span>}
+            <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border border-[#C5A059]/50 bg-[#1A1A1E]">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h3l2-2h6l2 2h3v12H4V7Z" />
+                <circle cx="12" cy="13" r="3" />
+              </svg>
+            </span>
+          </button>
+          {(avatar || avatarUrl) && (
+            <button type="button" disabled={busy} onClick={() => {
+              setAvatar(null);
+              if (fileRef.current) fileRef.current.value = '';
+              onRemoveAvatar();
+            }} className="text-xs text-red-400/80 disabled:opacity-50">{t('social.remove_avatar')}</button>
+          )}
+        </div>
         <label className="block space-y-1"><span>{t('social.name')}</span>
           <input required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} className={inputStyle} />
         </label>
-        <label className="block space-y-1"><span>{t('social.avatar')}</span>
-          <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            if (file && (file.size > MAX_SOURCE_IMAGE_BYTES || !SOCIAL_IMAGE_TYPES.includes(file.type))) {
-              setAvatar(null);
-              setAvatarError(t('social.invalid_photo'));
-              event.target.value = '';
-            } else {
-              setAvatar(file);
-              setAvatarError(null);
-            }
-          }} className={inputStyle} />
-        </label>
-        {profile?.verified && <p className="text-[#C5A059]">✓ {t('social.verified')}</p>}
+        {profile.verified && <p className="text-[#C5A059]">✓ {t('social.verified')}</p>}
         <button type="submit" disabled={busy} className={actionStyle}>{t('social.save_profile')}</button>
       </form>
-      <section className="mt-5 space-y-2 border-t border-[#C5A059]/20 pt-4">
-        <h3 className="font-serif text-[#FFE28A]">{t('social.friends')}</h3>
-        {profile && (
-          <div className="flex items-center justify-between gap-2 text-xs text-slate-300">
-            <span>{t('social.my_id')}: {profile.telegram_id}</span>
-            <button type="button" className={actionStyle} onClick={() => {
-              void navigator.clipboard.writeText(String(profile.telegram_id)).then(() => setCopyError(null)).catch(() => setCopyError(t('social.copy_failed')));
-            }}>{t('social.copy_id')}</button>
-          </div>
-        )}
-        <div className="flex gap-2">
-          <input type="number" min={1} value={friendId} onChange={(event) => setFriendId(event.target.value)} placeholder={t('social.friend_id')} aria-label={t('social.friend_id')} className={inputStyle} />
-          <button type="button" disabled={busy || !friendId} onClick={() => onInvite(Number(friendId))} className={actionStyle}>＋</button>
-        </div>
-        <p className="text-xs text-slate-400">{t('social.friend_request')}</p>
-        {friends.map((friend) => <p key={friend.telegram_id} className="rounded-lg bg-[#1A1A1E] p-2">{friend.display_name}</p>)}
-        {requests.length > 0 && <h3 className="pt-2 text-[#FFE28A]">{t('social.incoming_requests')}</h3>}
-        {requests.map((request) => (
-          <div key={request.id} className="flex items-center justify-between gap-2 rounded-lg bg-[#1A1A1E] p-2">
-            <span>{request.sender.display_name}</span>
-            <button type="button" disabled={busy} onClick={() => onAccept(request.id)} className={actionStyle}>{t('social.accept')}</button>
-          </div>
-        ))}
-      </section>
       {tagRequests.length > 0 && (
         <section className="mt-5 space-y-2 border-t border-[#C5A059]/20 pt-4">
           <h3 className="font-serif text-[#FFE28A]">{t('social.tag_requests')}</h3>
@@ -156,7 +187,7 @@ export function SocialProfilePanel({
         </section>
       )}
       {notice && <p role="status" className="mt-4 text-[#FFE28A]">{notice}</p>}
-      {(avatarError || copyError || error) && <p role="alert" className="text-red-300">{avatarError || copyError || error}</p>}
+      {(avatarError || error) && <p role="alert" className="text-red-300">{avatarError || error}</p>}
     </section>
   );
 }
