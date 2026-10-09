@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { WhiskyTrail } from '@/components/WhiskyTrail.tsx';
@@ -50,7 +50,6 @@ export function ProfileTab() {
   const [activeScreen, setActiveScreen] = useState(0);
   const [favoritesVisited, setFavoritesVisited] = useState(false);
   const carouselRef = useRef<HTMLDivElement | null>(null);
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
   const [profile, setProfile] = useState<SocialProfile | null>(null);
   const [tagRequests, setTagRequests] = useState<TagRequest[]>([]);
@@ -105,33 +104,13 @@ export function ProfileTab() {
     }
   };
 
-  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
-    const target = event.target;
-    if (event.touches.length !== 1 || (target instanceof Element && target.closest('button, input, textarea, select, a, label, [data-profile-swipe-ignore]'))) {
-      touchStart.current = null;
-      return;
-    }
-    touchStart.current = { x: event.touches[0].clientX, y: event.touches[0].clientY };
-  };
-
   const goToScreen = (index: number) => {
     if (index === 2) setFavoritesVisited(true);
     carouselRef.current?.scrollTo({ left: index * carouselRef.current.clientWidth, behavior: 'smooth' });
   };
 
-  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
-    const start = touchStart.current;
-    touchStart.current = null;
-    if (!start || event.changedTouches.length !== 1) return;
-    const dx = event.changedTouches[0].clientX - start.x;
-    const dy = event.changedTouches[0].clientY - start.y;
-    if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-      goToScreen(Math.max(0, Math.min(2, activeScreen + (dx < 0 ? 1 : -1))));
-    }
-  };
-
   return (
-    <section className="mx-auto w-full max-w-md pb-8 pt-[env(safe-area-inset-top)]" onTouchStartCapture={handleTouchStart} onTouchEndCapture={handleTouchEnd} onTouchCancelCapture={() => { touchStart.current = null; }}>
+    <section className="mx-auto w-full max-w-md pb-8 pt-[env(safe-area-inset-top)]">
       <div ref={carouselRef} className="flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={(event) => {
         const { scrollLeft, clientWidth } = event.currentTarget;
         if (clientWidth) {
