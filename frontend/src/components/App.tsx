@@ -55,7 +55,7 @@ function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProp
   ];
 
   return (
-    <footer className={`${activeTab === 'cyprus-map' ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
+    <footer className={`${activeTab === 'cyprus-map' || activeTab === 'profile' ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
       <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
         {visibleTabs.map(({ id, labelKey, iconSrc }) => {
           const isActive = activeTab === id;
@@ -103,6 +103,7 @@ export function App() {
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
   const activeCyprusMap = activeTab === 'cyprus-map';
+  const dockedFooter = activeCyprusMap || activeTab === 'profile';
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedSocialEvent = useCallback(() => setSelectedSocialEventId(null), []);
@@ -194,8 +195,8 @@ export function App() {
   }, []);
 
   return (
-    <div className={`${activeCyprusMap ? 'flex h-[100dvh] flex-col' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
-      <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
+    <div className={`${dockedFooter ? 'flex h-[100dvh] flex-col overflow-hidden' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
+      <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'profile' ? 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
           {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
