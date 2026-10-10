@@ -29,6 +29,17 @@
   animation: distillery-spider-pop 250ms ease-out both;
 }
 
+.distillery-cluster-trigger,
+.distillery-spider-trigger {
+  outline: none;
+}
+
+.distillery-cluster-trigger:focus-visible > circle:first-of-type,
+.distillery-spider-trigger:focus-visible .distillery-spider-icon > circle:first-of-type {
+  stroke: #FFF2C2;
+  stroke-width: 3;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .distillery-spider-icon {
     animation: none;

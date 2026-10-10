@@ -441,6 +441,10 @@ export function ScotlandWhiskyMap({
                           geography={{ ...geography, svgPath: shape.svgPath }}
                           onClick={(event) => {
                             event.stopPropagation();
+                            if (expandedClusterId !== null) {
+                              setExpandedClusterId(null);
+                              return;
+                            }
                             scheduleMapClick(() => selectRegion(region));
                           }}
                           style={{
@@ -580,6 +584,11 @@ export function ScotlandWhiskyMap({
                     ))}
                     {spiderMarkers.map(({ distillery, x, y }) => {
                       const imageUrl = distillery.image_url || distillery.logo_url;
+                      const labelWidth = Math.max(56, distillery.name.length * 6.5 + 16);
+                      const labelX = Math.abs(x) > Math.abs(y)
+                        ? (x < 0 ? -labelWidth - 26 : 26)
+                        : -labelWidth / 2;
+                      const labelY = Math.abs(x) > Math.abs(y) ? -10 : (y < 0 ? -48 : 28);
                       const openDistillery = () => { void selectDistillery(distillery); };
                       return (
                         <g
@@ -588,7 +597,8 @@ export function ScotlandWhiskyMap({
                           role="button"
                           tabIndex={0}
                           aria-label={distillery.name}
-                          className="cursor-pointer"
+                          className="distillery-spider-trigger cursor-pointer"
+                          onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
                             openDistillery();
@@ -615,7 +625,13 @@ export function ScotlandWhiskyMap({
                                 {distillery.name.charAt(0)}
                               </text>
                             )}
-                            <circle r={18} fill="transparent" />
+                          </g>
+                          <circle r={22} fill="transparent" pointerEvents="all" />
+                          <g>
+                            <rect x={labelX} y={labelY} width={labelWidth} height={20} rx={10} fill="#141417" fillOpacity={0.95} stroke="#C5A059" strokeOpacity={0.6} />
+                            <text x={labelX + labelWidth / 2} y={labelY + 10} textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={11} pointerEvents="none">
+                              {distillery.name}
+                            </text>
                           </g>
                         </g>
                       );
@@ -625,7 +641,8 @@ export function ScotlandWhiskyMap({
                       tabIndex={0}
                       aria-label={`${t('tabs.distilleries')}: ${group.members.length}`}
                       aria-expanded={expanded}
-                      className="cursor-pointer"
+                      className="distillery-cluster-trigger cursor-pointer"
+                      onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
                         selectCluster(group);
@@ -638,10 +655,11 @@ export function ScotlandWhiskyMap({
                         }
                       }}
                     >
-                      <circle r={expanded ? 15 : 20} fill="#141417" stroke="#C5A059" strokeWidth={2} filter="url(#distillery-pin-shadow)" />
+                      <circle r={expanded ? 15 : 20} fill="#141417" stroke="#C5A059" strokeWidth={2} />
                       <text textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={expanded ? 19 : 13} fontWeight="bold" pointerEvents="none">
                         {expanded ? '×' : group.members.length}
                       </text>
+                      <circle r={24} fill="transparent" pointerEvents="all" />
                     </g>
                   </g>
                 </Marker>
