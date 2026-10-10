@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -12,6 +12,8 @@ import { useAnalytics } from '@/hooks/useAnalytics.ts';
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const SMALL_ISLAND_MAX_SIZE = 12;
+const MAX_ZOOM = 8;
+const CLUSTER_RADIUS = 48;
 
 export type MapDistillery = {
   id: number;
@@ -29,6 +31,42 @@ type PositionedMapDistillery = MapDistillery & {
   latitude: number;
   longitude: number;
 };
+
+type DistilleryGroup = {
+  members: PositionedMapDistillery[];
+  x: number;
+  y: number;
+  latitude: number;
+  longitude: number;
+};
+
+function groupDistilleries(distilleries: PositionedMapDistillery[], zoom: number): DistilleryGroup[] {
+  const radiusSquared = (CLUSTER_RADIUS / zoom) ** 2;
+  const groups: DistilleryGroup[] = [];
+  for (const distillery of distilleries) {
+    const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
+    let nearest: DistilleryGroup | undefined;
+    let nearestDistance = radiusSquared;
+    for (const group of groups) {
+      const distance = (group.x - x) ** 2 + (group.y - y) ** 2;
+      if (distance < nearestDistance) {
+        nearest = group;
+        nearestDistance = distance;
+      }
+    }
+    if (!nearest) {
+      groups.push({ members: [distillery], x, y, latitude: distillery.latitude, longitude: distillery.longitude });
+      continue;
+    }
+    const count = nearest.members.length;
+    nearest.members.push(distillery);
+    nearest.x = (nearest.x * count + x) / (count + 1);
+    nearest.y = (nearest.y * count + y) / (count + 1);
+    nearest.latitude = (nearest.latitude * count + distillery.latitude) / (count + 1);
+    nearest.longitude = (nearest.longitude * count + distillery.longitude) / (count + 1);
+  }
+  return groups;
+}
 
 type BottlePreview = {
   id: number;
@@ -122,15 +160,20 @@ export function ScotlandWhiskyMap({
   const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
-  const visibleMapDistilleries = mapDistilleries
-    .filter(hasCoordinates)
-    .filter((distillery, index) => (
-      !isDistantZoom
-      || distillery.tasted
-      || distillery.id === selectedDistillery?.id
-      || index % 3 === 0
-    ));
-  const canvasDistilleries = visibleMapDistilleries.filter((distillery) => (
+  const [expandedCluster, setExpandedCluster] = useState<PositionedMapDistillery[] | null>(null);
+  const positionedDistilleries = useMemo(() => mapDistilleries.filter(hasCoordinates), [mapDistilleries]);
+  const markerGroups = useMemo(() => groupDistilleries(
+    positionedDistilleries.filter((distillery) => distillery.id !== selectedDistillery?.id),
+    position.zoom,
+  ), [position.zoom, positionedDistilleries, selectedDistillery?.id]);
+  const singleDistilleries = markerGroups
+    .filter((group) => group.members.length === 1)
+    .map((group) => group.members[0]);
+  const selectedMapDistillery = positionedDistilleries.find((distillery) => distillery.id === selectedDistillery?.id);
+  const visibleMapDistilleries = selectedMapDistillery
+    ? [...singleDistilleries, selectedMapDistillery]
+    : singleDistilleries;
+  const canvasDistilleries = singleDistilleries.filter((distillery) => (
     distillery.id !== selectedDistillery?.id
     && (selectedRegion === null || distillery.region !== selectedRegion.sourceName)
   ));
@@ -152,6 +195,7 @@ export function ScotlandWhiskyMap({
     action();
   };
   const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
+    setExpandedCluster(null);
     setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
   }, []);
 
@@ -184,8 +228,9 @@ export function ScotlandWhiskyMap({
   }, []);
 
   const changeZoom = (amount: number) => {
+    setExpandedCluster(null);
     setPosition((current) => {
-      const zoom = Math.min(8, Math.max(initialPosition.zoom, current.zoom + amount));
+      const zoom = Math.min(MAX_ZOOM, Math.max(initialPosition.zoom, current.zoom + amount));
       return zoom === initialPosition.zoom ? initialPosition : { ...current, zoom };
     });
   };
@@ -196,13 +241,14 @@ export function ScotlandWhiskyMap({
       region: distillery.region ?? null,
     });
     setActiveDistillery(distillery);
+    setExpandedCluster(null);
     setSelectedDistillery(distillery);
     setSelectedBottles([]);
     setDetailLoadError(null);
     setIsLoadingDetails(true);
     setPosition({
       coordinates: [distillery.longitude!, distillery.latitude!],
-      zoom: 8,
+      zoom: MAX_ZOOM,
     });
 
     try {
@@ -256,10 +302,12 @@ export function ScotlandWhiskyMap({
     setSelectedBottles([]);
     setDetailLoadError(null);
     setSelectedRegion(null);
+    setExpandedCluster(null);
     setPosition(initialPosition);
   };
 
   const selectRegion = (region: WhiskyRegion) => {
+    setExpandedCluster(null);
     if (selectedDistillery) {
       resetMap();
       return;
@@ -269,6 +317,19 @@ export function ScotlandWhiskyMap({
     setPosition(nextRegion
       ? { coordinates: nextRegion.center, zoom: nextRegion.zoom }
       : initialPosition);
+  };
+
+  const selectCluster = (group: DistilleryGroup) => {
+    setActiveDistillery(null);
+    if (position.zoom >= MAX_ZOOM) {
+      setExpandedCluster(group.members);
+      return;
+    }
+    setExpandedCluster(null);
+    setPosition({
+      coordinates: [group.longitude, group.latitude],
+      zoom: Math.min(MAX_ZOOM, Math.max(position.zoom + 1.5, position.zoom * 1.8)),
+    });
   };
 
   return (
@@ -493,9 +554,53 @@ export function ScotlandWhiskyMap({
                 </Marker>
               );
             })}
+            {markerGroups.filter((group) => group.members.length > 1).map((group) => (
+              <Marker
+                key={`cluster-${group.members[0].id}`}
+                coordinates={[group.longitude, group.latitude]}
+                role="button"
+                tabIndex={0}
+                aria-label={`${t('tabs.distilleries')}: ${group.members.length}`}
+                onMouseEnter={() => setActiveDistillery(null)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectCluster(group);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    selectCluster(group);
+                  }
+                }}
+              >
+                <g transform={`scale(${1 / position.zoom})`} className="cursor-pointer">
+                  <circle r={20} fill="#141417" stroke="#C5A059" strokeWidth={2} filter="url(#distillery-pin-shadow)" />
+                  <circle r={16} fill="#C5A059" fillOpacity={0.14} />
+                  <text textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={13} fontWeight="bold" pointerEvents="none">
+                    {group.members.length}
+                  </text>
+                </g>
+              </Marker>
+            ))}
           </ZoomableGroup>
         </ComposableMap>
 
+        {expandedCluster && (
+          <div className="absolute bottom-20 left-1/2 z-10 max-h-[40dvh] w-[90%] max-w-xs -translate-x-1/2 overflow-y-auto rounded-2xl border border-[#C5A059]/40 bg-[#1a1a1e]/95 p-2 shadow-2xl backdrop-blur-md">
+            <p className="px-2 py-1 text-xs font-semibold text-[#C5A059]">{t('tabs.distilleries')}</p>
+            {expandedCluster.map((distillery) => (
+              <button
+                key={distillery.id}
+                type="button"
+                className="w-full rounded-lg px-2 py-2 text-left text-sm text-[#F4F4F5] hover:bg-[#C5A059]/15"
+                onClick={() => void selectDistillery(distillery)}
+              >
+                {distillery.name}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="absolute right-3 top-3 flex flex-col space-y-2">
           <button
             aria-label="Zoom in"
