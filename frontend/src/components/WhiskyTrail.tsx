@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { TransformComponent, TransformWrapper, type ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
 import { publicUrl } from '@/helpers/publicUrl.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
-const NODE_SPACING = 120;
-const TRAIL_EXTENSION = 60;
-const TRAIL_X = 64;
+const VISIBLE_EVENTS = 3;
+const TRAIL_WAVE = 36;
 const trailTranslations = {
   en: { attended: 'Attended', missed: 'Missed', reserve: 'Reserve', tastedBottles: 'Tasted bottles' },
   ru: { attended: 'Был', missed: 'Пропущено', reserve: 'Забронировать', tastedBottles: 'Продегустировано бутылок' },
@@ -168,8 +166,8 @@ export function WhiskyTrail({
   username?: string;
   firstName?: string;
 }) {
-  const transformRef = useRef<ReactZoomPanPinchRef | null>(null);
   const cardRef = useRef<HTMLElement | null>(null);
+  const [frameSize, setFrameSize] = useState({ width: 0, height: 0 });
   const [trail, setTrail] = useState<WhiskyTrailData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<EventNode | null>(null);
@@ -209,11 +207,35 @@ export function WhiskyTrail({
     return () => controller.abort();
   }, [initDataRaw, language, telegramId]);
 
-  const points = useMemo(() => trail?.nodes.map((node, index) => ({
-    x: node.type === 'milestone' ? TRAIL_X : TRAIL_X + (index % 2 === 0 ? 8 : -8),
-    y: TRAIL_EXTENSION + index * NODE_SPACING,
-  })) ?? [], [trail?.nodes]);
-  const canvasHeight = Math.max(1, Math.max(0, points.length - 1) * NODE_SPACING + TRAIL_EXTENSION * 2);
+  useEffect(() => {
+    if (trail?.status !== 'success' || !cardRef.current) return;
+    const card = cardRef.current;
+    const observer = new ResizeObserver(() => {
+      const width = card.clientWidth;
+      const height = card.clientHeight;
+      setFrameSize((current) => current.width === width && current.height === height
+        ? current : { width, height });
+    });
+    observer.observe(card);
+    return () => observer.disconnect();
+  }, [trail?.status]);
+
+  const nodeSpacing = frameSize.height / VISIBLE_EVENTS;
+  const points = useMemo(() => {
+    let eventIndex = 0;
+    return trail?.nodes.map((node) => {
+      const x = frameSize.width / 2 + (node.type === 'event'
+        ? (eventIndex % 2 === 0 ? -TRAIL_WAVE : TRAIL_WAVE)
+        : 0);
+      const y = node.type === 'event'
+        ? (eventIndex++ + 0.5) * nodeSpacing
+        : eventIndex * nodeSpacing;
+      return { x, y };
+    }) ?? [];
+  }, [frameSize.width, nodeSpacing, trail?.nodes]);
+  const eventCount = trail?.nodes.filter((node) => node.type === 'event').length ?? 0;
+  const lastNode = trail?.nodes[trail.nodes.length - 1];
+  const canvasHeight = Math.max(frameSize.height, (eventCount + (lastNode?.type === 'milestone' ? 0.5 : 0)) * nodeSpacing);
   const focusedPoint = useMemo(() => {
     const index = trail?.nodes.findIndex((node) => node.id === trail.focused_node_id) ?? -1;
     return index >= 0 ? points[index] : undefined;
@@ -223,9 +245,9 @@ export function WhiskyTrail({
     if (points.length === 0) return '';
 
     const linePoints = [
-      { x: points[0].x, y: 0 },
+      { x: frameSize.width / 2, y: 0 },
       ...points,
-      { x: points[points.length - 1].x, y: canvasHeight },
+      { x: frameSize.width / 2, y: canvasHeight },
     ];
     return linePoints.reduce((result, point, index) => {
     if (index === 0) return `M ${point.x} ${point.y}`;
@@ -233,23 +255,18 @@ export function WhiskyTrail({
     const middleY = (previous.y + point.y) / 2;
     return `${result} C ${previous.x} ${middleY}, ${point.x} ${middleY}, ${point.x} ${point.y}`;
     }, '');
-  }, [canvasHeight, points]);
+  }, [canvasHeight, frameSize.width, points]);
 
   useEffect(() => {
-    if (!focusedPoint || !transformRef.current || !cardRef.current) {
+    if (!focusedPoint || !frameSize.height || !cardRef.current) {
       return;
     }
 
     const frame = window.requestAnimationFrame(() => {
-      transformRef.current?.setTransform(
-        0,
-        (cardRef.current?.clientHeight ?? 0) / 2 - focusedPoint.y,
-        1,
-        0,
-      );
+      if (cardRef.current) cardRef.current.scrollTop = focusedPoint.y - frameSize.height / 2;
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusedPoint]);
+  }, [focusedPoint, frameSize.height]);
 
   const openNode = async (node: EventNode) => {
     const eventId = eventIdFromNodeId(node.id);
@@ -319,54 +336,56 @@ export function WhiskyTrail({
 
   return (
     <>
-      <article ref={cardRef} className="relative h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-hidden rounded-2xl border border-[#C5A059]/30 bg-[#141417] shadow-2xl">
-        <TransformWrapper ref={transformRef} centerOnInit={false} initialScale={1} limitToBounds maxScale={1.8} minScale={0.6} panning={{ excluded: ['button'], lockAxisX: true }} wheel={{ step: 0.15 }}>
-          <TransformComponent wrapperClass="!h-full !w-full" contentClass="!h-auto !w-full">
-            <div className="relative w-full" style={{ height: canvasHeight }}>
-              <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
-                <defs>
-                  <linearGradient id="copperGradient" x1="0" x2="1" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#75451f" />
-                    <stop offset="50%" stopColor="#e2b66c" />
-                    <stop offset="100%" stopColor="#8f5728" />
-                  </linearGradient>
-                </defs>
-                {path && <path d={path} fill="none" filter="drop-shadow(0 0 8px rgba(197, 160, 89, 0.6))" stroke="url(#copperGradient)" strokeWidth="4" />}
-              </svg>
-              {trail.nodes.map((node, index) => {
-                const point = points[index];
-                if (node.type === 'milestone') {
-                  return (
-                    <div key={node.id} aria-label={`${trailText.tastedBottles}: ${node.tried_bottles_count}`} className="absolute z-10 h-14 w-14 -translate-x-1/2 -translate-y-1/2" role="img" style={{ left: point.x, top: point.y }}>
-                      <img alt="" aria-hidden="true" className="h-full w-full object-contain drop-shadow-[0_0_12px_rgba(197,160,89,0.35)]" src={publicUrl('assets/nav/BottleJourney.webp')} />
-                      <span aria-hidden="true" className="absolute -left-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#141417] bg-[#C5A059] px-1 text-[11px] font-bold leading-none text-[#141417] shadow-[0_0_12px_rgba(197,160,89,0.4)]">
-                        {node.tried_bottles_count}
-                      </span>
-                    </div>
-                  );
-                }
+      <article ref={cardRef} className="relative h-[calc(100dvh-9rem-env(safe-area-inset-top))] min-h-[24rem] w-full overflow-y-auto rounded-2xl border border-[#C5A059]/30 bg-[#141417] shadow-2xl">
+        <div className={`relative w-full ${frameSize.height ? '' : 'invisible'}`} style={{ height: canvasHeight }}>
+          <svg aria-hidden="true" className="absolute inset-0 h-full w-full overflow-visible">
+            <defs>
+              <linearGradient id="copperGradient" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1="0" y2={canvasHeight}>
+                <stop offset="0%" stopColor="#75451f" />
+                <stop offset="50%" stopColor="#e2b66c" />
+                <stop offset="100%" stopColor="#8f5728" />
+              </linearGradient>
+            </defs>
+            {path && <path d={path} fill="none" filter="drop-shadow(0 0 8px rgba(197, 160, 89, 0.6))" stroke="url(#copperGradient)" strokeWidth="4" />}
+          </svg>
+          {trail.nodes.map((node, index) => {
+            const point = points[index];
+            if (node.type === 'milestone') {
+              return (
+                <div key={node.id} aria-label={`${trailText.tastedBottles}: ${node.tried_bottles_count}`} className="absolute z-10 h-14 w-14 -translate-x-1/2 -translate-y-1/2" role="img" style={{ left: point.x, top: point.y }}>
+                  <img alt="" aria-hidden="true" className="h-full w-full object-contain drop-shadow-[0_0_12px_rgba(197,160,89,0.35)]" src={publicUrl('assets/nav/BottleJourney.webp')} />
+                  <span aria-hidden="true" className="absolute -left-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full border-2 border-[#141417] bg-[#C5A059] px-1 text-[11px] font-bold leading-none text-[#141417] shadow-[0_0_12px_rgba(197,160,89,0.4)]">
+                    {node.tried_bottles_count}
+                  </span>
+                </div>
+              );
+            }
 
-                const isMissed = node.status === 'missed';
-                const isUpcoming = node.status === 'upcoming';
-                return (
-                  <div key={node.id} className="absolute inset-x-0 z-10" style={{ top: point.y }}>
-                    <button aria-label={node.title} className="group absolute -translate-x-1/2 -translate-y-1/2" style={{ left: point.x }} onClick={() => void openNode(node)} type="button">
-                      {isUpcoming && <span className="absolute inset-0 rounded-full border-2 border-[#C5A059] animate-ping" />}
-                      <span className={`relative flex h-12 w-12 overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] ${isMissed ? '' : 'shadow-[0_0_16px_rgba(197,160,89,0.7)]'}`}>
-                        {node.image_url ? <img alt="" className={`h-full w-full object-cover ${isMissed ? 'grayscale opacity-40' : ''}`} src={node.image_url} /> : <span className={`m-auto text-lg text-[#C5A059] ${isMissed ? 'opacity-40 grayscale' : ''}`}>🥃</span>}
-                      </span>
-                    </button>
-                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-left" style={{ left: point.x + 36 }}>
-                      <p className={`text-sm font-semibold leading-tight ${isMissed ? 'text-slate-500' : 'text-white'}`}>{node.title}</p>
-                      <p className="mt-1 text-[11px] text-slate-400">{formatEventDate(node.date, language)}</p>
-                      {isMissed ? <span className="mt-1 inline-block rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">{trailText.missed}</span> : isUpcoming ? <span className="mt-1 inline-block rounded-full bg-[#C5A059]/20 px-2 py-0.5 text-[10px] text-[#e4c47f]">{trailText.reserve}</span> : <span className="mt-1 inline-block rounded-full bg-[#C5A059]/15 px-2 py-0.5 text-[10px] text-[#C5A059]">{trailText.attended} · {node.bottles_count}</span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </TransformComponent>
-        </TransformWrapper>
+            const isMissed = node.status === 'missed';
+            const isUpcoming = node.status === 'upcoming';
+            const bendsLeft = point.x < frameSize.width / 2;
+            return (
+              <div key={node.id} className="absolute inset-x-0 z-10" style={{ top: point.y }}>
+                <button aria-label={node.title} className="group absolute -translate-x-1/2 -translate-y-1/2" style={{ left: point.x }} onClick={() => void openNode(node)} type="button">
+                  {isUpcoming && <span className="absolute inset-0 rounded-full border-2 border-[#C5A059] animate-ping" />}
+                  <span className={`relative flex h-12 w-12 overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] ${isMissed ? '' : 'shadow-[0_0_16px_rgba(197,160,89,0.7)]'}`}>
+                    {node.image_url ? <img alt="" className={`h-full w-full object-cover ${isMissed ? 'grayscale opacity-40' : ''}`} src={node.image_url} /> : <span className={`m-auto text-lg text-[#C5A059] ${isMissed ? 'opacity-40 grayscale' : ''}`}>🥃</span>}
+                  </span>
+                </button>
+                <div
+                  className={`pointer-events-none absolute top-1/2 -translate-y-1/2 ${bendsLeft ? 'text-left' : 'text-right'}`}
+                  style={bendsLeft
+                    ? { left: point.x + 36, right: 12 }
+                    : { left: 12, right: frameSize.width - point.x + 36 }}
+                >
+                  <p className={`text-sm font-semibold leading-tight ${isMissed ? 'text-slate-500' : 'text-white'}`}>{node.title}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{formatEventDate(node.date, language)}</p>
+                  {isMissed ? <span className="mt-1 inline-block rounded-full bg-slate-500/20 px-2 py-0.5 text-[10px] text-slate-400">{trailText.missed}</span> : isUpcoming ? <span className="mt-1 inline-block rounded-full bg-[#C5A059]/20 px-2 py-0.5 text-[10px] text-[#e4c47f]">{trailText.reserve}</span> : <span className="mt-1 inline-block rounded-full bg-[#C5A059]/15 px-2 py-0.5 text-[10px] text-[#C5A059]">{trailText.attended} · {node.bottles_count}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </article>
 
       {selectedNode && (
