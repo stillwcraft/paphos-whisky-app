@@ -42,8 +42,9 @@ const eventIcon = new Icon({
   iconAnchor: [12, 41],
   shadowSize: [41, 41],
 });
+const drinkEmojis: Record<Drink, string> = { beer: '🍺', wine: '🍷', spirits: '🥃', cocktails: '🍸', coffee: '☕' };
 const socialIcons: Record<Drink, DivIcon> = Object.fromEntries(
-  (Object.entries({ beer: '🍺', wine: '🍷', spirits: '🥃', cocktails: '🍸', coffee: '☕' }) as [Drink, string][])
+  (Object.entries(drinkEmojis) as [Drink, string][])
     .map(([drink, emoji]) => [drink, new DivIcon({
       html: `<span style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;background:#141417;font-size:22px;box-shadow:0 2px 12px #0009">${emoji}</span>`,
       className: '',
@@ -107,6 +108,7 @@ function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick 
   const map = useMap();
   const groupRef = useRef<L.MarkerClusterGroup | null>(null);
   const markersRef = useRef(new Map<string, { marker: L.Marker; signature: string }>());
+  const markerVisualsRef = useRef(new WeakMap<L.Marker, { imageUrl: string | null; fallback: string }>());
   const catalogRef = useRef(new Map<number, PositionedEvent>());
   const clickRef = useRef({ onCatalogClick, onSocialClick });
   clickRef.current = { onCatalogClick, onSocialClick };
@@ -117,12 +119,37 @@ function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick 
       maxClusterRadius: 48,
       showCoverageOnHover: false,
       spiderLegPolylineOptions: { color: '#C5A059', weight: 1.5, opacity: 0.8 },
-      iconCreateFunction: (cluster) => new DivIcon({
-        html: `<span class="cyprus-event-cluster-count">${cluster.getChildCount()}</span>`,
-        className: 'cyprus-event-cluster',
-        iconSize: [42, 42],
-        iconAnchor: [21, 21],
-      }),
+      iconCreateFunction: (cluster) => {
+        const visuals = cluster.getAllChildMarkers().map((marker) => markerVisualsRef.current.get(marker));
+        const imageUrl = visuals.find((visual) => visual?.imageUrl)?.imageUrl;
+        const fallback = visuals.find((visual) => visual?.fallback)?.fallback ?? '✦';
+        const frame = document.createElement('span');
+        frame.className = 'cyprus-event-cluster-visual';
+        if (imageUrl) {
+          const image = document.createElement('img');
+          image.src = imageUrl;
+          image.alt = '';
+          image.onerror = () => {
+            image.remove();
+            frame.textContent = fallback;
+          };
+          frame.appendChild(image);
+        } else {
+          frame.textContent = fallback;
+        }
+        const badge = document.createElement('span');
+        badge.className = 'cyprus-event-cluster-count';
+        badge.textContent = String(cluster.getChildCount());
+        const content = document.createElement('div');
+        content.className = 'cyprus-event-cluster-content';
+        content.append(frame, badge);
+        return new DivIcon({
+          html: content,
+          className: 'cyprus-event-cluster',
+          iconSize: [42, 42],
+          iconAnchor: [21, 21],
+        });
+      },
     });
     groupRef.current = group;
     map.addLayer(group);
@@ -140,21 +167,27 @@ function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick 
     for (const event of catalog) {
       next.set(`catalog-${event.id}`, {
         signature: `${event.latitude}:${event.longitude}`,
-        create: () => L.marker([event.latitude, event.longitude], { icon: eventIcon })
-          .on('click', () => {
+        create: () => {
+          const marker = L.marker([event.latitude, event.longitude], { icon: eventIcon });
+          markerVisualsRef.current.set(marker, { imageUrl: null, fallback: '📅' });
+          return marker.on('click', () => {
             const current = catalogRef.current.get(event.id);
             if (current) clickRef.current.onCatalogClick(current);
-          }),
+          });
+        },
       });
     }
     for (const event of social) {
       next.set(`social-${event.id}`, {
         signature: `${event.latitude}:${event.longitude}:${event.event_type}:${event.drink}:${event.image_url ?? ''}`,
-        create: () => L.marker([event.latitude, event.longitude], {
-          icon: event.event_type === 'global' && event.image_url
-            ? globalEventIcon(event.image_url)
-            : socialIcons[event.drink] ?? eventIcon,
-        }).on('click', () => clickRef.current.onSocialClick(event.id)),
+        create: () => {
+          const imageUrl = event.event_type === 'global' ? event.image_url : null;
+          const marker = L.marker([event.latitude, event.longitude], {
+            icon: imageUrl ? globalEventIcon(imageUrl) : socialIcons[event.drink] ?? eventIcon,
+          });
+          markerVisualsRef.current.set(marker, { imageUrl, fallback: drinkEmojis[event.drink] ?? '✦' });
+          return marker.on('click', () => clickRef.current.onSocialClick(event.id));
+        },
       });
     }
     const removed: L.Marker[] = [];
