@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref, type SetStateAction } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { AttributionControl, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import L, { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
+import L, { DivIcon, Icon, latLngBounds, type DivIconOptions, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import { useTranslation } from 'react-i18next';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -54,17 +54,30 @@ const socialIcons: Record<Drink, DivIcon> = Object.fromEntries(
 ) as Record<Drink, DivIcon>;
 const globalIcons = new Map<string, DivIcon>();
 
+class FreshContentDivIcon extends DivIcon {
+  constructor(private readonly createContent: () => HTMLElement, options: DivIconOptions) {
+    super(options);
+  }
+
+  override createIcon(oldIcon?: HTMLElement): HTMLElement {
+    this.options.html = this.createContent();
+    return super.createIcon(oldIcon);
+  }
+}
+
 function globalEventIcon(imageUrl: string): DivIcon {
   const cached = globalIcons.get(imageUrl);
   if (cached) return cached;
-  const frame = document.createElement('div');
-  frame.style.cssText = 'width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;overflow:hidden;background:#141417;box-shadow:0 2px 12px #0009';
-  const image = document.createElement('img');
-  image.src = imageUrl;
-  image.alt = '';
-  image.style.cssText = 'width:100%;height:100%;object-fit:cover';
-  frame.appendChild(image);
-  const icon = new DivIcon({ html: frame, className: '', iconSize: [38, 38], iconAnchor: [19, 38] });
+  const icon = new FreshContentDivIcon(() => {
+    const frame = document.createElement('div');
+    frame.style.cssText = 'width:38px;height:38px;border:2px solid #C5A059;border-radius:50%;overflow:hidden;background:#141417;box-shadow:0 2px 12px #0009';
+    const image = document.createElement('img');
+    image.src = imageUrl;
+    image.alt = '';
+    image.style.cssText = 'width:100%;height:100%;object-fit:cover';
+    frame.appendChild(image);
+    return frame;
+  }, { className: '', iconSize: [38, 38], iconAnchor: [19, 38] });
   globalIcons.set(imageUrl, icon);
   return icon;
 }
@@ -119,7 +132,7 @@ function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick 
       maxClusterRadius: 48,
       showCoverageOnHover: false,
       spiderLegPolylineOptions: { color: '#C5A059', weight: 1.5, opacity: 0.8 },
-      iconCreateFunction: (cluster) => {
+      iconCreateFunction: (cluster) => new FreshContentDivIcon(() => {
         const visuals = cluster.getAllChildMarkers().map((marker) => markerVisualsRef.current.get(marker));
         const imageUrl = visuals.find((visual) => visual?.imageUrl)?.imageUrl;
         const fallback = visuals.find((visual) => visual?.fallback)?.fallback ?? '✦';
@@ -143,13 +156,12 @@ function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick 
         const content = document.createElement('div');
         content.className = 'cyprus-event-cluster-content';
         content.append(frame, badge);
-        return new DivIcon({
-          html: content,
-          className: 'cyprus-event-cluster',
-          iconSize: [42, 42],
-          iconAnchor: [21, 21],
-        });
-      },
+        return content;
+      }, {
+        className: 'cyprus-event-cluster',
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+      }),
     });
     groupRef.current = group;
     map.addLayer(group);
