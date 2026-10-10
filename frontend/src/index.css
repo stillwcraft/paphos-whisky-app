@@ -83,6 +83,53 @@ body {
   top: env(safe-area-inset-top);
 }
 
+.cyprus-event-cluster {
+  display: grid;
+  place-items: center;
+  border: 2px solid #C5A059;
+  border-radius: 50%;
+  background: #141417;
+  box-shadow: 0 2px 12px #0009, 0 0 10px #C5A05955;
+  color: #FFE28A;
+  font-weight: 700;
+}
+
+.cyprus-event-range {
+  appearance: none;
+  background: transparent;
+  touch-action: none;
+}
+
+.cyprus-event-range::-webkit-slider-runnable-track {
+  height: 24px;
+  background: transparent;
+}
+
+.cyprus-event-range::-moz-range-track {
+  height: 24px;
+  background: transparent;
+}
+
+.cyprus-event-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  border: 2px solid #FFE28A;
+  border-radius: 50%;
+  background: #C5A059;
+  box-shadow: 0 0 10px #C5A05999;
+}
+
+.cyprus-event-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #FFE28A;
+  border-radius: 50%;
+  background: #C5A059;
+  box-shadow: 0 0 10px #C5A05999;
+}
+
 .markdown-content strong,
 .markdown-content b {
   color: #fff;

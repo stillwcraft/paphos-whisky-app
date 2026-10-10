@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type Ref, type SetStateAction } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { AttributionControl, MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
+import L, { DivIcon, Icon, latLngBounds, type LatLngTuple, type Map as LeafletMap } from 'leaflet';
 import { useTranslation } from 'react-i18next';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
 import { localizedApiUrl } from '@/localization.ts';
 import { eventEndTime, isEventCurrentOrUpcoming } from '@/helpers/eventTime.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
@@ -19,6 +21,20 @@ const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
 const CYPRUS_MAP_BOUNDS = latLngBounds([34.15, 31.8], [36.0, 34.9]);
 const CYPRUS_LOCATION_BOUNDS = latLngBounds([34.55, 32.25], [35.75, 34.65]);
+const GLOBAL_RANGE_MAX = 29;
+const cyprusDateFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Asia/Nicosia', year: 'numeric', month: '2-digit', day: '2-digit',
+});
+function cyprusDateKey(date: Date): string {
+  const parts = cyprusDateFormatter.formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function rangeEndDate(now: number, day: number): string {
+  const [year, month, date] = cyprusDateKey(new Date(now)).split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, date + day)).toISOString().slice(0, 10);
+}
 const eventIcon = new Icon({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
@@ -82,6 +98,87 @@ function DismissSelectedOnMapClick({ onClick }: { onClick: () => void }) {
   return null;
 }
 
+function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick }: {
+  catalog: PositionedEvent[];
+  social: SocialMapMarker[];
+  onCatalogClick: (event: PositionedEvent) => void;
+  onSocialClick: (id: number) => void;
+}) {
+  const map = useMap();
+  const groupRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersRef = useRef(new Map<string, { marker: L.Marker; signature: string }>());
+  const catalogRef = useRef(new Map<number, PositionedEvent>());
+  const clickRef = useRef({ onCatalogClick, onSocialClick });
+  clickRef.current = { onCatalogClick, onSocialClick };
+  catalogRef.current = new Map(catalog.map((event) => [event.id, event]));
+
+  useEffect(() => {
+    const group = L.markerClusterGroup({
+      maxClusterRadius: 48,
+      showCoverageOnHover: false,
+      spiderLegPolylineOptions: { color: '#C5A059', weight: 1.5, opacity: 0.8 },
+      iconCreateFunction: (cluster) => new DivIcon({
+        html: `<span class="cyprus-event-cluster-count">${cluster.getChildCount()}</span>`,
+        className: 'cyprus-event-cluster',
+        iconSize: [42, 42],
+        iconAnchor: [21, 21],
+      }),
+    });
+    groupRef.current = group;
+    map.addLayer(group);
+    return () => {
+      map.removeLayer(group);
+      groupRef.current = null;
+      markersRef.current.clear();
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    const next = new Map<string, { signature: string; create: () => L.Marker }>();
+    for (const event of catalog) {
+      next.set(`catalog-${event.id}`, {
+        signature: `${event.latitude}:${event.longitude}`,
+        create: () => L.marker([event.latitude, event.longitude], { icon: eventIcon })
+          .on('click', () => {
+            const current = catalogRef.current.get(event.id);
+            if (current) clickRef.current.onCatalogClick(current);
+          }),
+      });
+    }
+    for (const event of social) {
+      next.set(`social-${event.id}`, {
+        signature: `${event.latitude}:${event.longitude}:${event.event_type}:${event.drink}:${event.image_url ?? ''}`,
+        create: () => L.marker([event.latitude, event.longitude], {
+          icon: event.event_type === 'global' && event.image_url
+            ? globalEventIcon(event.image_url)
+            : socialIcons[event.drink] ?? eventIcon,
+        }).on('click', () => clickRef.current.onSocialClick(event.id)),
+      });
+    }
+    const removed: L.Marker[] = [];
+    for (const [key, item] of markersRef.current) {
+      if (next.get(key)?.signature !== item.signature) {
+        removed.push(item.marker);
+        markersRef.current.delete(key);
+      }
+    }
+    if (removed.length) group.removeLayers(removed);
+    const added: L.Marker[] = [];
+    for (const [key, item] of next) {
+      if (!markersRef.current.has(key)) {
+        const marker = item.create();
+        markersRef.current.set(key, { marker, signature: item.signature });
+        added.push(marker);
+      }
+    }
+    if (added.length) group.addLayers(added);
+  }, [catalog, social]);
+
+  return null;
+}
+
 function useAutoDismissError(message: string | null, setMessage: Dispatch<SetStateAction<string | null>>, enabled = true) {
   useEffect(() => {
     if (!message || !enabled) return;
@@ -142,6 +239,7 @@ export function CyprusEventsMap({
   const api = useMemo(() => initDataRaw ? new SocialApi(initDataRaw) : null, [initDataRaw]);
   const [events, setEvents] = useState<PositionedEvent[]>(() => cyprusMapCache.getEvents(i18n.language)?.items ?? []);
   const [now, setNow] = useState(() => Date.now());
+  const [globalRange, setGlobalRange] = useState(GLOBAL_RANGE_MAX);
   const [socialEvents, setSocialEvents] = useState<SocialMapMarker[]>(() => cyprusMapCache.getMarkers(userId) ?? []);
   const [socialDetail, setSocialDetail] = useState<SocialEvent | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -177,11 +275,19 @@ export function CyprusEventsMap({
   const [isSocialLoading, setIsSocialLoading] = useState(() => Boolean(api && cyprusMapCache.getMarkers(userId) === undefined));
   const mapLoading = isLoading || isSocialLoading;
   const ageConfirmed = profile !== null && (profile.age !== null || isAdmin);
-  const activeSocialEvents = api && ageConfirmed
-    ? socialEvents.filter((event) => new Date(event.expires_at).getTime() > now) : [];
+  const activeSocialEvents = useMemo(() => {
+    if (!api || !ageConfirmed) return [];
+    const lastDay = globalRange === GLOBAL_RANGE_MAX ? null : rangeEndDate(now, globalRange);
+    return socialEvents.filter((event) => new Date(event.expires_at).getTime() > now
+      && (event.event_type !== 'global' || lastDay === null
+        || cyprusDateKey(new Date(event.starts_at)) <= lastDay));
+  }, [api, ageConfirmed, socialEvents, now, globalRange]);
   const selectedSocial = socialDetail?.id === selectedSocialId && new Date(socialDetail.expires_at).getTime() > now
     ? socialDetail : null;
-  const upcomingEvents = events.filter((event) => isEventCurrentOrUpcoming(event.date, now));
+  const upcomingEvents = useMemo(
+    () => events.filter((event) => isEventCurrentOrUpcoming(event.date, now)),
+    [events, now],
+  );
   const activeSelected = selected && upcomingEvents.some((event) => event.id === selected.id) ? selected : null;
 
   useEffect(() => {
@@ -202,6 +308,16 @@ export function CyprusEventsMap({
     document.addEventListener('visibilitychange', refresh);
     return () => document.removeEventListener('visibilitychange', refresh);
   }, []);
+
+  useEffect(() => {
+    if (globalRange === GLOBAL_RANGE_MAX) return;
+    const interval = window.setInterval(() => {
+      const current = Date.now();
+      setNow((previous) => cyprusDateKey(new Date(previous)) === cyprusDateKey(new Date(current))
+        ? previous : current);
+    }, 60_000);
+    return () => window.clearInterval(interval);
+  }, [globalRange]);
 
   useAutoDismissError(error, setError);
   useAutoDismissError(linkError, setLinkError);
@@ -527,55 +643,72 @@ export function CyprusEventsMap({
     <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')} aria-busy={mapLoading}>
       <BaseMap className="cyprus-events-map h-full w-full" mapRef={mapRef} attributionPosition="topright">
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
-        {upcomingEvents.map((event) => (
-          <Marker
-            key={event.id}
-            icon={eventIcon}
-            position={[event.latitude, event.longitude]}
-            eventHandlers={{ click: () => { setSelected(event); setSelectedSocialId(null); setPanel(null); } }}
-          />
-        ))}
-        {activeSocialEvents.map((event) => (
-          <Marker
-            key={`social-${event.id}`}
-            icon={event.event_type === 'global' && event.image_url
-              ? globalEventIcon(event.image_url)
-              : socialIcons[event.drink] ?? eventIcon}
-            position={[event.latitude, event.longitude]}
-            eventHandlers={{ click: () => openSocialEvent(event.id) }}
-          />
-        ))}
+        <ClusteredEventMarkers
+          catalog={upcomingEvents}
+          social={activeSocialEvents}
+          onCatalogClick={(event) => { setSelected(event); setSelectedSocialId(null); setPanel(null); }}
+          onSocialClick={openSocialEvent}
+        />
       </BaseMap>
       {(mapLoading || detailLoading) && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
       {!mapLoading && !panel && !activeSelected && !selectedSocial && (
-        <div className="absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] right-4 z-[1000] flex flex-col gap-3">
-          <button
-            type="button"
-            aria-label={t('cyprus_map.my_location')}
-            title={t('cyprus_map.my_location')}
-            aria-busy={locating}
-            disabled={locating}
-            onClick={centerOnUser}
-            className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
-          >
-            <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="7" />
-              <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
-              <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            aria-label={t('social.create')}
-            title={t('social.create')}
-            disabled={busy}
-            onClick={openCreate}
-            className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
-          >
-            <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
+        <div className="absolute inset-x-4 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-[1000] flex items-end gap-3">
+          <div className="min-w-0 flex-1 rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
+            <label htmlFor="global-events-range" className="block truncate text-[11px] font-medium text-[#D9BD82]">
+              {t('cyprus_map.global_range')}: {globalRange === GLOBAL_RANGE_MAX
+                ? t('cyprus_map.all_available') : globalRange === 0
+                  ? t('cyprus_map.today') : t('cyprus_map.days_ahead', { count: globalRange + 1 })}
+            </label>
+            <div className="relative h-6">
+              <div aria-hidden="true" className="pointer-events-none absolute inset-x-[9px] top-3 flex justify-between">
+                {Array.from({ length: 30 }, (_, index) => (
+                  <span key={index} className={`h-2 w-px -translate-y-1/2 ${index <= globalRange ? 'bg-[#C5A059]' : 'bg-[#6E6D6A]'}`} />
+                ))}
+              </div>
+              <input
+                id="global-events-range"
+                className="cyprus-event-range absolute inset-0 w-full cursor-pointer"
+                type="range"
+                min={0}
+                max={GLOBAL_RANGE_MAX}
+                step={1}
+                value={globalRange}
+                aria-valuetext={globalRange === GLOBAL_RANGE_MAX
+                  ? t('cyprus_map.all_available')
+                  : globalRange === 0 ? t('cyprus_map.today') : t('cyprus_map.days_ahead', { count: globalRange + 1 })}
+                onChange={(event) => setGlobalRange(Number(event.target.value))}
+              />
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-col gap-3">
+            <button
+              type="button"
+              aria-label={t('cyprus_map.my_location')}
+              title={t('cyprus_map.my_location')}
+              aria-busy={locating}
+              disabled={locating}
+              onClick={centerOnUser}
+              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+            >
+              <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="7" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+                <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label={t('social.create')}
+              title={t('social.create')}
+              disabled={busy}
+              onClick={openCreate}
+              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+            >
+              <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
