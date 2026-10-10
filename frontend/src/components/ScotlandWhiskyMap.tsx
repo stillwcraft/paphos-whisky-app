@@ -41,6 +41,12 @@ type DistilleryGroup = {
   longitude: number;
 };
 
+type ExpandedCluster = {
+  id: number;
+  x: number;
+  y: number;
+};
+
 function groupDistilleries(distilleries: PositionedMapDistillery[], zoom: number): DistilleryGroup[] {
   const radiusSquared = (CLUSTER_RADIUS / zoom) ** 2;
   const groups: DistilleryGroup[] = [];
@@ -161,7 +167,8 @@ export function ScotlandWhiskyMap({
   const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
-  const [expandedClusterId, setExpandedClusterId] = useState<number | null>(null);
+  const [expandedCluster, setExpandedCluster] = useState<ExpandedCluster | null>(null);
+  const mapFrameRef = useRef<HTMLDivElement>(null);
   const positionedDistilleries = useMemo(() => mapDistilleries.filter(hasCoordinates), [mapDistilleries]);
   const markerGroups = useMemo(() => groupDistilleries(
     positionedDistilleries.filter((distillery) => distillery.id !== selectedDistillery?.id),
@@ -172,7 +179,12 @@ export function ScotlandWhiskyMap({
     .map((group) => group.members[0]);
   const clusteredGroups = markerGroups
     .filter((group) => group.members.length > 1)
-    .sort((a, b) => Number(a.members[0].id === expandedClusterId) - Number(b.members[0].id === expandedClusterId));
+    .sort((a, b) => Number(a.members[0].id === expandedCluster?.id) - Number(b.members[0].id === expandedCluster?.id));
+  const expandedGroup = clusteredGroups.find((group) => group.members[0].id === expandedCluster?.id);
+  const spiderMarkers = expandedGroup?.members.map((distillery, index) => {
+    const angle = -Math.PI / 2 + (2 * Math.PI * index) / expandedGroup.members.length;
+    return { distillery, x: Math.cos(angle) * SPIDER_RADIUS, y: Math.sin(angle) * SPIDER_RADIUS };
+  }) ?? [];
   const selectedMapDistillery = positionedDistilleries.find((distillery) => distillery.id === selectedDistillery?.id);
   const visibleMapDistilleries = selectedMapDistillery
     ? [...singleDistilleries, selectedMapDistillery]
@@ -199,7 +211,7 @@ export function ScotlandWhiskyMap({
     action();
   };
   const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
   }, []);
 
@@ -232,7 +244,7 @@ export function ScotlandWhiskyMap({
   }, []);
 
   const changeZoom = (amount: number) => {
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     setPosition((current) => {
       const zoom = Math.min(MAX_ZOOM, Math.max(initialPosition.zoom, current.zoom + amount));
       return zoom === initialPosition.zoom ? initialPosition : { ...current, zoom };
@@ -245,7 +257,7 @@ export function ScotlandWhiskyMap({
       region: distillery.region ?? null,
     });
     setActiveDistillery(distillery);
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     setSelectedDistillery(distillery);
     setSelectedBottles([]);
     setDetailLoadError(null);
@@ -306,12 +318,12 @@ export function ScotlandWhiskyMap({
     setSelectedBottles([]);
     setDetailLoadError(null);
     setSelectedRegion(null);
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     setPosition(initialPosition);
   };
 
   const selectRegion = (region: WhiskyRegion) => {
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     if (selectedDistillery) {
       resetMap();
       return;
@@ -323,13 +335,21 @@ export function ScotlandWhiskyMap({
       : initialPosition);
   };
 
-  const selectCluster = (group: DistilleryGroup) => {
+  const selectCluster = (group: DistilleryGroup, trigger: SVGGElement) => {
     setActiveDistillery(null);
     if (position.zoom >= MAX_ZOOM) {
-      setExpandedClusterId((current) => current === group.members[0].id ? null : group.members[0].id);
+      const frame = mapFrameRef.current;
+      if (!frame) throw new Error('Distillery map frame is unavailable');
+      const markerBounds = trigger.getBoundingClientRect();
+      const frameBounds = frame.getBoundingClientRect();
+      setExpandedCluster((current) => current?.id === group.members[0].id ? null : {
+        id: group.members[0].id,
+        x: markerBounds.left + markerBounds.width / 2 - frameBounds.left,
+        y: markerBounds.top + markerBounds.height / 2 - frameBounds.top,
+      });
       return;
     }
-    setExpandedClusterId(null);
+    setExpandedCluster(null);
     setPosition({
       coordinates: [group.longitude, group.latitude],
       zoom: Math.min(MAX_ZOOM, Math.max(position.zoom + 1.5, position.zoom * 1.8)),
@@ -354,7 +374,7 @@ export function ScotlandWhiskyMap({
         </div>
       )}
 
-      <div className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
+      <div ref={mapFrameRef} className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
         selectedDistillery
           ? 'h-[42dvh] min-h-[250px] shrink-0 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
           : 'h-full'
@@ -365,7 +385,13 @@ export function ScotlandWhiskyMap({
           projection="geoMercator"
           projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
           className="h-full w-full touch-none"
-          onClick={() => scheduleMapClick(resetMap)}
+          onClick={() => {
+            if (expandedCluster !== null) {
+              setExpandedCluster(null);
+            } else {
+              scheduleMapClick(resetMap);
+            }
+          }}
         >
           <defs>
             <linearGradient id="land-obsidian" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -441,8 +467,8 @@ export function ScotlandWhiskyMap({
                           geography={{ ...geography, svgPath: shape.svgPath }}
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (expandedClusterId !== null) {
-                              setExpandedClusterId(null);
+                            if (expandedCluster !== null) {
+                              setExpandedCluster(null);
                               return;
                             }
                             scheduleMapClick(() => selectRegion(region));
@@ -563,15 +589,7 @@ export function ScotlandWhiskyMap({
               );
             })}
             {clusteredGroups.map((group) => {
-              const expanded = expandedClusterId === group.members[0].id;
-              const spiderMarkers = expanded ? group.members.map((distillery, index) => {
-                const angle = -Math.PI / 2 + (2 * Math.PI * index) / group.members.length;
-                return {
-                  distillery,
-                  x: Math.cos(angle) * SPIDER_RADIUS,
-                  y: Math.sin(angle) * SPIDER_RADIUS,
-                };
-              }) : [];
+              const expanded = expandedCluster?.id === group.members[0].id;
               return (
                 <Marker
                   key={`cluster-${group.members[0].id}`}
@@ -579,63 +597,6 @@ export function ScotlandWhiskyMap({
                   onMouseEnter={() => setActiveDistillery(null)}
                 >
                   <g transform={`scale(${1 / position.zoom})`}>
-                    {spiderMarkers.map(({ distillery, x, y }) => (
-                      <line key={`line-${distillery.id}`} x1={0} y1={0} x2={x} y2={y} stroke="#C5A059" strokeOpacity={0.7} strokeWidth={1.5} pointerEvents="none" />
-                    ))}
-                    {spiderMarkers.map(({ distillery, x, y }) => {
-                      const imageUrl = distillery.image_url || distillery.logo_url;
-                      const labelWidth = Math.max(56, distillery.name.length * 6.5 + 16);
-                      const labelX = Math.abs(x) > Math.abs(y)
-                        ? (x < 0 ? -labelWidth - 26 : 26)
-                        : -labelWidth / 2;
-                      const labelY = Math.abs(x) > Math.abs(y) ? -10 : (y < 0 ? -48 : 28);
-                      const openDistillery = () => { void selectDistillery(distillery); };
-                      return (
-                        <g
-                          key={distillery.id}
-                          transform={`translate(${x} ${y})`}
-                          role="button"
-                          tabIndex={0}
-                          aria-label={distillery.name}
-                          className="distillery-spider-trigger cursor-pointer"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openDistillery();
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              event.stopPropagation();
-                              openDistillery();
-                            }
-                          }}
-                        >
-                          <g className="distillery-spider-icon">
-                            <defs>
-                              <clipPath id={`distillery-spider-photo-${distillery.id}`}>
-                                <circle r={14} />
-                              </clipPath>
-                            </defs>
-                            <circle r={18} fill="#141417" stroke="#C5A059" strokeWidth={2} filter="url(#distillery-pin-shadow)" />
-                            {imageUrl ? (
-                              <image href={imageUrl} x={-14} y={-14} width={28} height={28} clipPath={`url(#distillery-spider-photo-${distillery.id})`} preserveAspectRatio="xMidYMid slice" />
-                            ) : (
-                              <text textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={12}>
-                                {distillery.name.charAt(0)}
-                              </text>
-                            )}
-                          </g>
-                          <circle r={22} fill="transparent" pointerEvents="all" />
-                          <g>
-                            <rect x={labelX} y={labelY} width={labelWidth} height={20} rx={10} fill="#141417" fillOpacity={0.95} stroke="#C5A059" strokeOpacity={0.6} />
-                            <text x={labelX + labelWidth / 2} y={labelY + 10} textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={11} pointerEvents="none">
-                              {distillery.name}
-                            </text>
-                          </g>
-                        </g>
-                      );
-                    })}
                     <g
                       role="button"
                       tabIndex={0}
@@ -645,13 +606,13 @@ export function ScotlandWhiskyMap({
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
-                        selectCluster(group);
+                        selectCluster(group, event.currentTarget);
                       }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter' || event.key === ' ') {
                           event.preventDefault();
                           event.stopPropagation();
-                          selectCluster(group);
+                          selectCluster(group, event.currentTarget);
                         }
                       }}
                     >
@@ -668,7 +629,48 @@ export function ScotlandWhiskyMap({
           </ZoomableGroup>
         </ComposableMap>
 
-        <div className="absolute right-3 top-3 flex flex-col space-y-2">
+        {expandedCluster && expandedGroup && (
+          <div className="pointer-events-none absolute inset-0 z-10">
+            <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
+              {spiderMarkers.map(({ distillery, x, y }) => (
+                <line
+                  key={distillery.id}
+                  x1={expandedCluster.x}
+                  y1={expandedCluster.y}
+                  x2={expandedCluster.x + x}
+                  y2={expandedCluster.y + y}
+                  stroke="#C5A059"
+                  strokeOpacity={0.7}
+                  strokeWidth={1.5}
+                />
+              ))}
+            </svg>
+            {spiderMarkers.map(({ distillery, x, y }) => {
+              const imageUrl = distillery.image_url || distillery.logo_url;
+              const labelPosition = Math.abs(x) > Math.abs(y)
+                ? x < 0 ? 'right-[calc(100%+8px)] top-1/2 -translate-y-1/2' : 'left-[calc(100%+8px)] top-1/2 -translate-y-1/2'
+                : y < 0 ? 'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2' : 'top-[calc(100%+8px)] left-1/2 -translate-x-1/2';
+              return (
+                <button
+                  key={distillery.id}
+                  type="button"
+                  aria-label={distillery.name}
+                  className="distillery-spider-trigger pointer-events-auto absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-visible"
+                  style={{ left: expandedCluster.x + x, top: expandedCluster.y + y }}
+                  onClick={() => void selectDistillery(distillery)}
+                >
+                  <span className="distillery-spider-icon flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] text-xs text-[#FFE28A] shadow-lg">
+                    {imageUrl ? <img alt="" className="h-full w-full object-cover" src={imageUrl} /> : distillery.name.charAt(0)}
+                  </span>
+                  <span className={`absolute max-w-[95px] rounded-full border border-[#C5A059]/60 bg-[#141417]/95 px-2 py-1 text-center text-[10px] leading-tight break-words text-[#FFE28A] ${labelPosition}`}>
+                    {distillery.name}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="absolute right-3 top-3 z-20 flex flex-col space-y-2">
           <button
             aria-label="Zoom in"
             className="flex h-10 w-10 items-center justify-center rounded-full border border-[#C5A059]/30 bg-[#1a1a1e]/80 text-xl text-[#C5A059] shadow-lg backdrop-blur-md transition-all hover:border-[#C5A059]/70 active:scale-95"

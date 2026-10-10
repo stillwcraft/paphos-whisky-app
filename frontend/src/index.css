@@ -34,10 +34,14 @@
   outline: none;
 }
 
-.distillery-cluster-trigger:focus-visible > circle:first-of-type,
-.distillery-spider-trigger:focus-visible .distillery-spider-icon > circle:first-of-type {
+.distillery-cluster-trigger:focus-visible > circle:first-of-type {
   stroke: #FFF2C2;
   stroke-width: 3;
+}
+
+.distillery-spider-trigger:focus-visible .distillery-spider-icon {
+  outline: 2px solid #FFF2C2;
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
