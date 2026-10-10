@@ -97,6 +97,7 @@ body {
 }
 
 .cyprus-event-cluster-visual {
+  position: relative;
   display: grid;
   width: 100%;
   height: 100%;
@@ -109,6 +110,8 @@ body {
 }
 
 .cyprus-event-cluster-visual img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
