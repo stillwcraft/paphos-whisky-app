@@ -357,8 +357,8 @@ export function ScotlandWhiskyMap({
   };
 
   return (
-    <section className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
-      selectedDistillery ? 'flex h-full flex-col gap-3 px-4 py-3' : 'h-full'
+    <section className={`relative w-full bg-[#0a0a0c] ${
+      selectedDistillery ? 'flex h-full flex-col gap-3 overflow-x-hidden overflow-y-auto px-4 py-3' : 'h-full overflow-hidden'
     }`}>
       {selectedDistillery && (
         <div className="flex h-16 shrink-0 items-center justify-center">
@@ -376,7 +376,7 @@ export function ScotlandWhiskyMap({
 
       <div ref={mapFrameRef} className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
         selectedDistillery
-          ? 'h-[42dvh] min-h-[250px] shrink-0 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
+          ? 'min-h-[220px] flex-1 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
           : 'h-full'
       }`}>
         <ComposableMap
@@ -691,8 +691,8 @@ export function ScotlandWhiskyMap({
       </div>
 
       {selectedDistillery ? (
-        <div className="min-h-0 flex-1">
-          <div className="flex h-full snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
+        <div className="min-w-0 shrink-0">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
             {selectedBottles.map((bottle) => (
               <article
                 key={bottle.id}
@@ -748,7 +748,9 @@ export function ScotlandWhiskyMap({
       )}
       <button
         aria-label={t('map_view.close')}
-        className="absolute right-4 z-20 flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 bottom-[calc(1rem+env(safe-area-inset-bottom))]"
+        className={`absolute right-4 z-20 flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${
+          selectedDistillery ? 'top-4' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'
+        }`}
         onClick={onClose}
         type="button"
       >
