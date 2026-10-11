@@ -67,14 +67,15 @@ backend URL before starting Vite. The backend must separately set
 use its social API. See `backend/SOCIAL_EVENTS.md` for the private photo-storage
 setup. This feature remains hidden from regular users in production.
 
-The events map and event location picker use Stadia Maps Alidade Smooth Dark
-raster tiles. For production, register the Mini App's deployed web domain with
-Stadia Maps and use a commercial subscription; browser requests use domain
-authentication, so no API key is stored in the frontend. Localhost development
-works without a key but is rate-limited. If tiles return 401, check the
-registered domain and the browser's `Origin`/`Referer` headers (including
-preview domains and any `Referrer-Policy` setting). Keep the map attribution
-visible.
+The events map and event location picker use OpenStreetMap France HOT raster
+tiles with a dark CSS filter. This provider requires permission for use in a
+login-protected Mini App; keep the granted permission and map attribution
+visible. After three consecutive HOT tile errors, the affected map switches to
+Stadia Maps Alidade Smooth Dark. For the fallback in production, register the
+Mini App's deployed web domain with Stadia Maps; browser requests use domain
+authentication, so no API key is stored in the frontend. If fallback tiles
+return 401, check the registered domain and the browser's `Origin`/`Referer`
+headers (including preview domains and any `Referrer-Policy` setting).
 
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),

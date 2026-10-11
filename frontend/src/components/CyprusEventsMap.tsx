@@ -239,6 +239,8 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
   attributionPosition?: 'topright' | 'bottomright';
   showTiles?: boolean;
 }) {
+  const [useStadiaTiles, setUseStadiaTiles] = useState(false);
+  const consecutiveTileErrors = useRef(0);
   return (
     <MapContainer
       ref={mapRef}
@@ -254,12 +256,27 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
     >
       <ResizeMap />
       <AttributionControl position={attributionPosition} />
-      {showTiles && (
+      {showTiles && (useStadiaTiles ? (
         <TileLayer
+          key="stadia"
           attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
         />
-      )}
+      ) : (
+        <TileLayer
+          key="osm-fr-hot"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          className="osm-hot-dark-tiles"
+          eventHandlers={{
+            tileload: () => { consecutiveTileErrors.current = 0; },
+            tileerror: () => {
+              consecutiveTileErrors.current += 1;
+              if (consecutiveTileErrors.current >= 3) setUseStadiaTiles(true);
+            },
+          }}
+          url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+        />
+      ))}
       {children}
     </MapContainer>
   );
