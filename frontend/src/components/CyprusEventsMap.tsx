@@ -18,6 +18,10 @@ import { CyprusMapLoading } from './CyprusMapLoading.tsx';
 import { cyprusMapCache, type SocialMapMarker } from './cyprusMapCache.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const CARTO_BASEMAP_KEY: string = import.meta.env.VITE_CARTO_BASEMAP_KEY?.trim() ?? '';
+const CARTO_TILE_URL = CARTO_BASEMAP_KEY
+  ? `https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
+  : '';
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
 const CYPRUS_MAP_BOUNDS = latLngBounds([34.15, 31.8], [36.0, 34.9]);
 const CYPRUS_LOCATION_BOUNDS = latLngBounds([34.55, 32.25], [35.75, 34.65]);
@@ -239,8 +243,11 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
   attributionPosition?: 'topright' | 'bottomright';
   showTiles?: boolean;
 }) {
-  const [useStadiaTiles, setUseStadiaTiles] = useState(false);
+  const [useStadiaTiles, setUseStadiaTiles] = useState(!CARTO_TILE_URL);
   const consecutiveTileErrors = useRef(0);
+  useEffect(() => {
+    if (!CARTO_TILE_URL) console.error('VITE_CARTO_BASEMAP_KEY is missing; using Stadia Maps instead.');
+  }, []);
   return (
     <MapContainer
       ref={mapRef}
@@ -264,9 +271,8 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
         />
       ) : (
         <TileLayer
-          key="osm-fr-hot"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          className="osm-hot-dark-tiles"
+          key="carto-dark-matter"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attribution/">CARTO</a>'
           eventHandlers={{
             tileload: () => { consecutiveTileErrors.current = 0; },
             tileerror: () => {
@@ -274,7 +280,7 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
               if (consecutiveTileErrors.current >= 3) setUseStadiaTiles(true);
             },
           }}
-          url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+          url={CARTO_TILE_URL}
         />
       ))}
       {children}

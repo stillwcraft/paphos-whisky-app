@@ -67,15 +67,18 @@ backend URL before starting Vite. The backend must separately set
 use its social API. See `backend/SOCIAL_EVENTS.md` for the private photo-storage
 setup. This feature remains hidden from regular users in production.
 
-The events map and event location picker use OpenStreetMap France HOT raster
-tiles with a dark CSS filter. This provider requires permission for use in a
-login-protected Mini App; keep the granted permission and map attribution
-visible. After three consecutive HOT tile errors, the affected map switches to
-Stadia Maps Alidade Smooth Dark. For the fallback in production, register the
-Mini App's deployed web domain with Stadia Maps; browser requests use domain
-authentication, so no API key is stored in the frontend. If fallback tiles
-return 401, check the registered domain and the browser's `Origin`/`Referer`
-headers (including preview domains and any `Referrer-Policy` setting).
+The events map and event location picker use CARTO Dark Matter raster tiles.
+Set `VITE_CARTO_BASEMAP_KEY` to a CARTO Basemaps key in `frontend/.env.local`
+and in the deployment build environment. The key is embedded in browser tile
+requests, so restrict it to the Mini App's domains; CARTO recommends a separate
+key for localhost. Keep the CARTO and OpenStreetMap attribution visible.
+After three consecutive CARTO tile errors, the affected map switches to Stadia
+Maps Alidade Smooth Dark. Without a configured key, the map logs a configuration
+error and uses Stadia directly. A rejected CARTO key may return an HTTP 200
+placeholder instead of a tile error, so check that the map shows actual streets.
+For the fallback in production, register the deployed web domain with Stadia
+Maps. If fallback tiles return 401, check the registered domain and the browser's
+`Origin`/`Referer` headers (including preview domains and `Referrer-Policy`).
 
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),
