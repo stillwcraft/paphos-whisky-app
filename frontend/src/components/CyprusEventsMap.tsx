@@ -232,11 +232,12 @@ function useAutoDismissError(message: string | null, setMessage: Dispatch<SetSta
   }, [message, setMessage, enabled]);
 }
 
-function BaseMap({ children, className, mapRef, attributionPosition = 'bottomright' }: {
+function BaseMap({ children, className, mapRef, attributionPosition = 'bottomright', showTiles = true }: {
   children: ReactNode;
   className: string;
   mapRef?: Ref<LeafletMap>;
   attributionPosition?: 'topright' | 'bottomright';
+  showTiles?: boolean;
 }) {
   return (
     <MapContainer
@@ -253,10 +254,12 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
     >
       <ResizeMap />
       <AttributionControl position={attributionPosition} />
-      <TileLayer
-        attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
-      />
+      {showTiles && (
+        <TileLayer
+          attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+        />
+      )}
       {children}
     </MapContainer>
   );
@@ -329,6 +332,7 @@ export function CyprusEventsMap({
   }, [api, ageConfirmed, socialEvents, now, globalRange]);
   const selectedSocial = socialDetail?.id === selectedSocialId && new Date(socialDetail.expires_at).getTime() > now
     ? socialDetail : null;
+  const eventFormOpen = Boolean(api && (panel === 'create' || (panel === 'edit' && selectedSocial)));
   const upcomingEvents = useMemo(
     () => events.filter((event) => isEventCurrentOrUpcoming(event.date, now)),
     [events, now],
@@ -686,7 +690,12 @@ export function CyprusEventsMap({
 
   return (
     <section className="relative h-full w-full bg-[#141417]" aria-label={t('cyprus_map.title')} aria-busy={mapLoading}>
-      <BaseMap className="cyprus-events-map h-full w-full" mapRef={mapRef} attributionPosition="topright">
+      <BaseMap
+        className="cyprus-events-map h-full w-full"
+        mapRef={mapRef}
+        attributionPosition="topright"
+        showTiles={!eventFormOpen}
+      >
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         <ClusteredEventMarkers
           catalog={upcomingEvents}
@@ -806,7 +815,7 @@ export function CyprusEventsMap({
           />
         </div>
       )}
-      {(panel === 'create' || (panel === 'edit' && selectedSocial)) && api && (
+      {eventFormOpen && api && (
         <SocialEventForm
           key={panel === 'edit' ? `edit-${selectedSocial?.id}` : 'create'}
           editingEvent={panel === 'edit' ? selectedSocial : undefined}
