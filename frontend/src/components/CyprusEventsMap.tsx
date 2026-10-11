@@ -22,6 +22,9 @@ const CARTO_BASEMAP_KEY: string = import.meta.env.VITE_CARTO_BASEMAP_KEY?.trim()
 const CARTO_TILE_URL = CARTO_BASEMAP_KEY
   ? `https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png?key=${encodeURIComponent(CARTO_BASEMAP_KEY)}`
   : '';
+const STADIA_RETRY_KEY = 'cyprus-map-stadia-retry-after';
+const STADIA_FALLBACK_EVENT = 'cyprus-map-stadia-fallback';
+const STADIA_RETRY_DELAY = 24 * 60 * 60 * 1000;
 const CYPRUS_CENTER: LatLngTuple = [34.95, 33.25];
 const CYPRUS_MAP_BOUNDS = latLngBounds([34.15, 31.8], [36.0, 34.9]);
 const CYPRUS_LOCATION_BOUNDS = latLngBounds([34.55, 32.25], [35.75, 34.65]);
@@ -236,6 +239,30 @@ function useAutoDismissError(message: string | null, setMessage: Dispatch<SetSta
   }, [message, setMessage, enabled]);
 }
 
+function readStadiaRetryAfter(): number {
+  const value = Number(window.localStorage.getItem(STADIA_RETRY_KEY));
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function useStadiaRetryAfter(): number {
+  const [retryAfter, setRetryAfter] = useState(readStadiaRetryAfter);
+  useEffect(() => {
+    const sync = () => setRetryAfter(readStadiaRetryAfter());
+    window.addEventListener('storage', sync);
+    window.addEventListener(STADIA_FALLBACK_EVENT, sync);
+    return () => {
+      window.removeEventListener('storage', sync);
+      window.removeEventListener(STADIA_FALLBACK_EVENT, sync);
+    };
+  }, []);
+  useEffect(() => {
+    if (!retryAfter) return;
+    const timer = window.setTimeout(() => setRetryAfter(0), Math.max(0, retryAfter - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [retryAfter]);
+  return retryAfter;
+}
+
 function BaseMap({ children, className, mapRef, attributionPosition = 'bottomright', showTiles = true }: {
   children: ReactNode;
   className: string;
@@ -243,11 +270,17 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
   attributionPosition?: 'topright' | 'bottomright';
   showTiles?: boolean;
 }) {
-  const [useStadiaTiles, setUseStadiaTiles] = useState(!CARTO_TILE_URL);
+  const retryAfter = useStadiaRetryAfter();
+  const useCartoTiles = Boolean(CARTO_TILE_URL) && retryAfter > Date.now();
   const consecutiveTileErrors = useRef(0);
+  const fallbackErrorReported = useRef(false);
   useEffect(() => {
-    if (!CARTO_TILE_URL) console.error('VITE_CARTO_BASEMAP_KEY is missing; using Stadia Maps instead.');
-  }, []);
+    consecutiveTileErrors.current = 0;
+    fallbackErrorReported.current = false;
+  }, [useCartoTiles]);
+  useEffect(() => {
+    if (!showTiles) consecutiveTileErrors.current = 0;
+  }, [showTiles]);
   return (
     <MapContainer
       ref={mapRef}
@@ -263,24 +296,32 @@ function BaseMap({ children, className, mapRef, attributionPosition = 'bottomrig
     >
       <ResizeMap />
       <AttributionControl position={attributionPosition} />
-      {showTiles && (useStadiaTiles ? (
-        <TileLayer
-          key="stadia"
-          attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
-        />
-      ) : (
+      {showTiles && (useCartoTiles ? (
         <TileLayer
           key="carto-dark-matter"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attribution/">CARTO</a>'
+          url={CARTO_TILE_URL}
+        />
+      ) : (
+        <TileLayer
+          key="stadia"
+          attribution='&copy; <a href="https://stadiamaps.com/attribution/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           eventHandlers={{
             tileload: () => { consecutiveTileErrors.current = 0; },
             tileerror: () => {
               consecutiveTileErrors.current += 1;
-              if (consecutiveTileErrors.current >= 3) setUseStadiaTiles(true);
+              if (consecutiveTileErrors.current === 10) {
+                if (CARTO_TILE_URL) {
+                  window.localStorage.setItem(STADIA_RETRY_KEY, String(Date.now() + STADIA_RETRY_DELAY));
+                  window.dispatchEvent(new Event(STADIA_FALLBACK_EVENT));
+                } else if (!fallbackErrorReported.current) {
+                  fallbackErrorReported.current = true;
+                  console.error('Stadia Maps tiles failed and VITE_CARTO_BASEMAP_KEY is missing; CARTO fallback is unavailable.');
+                }
+              }
             },
           }}
-          url={CARTO_TILE_URL}
+          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
         />
       ))}
       {children}

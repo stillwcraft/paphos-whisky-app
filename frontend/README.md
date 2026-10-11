@@ -67,18 +67,24 @@ backend URL before starting Vite. The backend must separately set
 use its social API. See `backend/SOCIAL_EVENTS.md` for the private photo-storage
 setup. This feature remains hidden from regular users in production.
 
-The events map and event location picker use CARTO Dark Matter raster tiles.
-Set `VITE_CARTO_BASEMAP_KEY` to a CARTO Basemaps key in `frontend/.env.local`
-and in the deployment build environment. The key is embedded in browser tile
-requests, so restrict it to the Mini App's domains; CARTO recommends a separate
-key for localhost. Keep the CARTO and OpenStreetMap attribution visible.
-After three consecutive CARTO tile errors, the affected map switches to Stadia
-Maps Alidade Smooth Dark. Without a configured key, the map logs a configuration
-error and uses Stadia directly. A rejected CARTO key may return an HTTP 200
-placeholder instead of a tile error, so check that the map shows actual streets.
-For the fallback in production, register the deployed web domain with Stadia
-Maps. If fallback tiles return 401, check the registered domain and the browser's
-`Origin`/`Referer` headers (including preview domains and `Referrer-Policy`).
+The events map and event location picker use Stadia Maps Alidade Smooth Dark
+raster tiles. After 10 consecutive Stadia tile errors (reset by a successful
+tile), both maps switch to CARTO Dark Matter for 24 hours, including after a
+page reload. After 24 hours they try Stadia again; the two layers do not load
+simultaneously. The main map still stops loading tiles while the event form
+and its location picker are open.
+Register the deployed web domain with Stadia Maps. If its tiles return 401,
+check the registered domain and the browser's `Origin`/`Referer` headers
+(including preview domains and `Referrer-Policy`).
+
+For the CARTO fallback, set `VITE_CARTO_BASEMAP_KEY` to a CARTO Basemaps key in
+`frontend/.env.local` and in the deployment build environment. The key is
+embedded in browser tile requests; website restrictions are optional, but can
+help prevent use from other domains. CARTO recommends a separate key for
+localhost when using restrictions. Without a configured key, a Stadia failure
+is reported in the console and there is no fallback. A rejected CARTO key may
+return an HTTP 200 watermark instead of a tile error, so check that the map
+shows actual streets. Keep the current provider's attribution visible.
 
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),
