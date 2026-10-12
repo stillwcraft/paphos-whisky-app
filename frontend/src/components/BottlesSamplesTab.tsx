@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { localizedApiUrl } from '@/localization.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
@@ -21,6 +21,7 @@ type ShopItem = {
   description: string;
   description_i18n?: I18nString;
   image_url: string | null;
+  wax_seal_url: string | null;
 };
 
 const labelTitleKeys: Record<BottleLabel, string> = {
@@ -41,6 +42,26 @@ function BottleImage({
   }
 
   return <img alt="" className={className} src={imageUrl} />;
+}
+
+function WaxSeal({ imageUrl, isFocused }: { imageUrl: string; isFocused: boolean }) {
+  const [isLoaded, setIsLoaded] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const isVisible = isFocused && isLoaded;
+
+  return (
+    <motion.img
+      alt=""
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+      src={imageUrl}
+      loading="lazy"
+      onLoad={() => setIsLoaded(true)}
+      initial={false}
+      animate={{ x: reduceMotion ? 0 : isVisible ? 0 : '110%', opacity: isVisible ? 1 : 0 }}
+      transition={{ duration: reduceMotion ? 0 : 0.65, ease: 'easeOut' }}
+    />
+  );
 }
 
 export function BottlesSamplesTab() {
@@ -188,6 +209,7 @@ export function BottlesSamplesTab() {
                   }`}
                 >
                   <BottleImage imageUrl={bottle.image_url} className={`h-full w-full object-cover transition-[filter] duration-300 ${isBlurred ? 'blur-xl brightness-50' : ''}`} />
+                  {bottle.wax_seal_url && <WaxSeal key={bottle.wax_seal_url} imageUrl={bottle.wax_seal_url} isFocused={isFocused} />}
                   {isBlurred ? (
                     <div className="absolute inset-0 flex flex-col overflow-y-auto bg-black/20 p-6 text-white">
                       <span className="w-fit rounded-full border border-[#C5A059]/40 bg-black/50 px-3 py-1 text-xs font-semibold text-[#C5A059]">{t(labelTitleKeys[bottle.label])}</span>

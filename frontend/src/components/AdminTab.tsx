@@ -41,6 +41,7 @@ type Bottle = {
   label: Label; age: string | null; abv: string | null; cask: string | null;
   bottles: string | null; price_per_sample: number; description: string;
   description_i18n?: I18nResponse; image_url: string | null; background_url: string | null;
+  wax_seal_url: string | null;
 };
 type BottleBackground = {
   id: number; name: string; image_url: string;
@@ -65,6 +66,7 @@ type BottleForm = {
   name: string; name_i18n: I18nString; label: Label; age: string; abv: string;
   cask: string; bottles: string; price_per_sample: string; description: string;
   description_i18n: I18nString; image_url: string; background_url: string | null;
+  wax_seal_url: string;
 };
 type Deletion = { kind: 'event'; item: EventItem } | { kind: 'distillery'; item: Distillery } | { kind: 'tag'; item: TastingTag } | { kind: 'bottle'; item: Bottle };
 
@@ -96,7 +98,7 @@ const emptyTastingTag = (): TastingTagForm => ({
 const emptyBottle = (): BottleForm => ({
   name: '', name_i18n: emptyI18n(), label: 'bottle', age: '', abv: '', cask: '',
   bottles: '', price_per_sample: '', description: '', description_i18n: emptyI18n(),
-  image_url: '', background_url: null,
+  image_url: '', background_url: null, wax_seal_url: '',
 });
 
 function eventFormFromItem(item: EventItem): EventForm {
@@ -140,6 +142,7 @@ function bottleFormFromItem(item: Bottle): BottleForm {
     description_i18n: toI18n(item.description_i18n, item.description),
     image_url: item.image_url ?? '',
     background_url: item.background_url,
+    wax_seal_url: item.wax_seal_url ?? '',
   };
 }
 
@@ -209,6 +212,13 @@ function BottleFields({ backgrounds, form, setForm, includeLabel }: { background
       onChange={(name_i18n) => setForm({ ...form, name: name_i18n.en, name_i18n })}
     />
     <input placeholder="Photo URL" style={inputStyle} value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} />
+    {includeLabel && <label style={fieldGroupStyle}>
+      <span style={fieldLabelStyle}>Wax Seal Image URL</span>
+      <span style={{ display: 'flex', gap: 8 }}>
+        <input placeholder="https://example.com/seal.png" style={{ ...inputStyle, flex: 1, minWidth: 0 }} type="url" value={form.wax_seal_url} onChange={(event) => setForm({ ...form, wax_seal_url: event.target.value })} />
+        {form.wax_seal_url && <button aria-label="Remove wax seal URL" title="Remove wax seal URL" style={dangerButtonStyle} type="button" onClick={() => setForm({ ...form, wax_seal_url: '' })}>🗑️</button>}
+      </span>
+    </label>}
     <label style={fieldGroupStyle}>
       <span style={fieldLabelStyle}>Card Watermark Art</span>
       <select style={inputStyle} value={form.background_url ?? ''} onChange={(event) => setForm({ ...form, background_url: event.target.value || null })}>
@@ -374,7 +384,7 @@ export function AdminTab({ onOpenSocialReports }: { onOpenSocialReports: () => v
     try {
       const response = await fetch(editing ? `${API_URL}/api/bottles/${editingId}` : `${API_URL}/api/bottles`, {
         method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...telegramAuthHeaders(initDataRaw) },
-        body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, cask: form.cask || null, bottles: form.bottles || null, image_url: form.image_url || null, price_per_sample: Number(form.price_per_sample) }),
+        body: JSON.stringify({ ...form, distillery_id: distilleryId, age: form.age || null, abv: form.abv || null, cask: form.cask || null, bottles: form.bottles || null, image_url: form.image_url || null, wax_seal_url: form.wax_seal_url.trim() || null, price_per_sample: Number(form.price_per_sample) }),
       });
       if (!response.ok) throw new Error(await getError(response));
       reset(); await loadContent(); setMessage(editing ? 'Card updated.' : 'Card created.');

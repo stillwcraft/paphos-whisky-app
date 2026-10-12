@@ -259,6 +259,8 @@ def ensure_catalog_schema() -> None:
             )
         if "background_url" not in bottle_columns:
             connection.execute(text("ALTER TABLE bottles ADD COLUMN background_url VARCHAR"))
+        if "wax_seal_url" not in bottle_columns:
+            connection.execute(text("ALTER TABLE bottles ADD COLUMN wax_seal_url VARCHAR"))
 
         bottle_columns = get_table_columns(connection, "bottles")
         age_column = bottle_columns.get("age")
@@ -1046,6 +1048,7 @@ class BottleCreate(BaseModel):
     description_i18n: Optional[I18nString] = None
     image_url: Optional[str] = None
     background_url: Optional[str] = None
+    wax_seal_url: Optional[str] = None
 
 
 class BottleUpdate(BottleCreate):
@@ -1480,6 +1483,7 @@ def build_bottle_response(
         description_i18n=bottle.description_i18n,
         image_url=bottle.image_url,
         background_url=bottle.background_url,
+        wax_seal_url=bottle.wax_seal_url,
         favorites_count=bottle.favorites_count,
         tried_count=bottle.tried_count,
     )

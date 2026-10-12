@@ -22,6 +22,7 @@ from main import (
     EventUpdate,
     get_event_detail,
     get_events,
+    get_bottles,
     validate_bottle_ids,
     load_event_bottles,
     load_bottles_for_events,
@@ -474,6 +475,49 @@ class EventBottleTest(unittest.TestCase):
 
         self.assertEqual(created.description, "")
         self.assertEqual(self.db.get(models.Bottle, created.id).description, "")
+
+    def test_bottle_wax_seal_can_be_added_replaced_and_removed(self):
+        created = create_bottle(
+            BottleCreate(
+                name="Sealed bottle",
+                price_per_sample=12.0,
+                wax_seal_url="https://example.com/first.png",
+            ),
+            self.db,
+            None,
+        )
+        self.assertEqual(created.wax_seal_url, "https://example.com/first.png")
+        self.assertEqual(self.db.get(models.Bottle, created.id).wax_seal_url, created.wax_seal_url)
+        page = get_bottles("en", 24, 0, None, True, self.db)
+        self.assertEqual(
+            next(item for item in page["items"] if item.id == created.id).wax_seal_url,
+            created.wax_seal_url,
+        )
+
+        replaced = update_bottle(
+            created.id,
+            BottleUpdate(
+                name=created.name,
+                price_per_sample=created.price_per_sample,
+                wax_seal_url="https://example.com/second.png",
+            ),
+            self.db,
+            None,
+        )
+        self.assertEqual(replaced.wax_seal_url, "https://example.com/second.png")
+
+        cleared = update_bottle(
+            created.id,
+            BottleUpdate(
+                name=created.name,
+                price_per_sample=created.price_per_sample,
+                wax_seal_url=None,
+            ),
+            self.db,
+            None,
+        )
+        self.assertIsNone(cleared.wax_seal_url)
+        self.assertIsNone(self.db.get(models.Bottle, created.id).wax_seal_url)
 
     def test_update_bottle_can_clear_description(self):
         updated = update_bottle(

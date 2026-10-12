@@ -286,6 +286,7 @@ class Bottle(Base):
     description_i18n = Column(I18N_JSON, nullable=True)
     image_url = Column(String, nullable=True)
     background_url = Column(String, nullable=True)
+    wax_seal_url = Column(String, nullable=True)
     favorites_count = Column(Integer, default=0, nullable=False)
     tried_count = Column(Integer, default=0, nullable=False)
     distillery = relationship("Distillery", back_populates="bottles")
