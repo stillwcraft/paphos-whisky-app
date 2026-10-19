@@ -86,6 +86,23 @@ is reported in the console and there is no fallback. A rejected CARTO key may
 return an HTTP 200 watermark instead of a tile error, so check that the map
 shows actual streets. Keep the current provider's attribution visible.
 
+### Map marker layers
+
+The Layers button above the location button selects one marker layer at a
+time; it does not change the basemap. The default Global events layer preserves
+the existing catalog and visible social markers (including regular meetups),
+clustering, expiry rules, and global-event date slider. Only this layer is
+currently offered; no database migration or additional API request is needed.
+
+To add a layer, register a unique `id`, translated `labelKey` (in all three
+locales), `showGlobalRange`, and catalog/social marker predicates in
+`src/components/cyprusMapLayers.ts`. Predicates run on current, authorized
+markers, so layers cannot bypass expiry or social visibility rules. Use
+`showGlobalRange: false` for sets that should not use the global-event slider.
+For a new data source, add its typed loading/cache and marker-rendering support
+as well; the registry itself does not fetch data. Selection lasts while the map
+is mounted and resets to Global events on remount.
+
 > [!NOTE]
 > As long as we use [vite-plugin-mkcert](https://www.npmjs.com/package/vite-plugin-mkcert),
 > launching the dev mode for the first time, you may see sudo password request.

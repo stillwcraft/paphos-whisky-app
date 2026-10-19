@@ -16,6 +16,7 @@ import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, t
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 import { CyprusMapLoading } from './CyprusMapLoading.tsx';
 import { cyprusMapCache, type SocialMapMarker } from './cyprusMapCache.ts';
+import { CYPRUS_MAP_LAYERS, DEFAULT_CYPRUS_MAP_LAYER, type CyprusMapLayer } from './cyprusMapLayers.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CARTO_BASEMAP_KEY: string = import.meta.env.VITE_CARTO_BASEMAP_KEY?.trim() ?? '';
@@ -117,6 +118,83 @@ function ResizeMap() {
 function DismissSelectedOnMapClick({ onClick }: { onClick: () => void }) {
   useMapEvents({ click: onClick });
   return null;
+}
+
+function MapLayersControl({ layer, onChange }: {
+  layer: CyprusMapLayer;
+  onChange: (layer: CyprusMapLayer) => void;
+}) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const optionsRef = useRef<HTMLFieldSetElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    optionsRef.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
+    }}>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-label={t('cyprus_map.layers')}
+        title={t('cyprus_map.layers')}
+        aria-expanded={open}
+        aria-controls="cyprus-map-layers"
+        onClick={() => setOpen((current) => !current)}
+        className={`flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${open ? 'ring-2 ring-[#C5A059]/50' : ''}`}
+      >
+        <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinejoin="round" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
+          <path d="m12 3-10 6 10 6 10-6-10-6Z" />
+          <path d="m2 14 10 6 10-6" />
+        </svg>
+      </button>
+      {open && (
+        <fieldset
+          ref={optionsRef}
+          id="cyprus-map-layers"
+          className="absolute bottom-full right-0 mb-3 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-[#C5A059]/50 bg-[#141417]/95 p-3 text-sm text-[#F4F4F5] shadow-xl backdrop-blur-md"
+        >
+          <legend className="sr-only">{t('cyprus_map.layers')}</legend>
+          <p aria-hidden="true" className="mb-2 font-medium text-[#D9BD82]">{t('cyprus_map.layers')}</p>
+          {CYPRUS_MAP_LAYERS.map((option) => (
+            <label key={option.id} className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[#C5A059]/10">
+              <input
+                type="radio"
+                name="cyprus-map-layer"
+                value={option.id}
+                checked={option.id === layer.id}
+                className="h-4 w-4 shrink-0 accent-[#C5A059]"
+                onChange={() => onChange(option)}
+                onClick={() => { setOpen(false); buttonRef.current?.focus(); }}
+              />
+              {t(option.labelKey)}
+            </label>
+          ))}
+        </fieldset>
+      )}
+    </div>
+  );
 }
 
 function ClusteredEventMarkers({ catalog, social, onCatalogClick, onSocialClick }: {
@@ -352,6 +430,7 @@ export function CyprusEventsMap({
   const [events, setEvents] = useState<PositionedEvent[]>(() => cyprusMapCache.getEvents(i18n.language)?.items ?? []);
   const [now, setNow] = useState(() => Date.now());
   const [globalRange, setGlobalRange] = useState(GLOBAL_RANGE_MAX);
+  const [activeLayer, setActiveLayer] = useState(DEFAULT_CYPRUS_MAP_LAYER);
   const [socialEvents, setSocialEvents] = useState<SocialMapMarker[]>(() => cyprusMapCache.getMarkers(userId) ?? []);
   const [socialDetail, setSocialDetail] = useState<SocialEvent | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -389,17 +468,22 @@ export function CyprusEventsMap({
   const ageConfirmed = profile !== null && (profile.age !== null || isAdmin);
   const activeSocialEvents = useMemo(() => {
     if (!api || !ageConfirmed) return [];
-    const lastDay = globalRange === GLOBAL_RANGE_MAX ? null : rangeEndDate(now, globalRange);
+    const lastDay = !activeLayer.showGlobalRange || globalRange === GLOBAL_RANGE_MAX ? null : rangeEndDate(now, globalRange);
     return socialEvents.filter((event) => new Date(event.expires_at).getTime() > now
+      && activeLayer.includesSocialEvent(event)
       && (event.event_type !== 'global' || lastDay === null
         || cyprusDateKey(new Date(event.starts_at)) <= lastDay));
-  }, [api, ageConfirmed, socialEvents, now, globalRange]);
+  }, [api, ageConfirmed, socialEvents, now, globalRange, activeLayer]);
   const selectedSocial = socialDetail?.id === selectedSocialId && new Date(socialDetail.expires_at).getTime() > now
     ? socialDetail : null;
   const eventFormOpen = Boolean(api && (panel === 'create' || (panel === 'edit' && selectedSocial)));
   const upcomingEvents = useMemo(
     () => events.filter((event) => isEventCurrentOrUpcoming(event.date, now)),
     [events, now],
+  );
+  const layerCatalogEvents = useMemo(
+    () => upcomingEvents.filter(activeLayer.includesCatalogEvent),
+    [upcomingEvents, activeLayer],
   );
   const activeSelected = selected && upcomingEvents.some((event) => event.id === selected.id) ? selected : null;
 
@@ -762,7 +846,7 @@ export function CyprusEventsMap({
       >
         <DismissSelectedOnMapClick onClick={() => { setSelected(null); setSelectedSocialId(null); }} />
         <ClusteredEventMarkers
-          catalog={upcomingEvents}
+          catalog={layerCatalogEvents}
           social={activeSocialEvents}
           onCatalogClick={(event) => { setSelected(event); setSelectedSocialId(null); setPanel(null); }}
           onSocialClick={openSocialEvent}
@@ -771,7 +855,7 @@ export function CyprusEventsMap({
       {(mapLoading || detailLoading) && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
       {!mapLoading && !panel && !activeSelected && !selectedSocial && (
         <div className="absolute inset-x-4 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-[1000] flex items-end gap-3">
-          <div className="min-w-0 flex-1 rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
+          {activeLayer.showGlobalRange ? <div className="min-w-0 flex-1 rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
             <label htmlFor="global-events-range" className="block truncate text-[11px] font-medium text-[#D9BD82]">
               {t('cyprus_map.global_range')}: {globalRange === GLOBAL_RANGE_MAX
                 ? t('cyprus_map.all_available') : globalRange === 0
@@ -797,8 +881,16 @@ export function CyprusEventsMap({
                 onChange={(event) => setGlobalRange(Number(event.target.value))}
               />
             </div>
-          </div>
+          </div> : <div className="flex-1" />}
           <div className="flex shrink-0 flex-col gap-3">
+            <MapLayersControl layer={activeLayer} onChange={(layer) => {
+              ++detailRequestId.current;
+              setActiveLayer(layer);
+              setSelected(null);
+              setSelectedSocialId(null);
+              setSocialDetail(null);
+              setDetailLoading(false);
+            }} />
             <button
               type="button"
               aria-label={t('cyprus_map.my_location')}
@@ -831,7 +923,7 @@ export function CyprusEventsMap({
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
       {!error && !mapLoading && !loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
-        && upcomingEvents.length === 0 && activeSocialEvents.length === 0 && (
+        && layerCatalogEvents.length === 0 && activeSocialEvents.length === 0 && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
           {t('cyprus_map.empty')}
         </p>

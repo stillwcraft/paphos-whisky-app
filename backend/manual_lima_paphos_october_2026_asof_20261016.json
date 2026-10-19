@@ -1,0 +1,1329 @@
+{
+  "source_url": "https://lima.events/en/paphos",
+  "snapshot_date": "2026-10-16",
+  "today_exclusive": "2026-10-16",
+  "month": "2026-10",
+  "timezone": "Europe/Nicosia",
+  "listing_card_count": 50,
+  "date_candidate_count": 27,
+  "sql_candidate_count": 21,
+  "owner_id": 8546526596,
+  "owner_id_source": "backend/manual_lima_paphos_october_2026.sql; agrees with backend/manual_ukrcy_october_2026.sql",
+  "database": {
+    "production_checked": false,
+    "reason": "DATABASE_URL unset; backend/.env has no settings; local backend/club.db and backend/i18n_validation.db have no social_events table.",
+    "duplicate_guards": [
+      "Ukrainian/original heading, ignoring case and surrounding whitespace",
+      "source URL, including merged-card aliases",
+      "all primary/alias image URLs"
+    ]
+  },
+  "description_policy": "Фактографічні українські адаптації About із збереженням значимих умов, цін та контактів, без повного відтворення авторських рекламних текстів. Відсутній About явно позначений.",
+  "price_policy": "Zero in Lima price does not prove free admission. Free admission is stated only where About explicitly says it.",
+  "geography_policy": "All qualifying cards on the Paphos page are considered, even cards actually located in Nicosia. Actual location takes priority over page categorization.",
+  "coordinate_attribution": "© OpenStreetMap contributors, ODbL 1.0, https://www.openstreetmap.org/copyright; Lima/official sources as cited per event.",
+  "internal_duplicate_merge": {
+    "canonical_id": 2459,
+    "alias_id": 2592,
+    "evidence": "Matching FUN 5K posters, organizers, start date/time and harbour; registration from canonical About."
+  },
+  "shared_titles_different_performances": {
+    "«Темний лицар»: мюзикл про Бетмена": [
+      2672,
+      2694
+    ]
+  },
+  "shared_title_guard_warning": "Different Batman performances on Oct 28 and Oct 31 are not duplicate events. Both are retained in the single INSERT when neither title exists. If either title already exists, the requested title-only database guard suppresses both.",
+  "events": [
+    {
+      "lima_id": 2415,
+      "source_url": "https://lima.events/en/events/2415",
+      "original_title": "Poolparty, YOGA & Brunch",
+      "title_uk": "Йога, вечірка біля басейну та бранч",
+      "description_uk": "Йога, бранч і відпочинок біля басейну в Kamares Club із живим DJ-сетом. Двері відчиняються о 10:00, йога починається о 10:30; для starts_at використано 10:00 із Schedule. Дрескод: білий, нюдовий або бежевий одяг. Візьміть купальник; доступна роздягальня. Умови Early Bird в About: €69 до 6 жовтня 2026 або до розпродажу — цей термін уже минув, поточну ціну слід перевірити при купівлі. Instagram організаторів: @ele.community.events.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/5bd385e7-ca38-419a-a6c8-703f6c24125b.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/5bd385e7-ca38-419a-a6c8-703f6c24125b.webp"
+      ],
+      "starts_at": "2026-10-17T10:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3023,
+        "place": {
+          "id": 1361,
+          "city_id": 4,
+          "name": "Kamares Club",
+          "address": null,
+          "latitude": 34.85,
+          "longitude": 32.44
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T10:00:00",
+        "end_date": null
+      },
+      "venue": "Kamares Club",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.85,
+        "longitude": 32.44,
+        "precision": "source_only",
+        "note": "Координати Kamares Club наведені лише за джерелом і округлені до двох десяткових знаків: похибка може становити сотні метрів. Точну будівлю клубу незалежно не підтверджено; позначку села Kamares не використано як адресу клубу.",
+        "source_url": "https://lima.events/en/events/2415",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2551685?utm_source=lima",
+      "source_price": 69,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Йога, бранч і відпочинок біля басейну в Kamares Club із живим DJ-сетом. Двері відчиняються о 10:00, йога починається о 10:30; для starts_at використано 10:00 із Schedule. Дрескод: білий, нюдовий або бежевий одяг. Візьміть купальник; доступна роздягальня. Умови Early Bird в About: €69 до 6 жовтня 2026 або до розпродажу — цей термін уже минув, поточну ціну слід перевірити при купівлі. Instagram організаторів: @ele.community.events.\n\nМісце: Kamares Club\n\nКоординати приблизні / не підтверджені незалежно: Координати Kamares Club наведені лише за джерелом і округлені до двох десяткових знаків: похибка може становити сотні метрів. Точну будівлю клубу незалежно не підтверджено; позначку села Kamares не використано як адресу клубу.\n\nДжерело координат: https://lima.events/en/events/2415\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2551685?utm_source=lima\n\nДжерело: https://lima.events/en/events/2415"
+    },
+    {
+      "lima_id": 2591,
+      "source_url": "https://lima.events/en/events/2591",
+      "original_title": "Inia Crags Trail: Scenic Hike at Cyprus Rock Climbing Festival",
+      "title_uk": "Стежка скель Інії: піший похід на Кіпрському фестивалі скелелазіння",
+      "description_uk": "Поле About у картці Lima відсутнє. У заголовку анонсовано піший похід Inia Crags Trail у межах Cyprus Rock Climbing Festival. Маршрут, вимоги до спорядження, умови участі та ціна в картці не наведені.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/f0a0984d-e130-4b8d-81e2-143f0e3be701.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/f0a0984d-e130-4b8d-81e2-143f0e3be701.webp"
+      ],
+      "starts_at": "2026-10-17T14:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3199,
+        "place": {
+          "id": 1439,
+          "city_id": 4,
+          "name": "Inia Village Square",
+          "address": null,
+          "latitude": 34.9560179,
+          "longitude": 32.3929482
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T14:00:00",
+        "end_date": null
+      },
+      "venue": "Inia Village Square",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.9560179,
+        "longitude": 32.3929482,
+        "precision": "source_only",
+        "note": "Точка збору Inia Village Square наведена за джерелом. Розташування в Інеї узгоджується з картою, але саме площу та точку зустрічі незалежно не підтверджено; це не перевірений вхід.",
+        "source_url": "https://lima.events/en/events/2591",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://rsrvin.com/events/6acb768aad6fdbadb544eecf-Inia%20Crags%20Trail%3A%20Scenic%20Hike%20at%20Cyprus%20Rock%20Climbing%20Festival?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. У заголовку анонсовано піший похід Inia Crags Trail у межах Cyprus Rock Climbing Festival. Маршрут, вимоги до спорядження, умови участі та ціна в картці не наведені.\n\nМісце: Inia Village Square\n\nКоординати приблизні / не підтверджені незалежно: Точка збору Inia Village Square наведена за джерелом. Розташування в Інеї узгоджується з картою, але саме площу та точку зустрічі незалежно не підтверджено; це не перевірений вхід.\n\nДжерело координат: https://lima.events/en/events/2591\n\nКвитки / реєстрація / деталі події: https://rsrvin.com/events/6acb768aad6fdbadb544eecf-Inia%20Crags%20Trail%3A%20Scenic%20Hike%20at%20Cyprus%20Rock%20Climbing%20Festival?utm_source=lima\n\nДжерело: https://lima.events/en/events/2591"
+    },
+    {
+      "lima_id": 2592,
+      "source_url": "https://lima.events/en/events/2592",
+      "original_title": "Fun 5K Run or Walk: Cancer Charity Event at Paphos Harbour",
+      "title_uk": "Благодійний забіг або прогулянка на 5 км у гавані Пафоса",
+      "description_uk": "Поле About у цій картці Lima відсутнє. Афіша підтверджує благодійний забіг або прогулянку на 5 км 17 жовтня о 16:00 зі збором коштів для CPSG та Care Days. Реєстрація з 15:00; внесок €10, для дітей до 12 років — €5.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/0e589ca4-162d-40ba-abf2-8add7f82f663.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/0e589ca4-162d-40ba-abf2-8add7f82f663.webp"
+      ],
+      "starts_at": "2026-10-17T16:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3200,
+        "place": {
+          "id": 1440,
+          "city_id": 4,
+          "name": "Paphos Harbour",
+          "address": null,
+          "latitude": 34.7543205,
+          "longitude": 32.406824
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T16:00:00",
+        "end_date": null
+      },
+      "venue": "Paphos Harbour",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7543205,
+        "longitude": 32.406824,
+        "precision": "source_only",
+        "note": "Координати гавані Пафоса наведені за джерелом; точне місце старту благодійного забігу незалежно не підтверджено. Однойменний ресторан The Harbour не є підтвердженою точкою збору.",
+        "source_url": "https://lima.events/en/events/2592",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://rsrvin.com/events/6acb768aad6fdbadb544eeda-Fun%205K%20Run%20or%20Walk%3A%20Cancer%20Charity%20Event%20at%20Paphos%20Harbour?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Дубль події 2459: ідентична афіша FUN 5K, дата, час, організатори CPSG/Care Days і старт у гавані. Дані об’єднано з 2459.",
+      "import_description": "Поле About у цій картці Lima відсутнє. Афіша підтверджує благодійний забіг або прогулянку на 5 км 17 жовтня о 16:00 зі збором коштів для CPSG та Care Days. Реєстрація з 15:00; внесок €10, для дітей до 12 років — €5.\n\nМісце: Paphos Harbour\n\nКоординати приблизні / не підтверджені незалежно: Координати гавані Пафоса наведені за джерелом; точне місце старту благодійного забігу незалежно не підтверджено. Однойменний ресторан The Harbour не є підтвердженою точкою збору.\n\nДжерело координат: https://lima.events/en/events/2592\n\nКвитки / реєстрація / деталі події: https://rsrvin.com/events/6acb768aad6fdbadb544eeda-Fun%205K%20Run%20or%20Walk%3A%20Cancer%20Charity%20Event%20at%20Paphos%20Harbour?utm_source=lima\n\nДжерело: https://lima.events/en/events/2592"
+    },
+    {
+      "lima_id": 2492,
+      "source_url": "https://lima.events/en/events/2492",
+      "original_title": "LEGO® δραστηριότητες για μικρούς builders @ Public Kings Avenue Mall, Πάφος",
+      "title_uk": "Заняття LEGO® для маленьких будівельників у Public Kings Avenue Mall, Пафос",
+      "description_uk": "Поле About у картці Lima відсутнє. Заголовок анонсує заняття LEGO® для дітей у Public, Kings Avenue Mall. Вікові обмеження, потреба в реєстрації та ціна не вказані.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/0b7594ea-28cb-4f08-b525-ba6a9784b36d.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/0b7594ea-28cb-4f08-b525-ba6a9784b36d.webp"
+      ],
+      "starts_at": "2026-10-17T16:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3100,
+        "place": {
+          "id": 245,
+          "city_id": 4,
+          "name": "Kings Avenue Mall Paphos",
+          "address": null,
+          "latitude": 34.76518286,
+          "longitude": 32.41328092
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T16:00:00",
+        "end_date": null
+      },
+      "venue": "Kings Avenue Mall Paphos",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7657937,
+        "longitude": 32.413729,
+        "precision": "verified_feature",
+        "note": "Місце підтверджено на карті як Kings Avenue Mall. Позначка відповідає будівлі торговельного центру, а не конкретному входу чи майданчику заходу.",
+        "source_url": "https://kingsavenuemall.com/",
+        "feature_url": "https://www.openstreetmap.org/way/147476732",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030800113543?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. Заголовок анонсує заняття LEGO® для дітей у Public, Kings Avenue Mall. Вікові обмеження, потреба в реєстрації та ціна не вказані.\n\nМісце: Kings Avenue Mall Paphos\n\nПоходження координат: Місце підтверджено на карті як Kings Avenue Mall. Позначка відповідає будівлі торговельного центру, а не конкретному входу чи майданчику заходу.\n\nДжерело координат: https://kingsavenuemall.com/\n\nОб’єкт на карті: https://www.openstreetmap.org/way/147476732\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030800113543?utm_source=lima\n\nДжерело: https://lima.events/en/events/2492"
+    },
+    {
+      "lima_id": 2459,
+      "source_url": "https://lima.events/en/events/2459",
+      "original_title": "Charity Fun Run & Walk",
+      "title_uk": "Благодійний забіг або прогулянка",
+      "description_uk": "Благодійний забіг або прогулянка на 5 км для підтримки людей з онкологічними захворюваннями. Збір коштів для CPSG та Care Days за підтримки Paphos Running Club підтверджений афішею. Початок о 16:00; реєстрація з 15:00. Організатори радять приїхати заздалегідь. Онлайн-реєстрація: https://shorturl.at/ik7DN. На афіші: участь €10, для дітей до 12 років — €5; DJ та танцювальна розминка. Картка 2592 описує цю саму подію, тому об’єднана з цією.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/342aeecd-be65-4c08-8c22-9b26e002532c.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/342aeecd-be65-4c08-8c22-9b26e002532c.webp",
+        "https://lima.events/uploads/events/0e589ca4-162d-40ba-abf2-8add7f82f663.webp"
+      ],
+      "starts_at": "2026-10-17T16:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3067,
+        "place": {
+          "id": 535,
+          "city_id": 4,
+          "name": "Paphos Castle",
+          "address": null,
+          "latitude": 34.754167,
+          "longitude": 32.408333
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T16:00:00",
+        "end_date": null
+      },
+      "venue": "Paphos Castle",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7536703,
+        "longitude": 32.4069592,
+        "precision": "verified_feature",
+        "note": "Координати уточнено за будівлею замку Пафоса на OpenStreetMap. Точний майданчик або вхід заходу біля замку слід уточнити в організатора.",
+        "source_url": "https://www.openstreetmap.org/way/8052789",
+        "feature_url": "https://www.openstreetmap.org/way/8052789",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030774508150?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [
+        "https://lima.events/en/events/2592"
+      ],
+      "original_title_aliases": [
+        "Fun 5K Run or Walk: Cancer Charity Event at Paphos Harbour"
+      ],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Благодійний забіг або прогулянка на 5 км для підтримки людей з онкологічними захворюваннями. Збір коштів для CPSG та Care Days за підтримки Paphos Running Club підтверджений афішею. Початок о 16:00; реєстрація з 15:00. Організатори радять приїхати заздалегідь. Онлайн-реєстрація: https://shorturl.at/ik7DN. На афіші: участь €10, для дітей до 12 років — €5; DJ та танцювальна розминка. Картка 2592 описує цю саму подію, тому об’єднана з цією.\n\nМісце: Paphos Castle\n\nПоходження координат: Координати уточнено за будівлею замку Пафоса на OpenStreetMap. Точний майданчик або вхід заходу біля замку слід уточнити в організатора.\n\nДжерело координат: https://www.openstreetmap.org/way/8052789\n\nОб’єкт на карті: https://www.openstreetmap.org/way/8052789\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030774508150?utm_source=lima\n\nДжерело: https://lima.events/en/events/2459\n\nДодаткова картка тієї самої події: https://lima.events/en/events/2592"
+    },
+    {
+      "lima_id": 2493,
+      "source_url": "https://lima.events/en/events/2493",
+      "original_title": "Έκθεση: Ύλη & Κοινότητα | Exhibition: Matter & Community",
+      "title_uk": "Виставка «Матерія та спільнота»",
+      "description_uk": "Поле About у картці Lima відсутнє. Назва виставки — «Матерія та спільнота»; місце, зазначене в Location, — Fyti. Авторів, програму, точну адресу та вартість не наведено.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/07eccfee-09ef-4435-b3dc-555c564dde6a.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/07eccfee-09ef-4435-b3dc-555c564dde6a.webp"
+      ],
+      "starts_at": "2026-10-17T17:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3101,
+        "place": {
+          "id": 1390,
+          "city_id": 4,
+          "name": "Fyti",
+          "address": null,
+          "latitude": 34.9292,
+          "longitude": 32.55
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T17:00:00",
+        "end_date": null
+      },
+      "venue": "Fyti",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.9285633,
+        "longitude": 32.5449928,
+        "precision": "approximate_area",
+        "note": "Вказано лише село Фіті. Позначка орієнтовно показує центр села за картою, а не будівлю виставки; конкретне місце проведення не встановлено. Початкові координати джерела також позначали лише район села.",
+        "source_url": "https://allevents.in/event/200030800413955",
+        "feature_url": "https://www.openstreetmap.org/node/60061093",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030800413955?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. Назва виставки — «Матерія та спільнота»; місце, зазначене в Location, — Fyti. Авторів, програму, точну адресу та вартість не наведено.\n\nМісце: Fyti\n\nКоординати приблизні / не підтверджені незалежно: Вказано лише село Фіті. Позначка орієнтовно показує центр села за картою, а не будівлю виставки; конкретне місце проведення не встановлено. Початкові координати джерела також позначали лише район села.\n\nДжерело координат: https://allevents.in/event/200030800413955\n\nОб’єкт на карті: https://www.openstreetmap.org/node/60061093\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030800413955?utm_source=lima\n\nДжерело: https://lima.events/en/events/2493"
+    },
+    {
+      "lima_id": 2266,
+      "source_url": "https://lima.events/en/events/2266",
+      "original_title": "A Night Of Soul & Motown With Una",
+      "title_uk": "Вечір соулу та Motown з Уною",
+      "description_uk": "Уна Петтіфорд виконає програму, присвячену Motown, соулу й диско. Вечеря з трьох страв коштує €25; можна прийти лише на напої. Бронювання: 26 96 24 15. Додатковий контакт у джерелі подано в обфускованому вигляді «colosseum | cytanet ! com ! cy»; непідтверджену email-адресу не відновлено.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/d41d3c18-5a4b-44a4-8c23-fdb133c8ba35.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/d41d3c18-5a4b-44a4-8c23-fdb133c8ba35.webp"
+      ],
+      "starts_at": "2026-10-17T19:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2874,
+        "place": {
+          "id": 233,
+          "city_id": 4,
+          "name": "Colosseum Restaurant Paphos Live Shows & Weddings",
+          "address": null,
+          "latitude": 34.74987604,
+          "longitude": 32.42742529
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T19:00:00",
+        "end_date": null
+      },
+      "venue": "Colosseum Restaurant Paphos Live Shows & Weddings",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.74987604,
+        "longitude": 32.42742529,
+        "precision": "source_only",
+        "note": "Координати Colosseum Restaurant взято з картки події; зовнішня картка AllEvents містить ту саму точку, але це не незалежна перевірка закладу. Точність розташування та входу не підтверджено.",
+        "source_url": "https://allevents.in/event/200030636300353",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030636300353?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Уна Петтіфорд виконає програму, присвячену Motown, соулу й диско. Вечеря з трьох страв коштує €25; можна прийти лише на напої. Бронювання: 26 96 24 15. Додатковий контакт у джерелі подано в обфускованому вигляді «colosseum | cytanet ! com ! cy»; непідтверджену email-адресу не відновлено.\n\nМісце: Colosseum Restaurant Paphos Live Shows & Weddings\n\nКоординати приблизні / не підтверджені незалежно: Координати Colosseum Restaurant взято з картки події; зовнішня картка AllEvents містить ту саму точку, але це не незалежна перевірка закладу. Точність розташування та входу не підтверджено.\n\nДжерело координат: https://allevents.in/event/200030636300353\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030636300353?utm_source=lima\n\nДжерело: https://lima.events/en/events/2266"
+    },
+    {
+      "lima_id": 2488,
+      "source_url": "https://lima.events/en/events/2488",
+      "original_title": "Αόρατη πόλη / Invisible City",
+      "title_uk": "«Невидиме місто»",
+      "description_uk": "Поле About у картці Lima відсутнє. Подія «Невидиме місто» запланована в Old Powerhouse, Пафос. Формат, програму, умови участі та ціну в картці не зазначено.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/2c932ac3-d8a5-4d12-9423-63c7acf95b52.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/2c932ac3-d8a5-4d12-9423-63c7acf95b52.webp"
+      ],
+      "starts_at": "2026-10-17T19:30:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3096,
+        "place": {
+          "id": 1388,
+          "city_id": 4,
+          "name": "Old Powerhouse, Pafos - Παλιά Ηλεκτρική, Πάφος",
+          "address": null,
+          "latitude": 34.77659,
+          "longitude": 32.42175
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T19:30:00",
+        "end_date": null
+      },
+      "venue": "Old Powerhouse, Pafos - Παλιά Ηλεκτρική, Πάφος",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7765493,
+        "longitude": 32.4219099,
+        "precision": "verified_feature",
+        "note": "Місце підтверджено як культурний центр Παλιά Ηλεκτρική / Old Powerhouse у Пафосі; координати уточнено за об'єктом на OpenStreetMap.",
+        "source_url": "https://www.openstreetmap.org/node/60463692",
+        "feature_url": "https://www.openstreetmap.org/node/60463692",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030800112437?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. Подія «Невидиме місто» запланована в Old Powerhouse, Пафос. Формат, програму, умови участі та ціну в картці не зазначено.\n\nМісце: Old Powerhouse, Pafos - Παλιά Ηλεκτρική, Πάφος\n\nПоходження координат: Місце підтверджено як культурний центр Παλιά Ηλεκτρική / Old Powerhouse у Пафосі; координати уточнено за об'єктом на OpenStreetMap.\n\nДжерело координат: https://www.openstreetmap.org/node/60463692\n\nОб’єкт на карті: https://www.openstreetmap.org/node/60463692\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030800112437?utm_source=lima\n\nДжерело: https://lima.events/en/events/2488"
+    },
+    {
+      "lima_id": 2343,
+      "source_url": "https://lima.events/en/events/2343",
+      "original_title": "Lotus Parable label night",
+      "title_uk": "Вечір лейблу Lotus Parable",
+      "description_uk": "Щорічна зустріч Lotus Parable на Кіпрі з глибоким гіпнотичним техно просто неба. Точний майданчик оголосять пізніше. Кількість квитків обмежена. Умови продажу з About: Early Bird €20 — 23–30 вересня; другий реліз €25 — 1–16 жовтня; фінальний реліз €30 онлайн або €35 на вході. Попередній продаж через сайт організаторів.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/a91faf60-7493-4c45-be2d-260bcc30b99e.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/a91faf60-7493-4c45-be2d-260bcc30b99e.webp"
+      ],
+      "starts_at": "2026-10-17T20:30:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2951,
+        "place": {
+          "id": 153,
+          "city_id": 4,
+          "name": "Tba",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T20:30:00",
+        "end_date": null
+      },
+      "venue": "Tba",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": null,
+        "longitude": null,
+        "precision": "unresolved",
+        "note": "Місце Lotus Parable label night ще не оголошене: в описі зазначено лише відкритий майданчик, який повідомлять пізніше. Сторінка Resident Advisor недоступна для перевірки; координати не встановлено.",
+        "source_url": "https://ra.co/events/2535790",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2535790?utm_source=lima",
+      "source_price": 25,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Точне місце та підтверджені або обґрунтовані приблизні координати встановити не вдалося; обов’язкові latitude/longitude не вигадані.",
+      "import_description": "Щорічна зустріч Lotus Parable на Кіпрі з глибоким гіпнотичним техно просто неба. Точний майданчик оголосять пізніше. Кількість квитків обмежена. Умови продажу з About: Early Bird €20 — 23–30 вересня; другий реліз €25 — 1–16 жовтня; фінальний реліз €30 онлайн або €35 на вході. Попередній продаж через сайт організаторів.\n\nМісце: Tba\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2535790?utm_source=lima\n\nДжерело: https://lima.events/en/events/2343"
+    },
+    {
+      "lima_id": 2248,
+      "source_url": "https://lima.events/en/events/2248",
+      "original_title": "NERVENRLINIK Vol.5: Industrial Secret",
+      "title_uk": "NERVENRLINIK Vol.5: індустріальна таємниця",
+      "description_uk": "Клубна подія з індустріальним звучанням і важким басом. За About, склад учасників буде оновлено, а продаж квитків відкриється пізніше. Точне місце не оприлюднено.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/2f553123-be6e-407f-ab95-af97d63706b7.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/2f553123-be6e-407f-ab95-af97d63706b7.webp"
+      ],
+      "starts_at": "2026-10-17T21:00:00+03:00",
+      "expires_at": "2026-10-17T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2856,
+        "place": {
+          "id": 153,
+          "city_id": 4,
+          "name": "Tba",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-17T21:00:00",
+        "end_date": null
+      },
+      "venue": "Tba",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": null,
+        "longitude": null,
+        "precision": "unresolved",
+        "note": "Точний майданчик NERVENRLINIK Vol.5 не оголошено. Згадка промислової зони не визначає адресу; сторінка Resident Advisor недоступна для перевірки. Координати відсутні.",
+        "source_url": "https://ra.co/events/2523750",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2523750?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Точне місце та підтверджені або обґрунтовані приблизні координати встановити не вдалося; обов’язкові latitude/longitude не вигадані.",
+      "import_description": "Клубна подія з індустріальним звучанням і важким басом. За About, склад учасників буде оновлено, а продаж квитків відкриється пізніше. Точне місце не оприлюднено.\n\nМісце: Tba\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2523750?utm_source=lima\n\nДжерело: https://lima.events/en/events/2248"
+    },
+    {
+      "lima_id": 2458,
+      "source_url": "https://lima.events/en/events/2458",
+      "original_title": "DUSSHERA INDIAN FOOD FESTIVAL",
+      "title_uk": "Індійський гастрономічний фестиваль Дуссехра",
+      "description_uk": "Curry House святкує Дуссехру спеціальним індійським меню. Включено по 3 вегетаріанські та невегетаріанські закуски, по 3 вегетаріанські та невегетаріанські основні страви, 2 види рису, 3 види наану, 2 десерти, чатні, салат і райту. Безлімітна їжа — €23,95 з особи. Два сеанси: 18:00 та 20:00. Заохочується яскравий одяг. Бронювання телефоном або WhatsApp: Raj 99 864 607, Tula 99 17 90 94.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/22a6dc51-3c33-4b50-b545-68317eb5eff2.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/22a6dc51-3c33-4b50-b545-68317eb5eff2.webp"
+      ],
+      "starts_at": "2026-10-18T18:00:00+03:00",
+      "expires_at": "2026-10-18T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3066,
+        "place": {
+          "id": 272,
+          "city_id": 4,
+          "name": "22, Iassonos Str., 8041 Paphos",
+          "address": null,
+          "latitude": 34.75733,
+          "longitude": 32.42193
+        },
+        "city_id": 4,
+        "start_date": "2026-10-18T18:00:00",
+        "end_date": null
+      },
+      "venue": "22, Iassonos Str., 8041 Paphos",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7573793,
+        "longitude": 32.4220882,
+        "precision": "verified_feature",
+        "note": "Адресу 22 Iassonos підтверджено на OpenStreetMap як ресторан Curry House у Като-Пафосі; координати уточнено за закладом.",
+        "source_url": "https://curryhousepaphos.com/restaurant/",
+        "feature_url": "https://www.openstreetmap.org/node/3294281203",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030769993226?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Curry House святкує Дуссехру спеціальним індійським меню. Включено по 3 вегетаріанські та невегетаріанські закуски, по 3 вегетаріанські та невегетаріанські основні страви, 2 види рису, 3 види наану, 2 десерти, чатні, салат і райту. Безлімітна їжа — €23,95 з особи. Два сеанси: 18:00 та 20:00. Заохочується яскравий одяг. Бронювання телефоном або WhatsApp: Raj 99 864 607, Tula 99 17 90 94.\n\nМісце: 22, Iassonos Str., 8041 Paphos\n\nПоходження координат: Адресу 22 Iassonos підтверджено на OpenStreetMap як ресторан Curry House у Като-Пафосі; координати уточнено за закладом.\n\nДжерело координат: https://curryhousepaphos.com/restaurant/\n\nОб’єкт на карті: https://www.openstreetmap.org/node/3294281203\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030769993226?utm_source=lima\n\nДжерело: https://lima.events/en/events/2458"
+    },
+    {
+      "lima_id": 2471,
+      "source_url": "https://lima.events/en/events/2471",
+      "original_title": "YALLA HABIBI",
+      "title_uk": "Yalla Habibi — клубна ніч, випуск 1",
+      "description_uk": "Club Teez та Culture Clash проводять перший Yalla Habibi в Нікосії. DJ NOUR N гратиме арабську й англомовну музику. У Schedule час початку — 23:00; About прямо вказує Club Teez, Nicosia, попри розміщення картки на сторінці Пафоса. У полі ціни Lima — €11,30.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/12373942-393d-412c-996f-fd2b64c39429.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/12373942-393d-412c-996f-fd2b64c39429.webp"
+      ],
+      "starts_at": "2026-10-22T23:00:00+03:00",
+      "expires_at": "2026-10-22T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3079,
+        "place": {
+          "id": 722,
+          "city_id": 4,
+          "name": "Tba - Club Teez",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-22T23:00:00",
+        "end_date": null
+      },
+      "venue": "Tba - Club Teez",
+      "resolved_venue": "Club Teez, Nicosia",
+      "coordinates": {
+        "latitude": null,
+        "longitude": null,
+        "precision": "unresolved",
+        "note": "За описом організатора захід відбудеться у Club Teez, Нікосія, а не в Пафосі. Назву й місто уточнено, але точну адресу та координати клубу незалежно не встановлено.",
+        "source_url": "https://lima.events/en/events/2471",
+        "venue_override": "Club Teez, Nicosia",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2552775?utm_source=lima",
+      "source_price": 11.3,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Точне місце та підтверджені або обґрунтовані приблизні координати встановити не вдалося; обов’язкові latitude/longitude не вигадані.",
+      "import_description": "Club Teez та Culture Clash проводять перший Yalla Habibi в Нікосії. DJ NOUR N гратиме арабську й англомовну музику. У Schedule час початку — 23:00; About прямо вказує Club Teez, Nicosia, попри розміщення картки на сторінці Пафоса. У полі ціни Lima — €11,30.\n\nМісце: Tba - Club Teez\n\nУточнення місця з опису або додаткового джерела: Club Teez, Nicosia\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2552775?utm_source=lima\n\nДжерело: https://lima.events/en/events/2471"
+    },
+    {
+      "lima_id": 2376,
+      "source_url": "https://lima.events/en/events/2376",
+      "original_title": "MLC @ Monara Live Music Sports Bar",
+      "title_uk": "MLC у Monara Live Music & Sports Bar",
+      "description_uk": "Три години живої рок-класики 1970-х, 1980-х та 1990-х від MLC на сцені Monara. Потрібне бронювання: 94 089 168.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/eff695d6-7e2f-4f93-9a91-cfa834a2e761.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/eff695d6-7e2f-4f93-9a91-cfa834a2e761.webp"
+      ],
+      "starts_at": "2026-10-23T20:30:00+03:00",
+      "expires_at": "2026-10-23T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2984,
+        "place": {
+          "id": 117,
+          "city_id": 4,
+          "name": "Monara Live Music & Sports Bar Paphos",
+          "address": null,
+          "latitude": 34.76516349,
+          "longitude": 32.41121
+        },
+        "city_id": 4,
+        "start_date": "2026-10-23T20:30:00",
+        "end_date": null
+      },
+      "venue": "Monara Live Music & Sports Bar Paphos",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7655708,
+        "longitude": 32.4113225,
+        "precision": "verified_feature",
+        "note": "Місце зіставлено із закладом Monara на Tombs of the Kings Avenue у Пафосі; координати уточнено за об'єктом OpenStreetMap. Карта класифікує його як ресторан; конкретний вхід заходу не перевірено.",
+        "source_url": "https://www.openstreetmap.org/node/4793814234",
+        "feature_url": "https://www.openstreetmap.org/node/4793814234",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030726042553?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Три години живої рок-класики 1970-х, 1980-х та 1990-х від MLC на сцені Monara. Потрібне бронювання: 94 089 168.\n\nМісце: Monara Live Music & Sports Bar Paphos\n\nПоходження координат: Місце зіставлено із закладом Monara на Tombs of the Kings Avenue у Пафосі; координати уточнено за об'єктом OpenStreetMap. Карта класифікує його як ресторан; конкретний вхід заходу не перевірено.\n\nДжерело координат: https://www.openstreetmap.org/node/4793814234\n\nОб’єкт на карті: https://www.openstreetmap.org/node/4793814234\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030726042553?utm_source=lima\n\nДжерело: https://lima.events/en/events/2376"
+    },
+    {
+      "lima_id": 2457,
+      "source_url": "https://lima.events/en/events/2457",
+      "original_title": "Reconnect to YOURSELF - Two Days Away From the Noise",
+      "title_uk": "Відновити зв’язок із собою: два дні подалі від шуму",
+      "description_uk": "Дводенний ретрит у Друзії 24–25 жовтня з практичними вправами, роботою в парах і групі, рефлексією, рухом, ранковими практиками та обговореннями стосунків, вибору, відповідальності й особистих рішень. Відкритий для всіх; досвід Insight або інших ретритів не потрібен. Група — максимум 20 учасників. Наживо проводять Krasimir та Clementine; протягом вихідних відбудуться дві інтерактивні онлайн-сесії з фасилітаторами Insight. Внесок — €97 з особи. Проживання та харчування НЕ включені й оплачуються окремо: одномісний номер зі сніданком — €70, двомісний зі сніданком — €85; період розрахунку цих тарифів у джерелі не уточнений. Для імпорту завершення навмисно встановлене на 23:59 24 жовтня.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/c53f5abb-4097-4d21-bf70-c00e24380899.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/c53f5abb-4097-4d21-bf70-c00e24380899.webp"
+      ],
+      "starts_at": "2026-10-24T09:00:00+03:00",
+      "expires_at": "2026-10-24T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3065,
+        "place": {
+          "id": 1381,
+          "city_id": 4,
+          "name": "Palates Hotel, Akamantos, Drouseia",
+          "address": null,
+          "latitude": 34.77201462,
+          "longitude": 32.42973709
+        },
+        "city_id": 4,
+        "start_date": "2026-10-24T09:00:00",
+        "end_date": null
+      },
+      "venue": "Palates Hotel, Akamantos, Drouseia",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.9622987,
+        "longitude": 32.3959819,
+        "precision": "verified_feature",
+        "note": "Початкову помилкову точку в місті Пафос відхилено. Офіційний сайт підтверджує Palates Village Hotel у Друсії та телефон +357 26332083; координати взято з відповідного готелю на OpenStreetMap. Поштова назва сусідньої Інеї в геокодері не означає інший готель.",
+        "source_url": "https://www.droushiahotelpalates.com/gr/contact-bgr.html",
+        "feature_url": "https://www.openstreetmap.org/node/3215974746",
+        "original_coords_rejected": true
+      },
+      "resource_url": "https://allevents.in/event/80001544123546?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Дводенний ретрит у Друзії 24–25 жовтня з практичними вправами, роботою в парах і групі, рефлексією, рухом, ранковими практиками та обговореннями стосунків, вибору, відповідальності й особистих рішень. Відкритий для всіх; досвід Insight або інших ретритів не потрібен. Група — максимум 20 учасників. Наживо проводять Krasimir та Clementine; протягом вихідних відбудуться дві інтерактивні онлайн-сесії з фасилітаторами Insight. Внесок — €97 з особи. Проживання та харчування НЕ включені й оплачуються окремо: одномісний номер зі сніданком — €70, двомісний зі сніданком — €85; період розрахунку цих тарифів у джерелі не уточнений. Для імпорту завершення навмисно встановлене на 23:59 24 жовтня.\n\nМісце: Palates Hotel, Akamantos, Drouseia\n\nПоходження координат: Початкову помилкову точку в місті Пафос відхилено. Офіційний сайт підтверджує Palates Village Hotel у Друсії та телефон +357 26332083; координати взято з відповідного готелю на OpenStreetMap. Поштова назва сусідньої Інеї в геокодері не означає інший готель.\n\nДжерело координат: https://www.droushiahotelpalates.com/gr/contact-bgr.html\n\nОб’єкт на карті: https://www.openstreetmap.org/node/3215974746\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/80001544123546?utm_source=lima\n\nДжерело: https://lima.events/en/events/2457"
+    },
+    {
+      "lima_id": 2221,
+      "source_url": "https://lima.events/en/events/2221",
+      "original_title": "✨🤍 THE ULTIMATE WHITE PARTY BOTTOMLESS BRUNCH IS COMING! 🤍✨",
+      "title_uk": "Біла вечірка з безлімітним бранчем",
+      "description_uk": "White Party у The Meeting Bar, Като-Пафос: R&B-класика від DJ Tom Owens, живий вокал, їжа й дві години безлімітних напоїв — просеко, вина, пива та добірки коктейлів. У джерелі програма 12:30–16:30. Дрескод — білий одяг. Ранні квитки — €30, їх кількість обмежена, далі ціна зросте. Вхід лише за квитками; кількість місць обмежена.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/16b27589-3075-4656-a350-1e6283b69ed2.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/16b27589-3075-4656-a350-1e6283b69ed2.webp"
+      ],
+      "starts_at": "2026-10-24T12:30:00+03:00",
+      "expires_at": "2026-10-24T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2829,
+        "place": {
+          "id": 123,
+          "city_id": 4,
+          "name": "13 Konstandias Street",
+          "address": null,
+          "latitude": 34.74992,
+          "longitude": 32.46602
+        },
+        "city_id": 4,
+        "start_date": "2026-10-24T12:30:00",
+        "end_date": null
+      },
+      "venue": "13 Konstandias Street",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.75836,
+        "longitude": 32.41666,
+        "precision": "source_only",
+        "note": "Помилкову точку на однойменній вулиці Konstantias у Колоні відхилено. Використано координати зовнішньої картки події AllEvents для The Meeting Bar у Като-Пафосі. Це координати джерела, а не незалежно перевірений заклад; у картці також є розбіжність номерів будинку 13/14.",
+        "source_url": "https://allevents.in/event/200030599803553",
+        "original_coords_rejected": true
+      },
+      "resource_url": "https://allevents.in/event/200030599803553?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "White Party у The Meeting Bar, Като-Пафос: R&B-класика від DJ Tom Owens, живий вокал, їжа й дві години безлімітних напоїв — просеко, вина, пива та добірки коктейлів. У джерелі програма 12:30–16:30. Дрескод — білий одяг. Ранні квитки — €30, їх кількість обмежена, далі ціна зросте. Вхід лише за квитками; кількість місць обмежена.\n\nМісце: 13 Konstandias Street\n\nКоординати приблизні / не підтверджені незалежно: Помилкову точку на однойменній вулиці Konstantias у Колоні відхилено. Використано координати зовнішньої картки події AllEvents для The Meeting Bar у Като-Пафосі. Це координати джерела, а не незалежно перевірений заклад; у картці також є розбіжність номерів будинку 13/14.\n\nДжерело координат: https://allevents.in/event/200030599803553\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030599803553?utm_source=lima\n\nДжерело: https://lima.events/en/events/2221"
+    },
+    {
+      "lima_id": 2463,
+      "source_url": "https://lima.events/en/events/2463",
+      "original_title": "🌊 Ocean of OM-s | Mantra Circle by the Sea",
+      "title_uk": "Океан OM: коло мантр біля моря",
+      "description_uk": "Спільне співання мантри OM біля моря в Мандрії, 18:00–20:00. Учасникам запропонують аюрведичний трав’яний напій для голосу. Внесок — €20. Відкрито для всіх: знання мантр, вокальні навички й досвід співу не потрібні. Кількість місць обмежена; бронювання через WhatsApp +357 97492550. Ведучі — Marty та Dora.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/634313b0-66ab-4c86-8f6f-eaf064e1fe18.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/634313b0-66ab-4c86-8f6f-eaf064e1fe18.webp"
+      ],
+      "starts_at": "2026-10-24T18:00:00+03:00",
+      "expires_at": "2026-10-24T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3071,
+        "place": {
+          "id": 1382,
+          "city_id": 4,
+          "name": "Mandria Paphos Cyprus",
+          "address": null,
+          "latitude": 34.7667,
+          "longitude": 32.4167
+        },
+        "city_id": 4,
+        "start_date": "2026-10-24T18:00:00",
+        "end_date": null
+      },
+      "venue": "Mandria Paphos Cyprus",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7027244,
+        "longitude": 32.5248108,
+        "precision": "approximate_area",
+        "note": "Помилкову точку в центрі Пафоса відхилено. Позначка показує лише район пляжу Мандрії за OpenStreetMap, а не точне місце кола мантр. Точну локацію біля моря організатори повідомляють через WhatsApp; перед поїздкою її потрібно отримати.",
+        "source_url": "https://allevents.in/event/200030769993024",
+        "feature_url": "https://www.openstreetmap.org/node/14200582130",
+        "original_coords_rejected": true
+      },
+      "resource_url": "https://allevents.in/event/200030769993024?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Спільне співання мантри OM біля моря в Мандрії, 18:00–20:00. Учасникам запропонують аюрведичний трав’яний напій для голосу. Внесок — €20. Відкрито для всіх: знання мантр, вокальні навички й досвід співу не потрібні. Кількість місць обмежена; бронювання через WhatsApp +357 97492550. Ведучі — Marty та Dora.\n\nМісце: Mandria Paphos Cyprus\n\nКоординати приблизні / не підтверджені незалежно: Помилкову точку в центрі Пафоса відхилено. Позначка показує лише район пляжу Мандрії за OpenStreetMap, а не точне місце кола мантр. Точну локацію біля моря організатори повідомляють через WhatsApp; перед поїздкою її потрібно отримати.\n\nДжерело координат: https://allevents.in/event/200030769993024\n\nОб’єкт на карті: https://www.openstreetmap.org/node/14200582130\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030769993024?utm_source=lima\n\nДжерело: https://lima.events/en/events/2463"
+    },
+    {
+      "lima_id": 2181,
+      "source_url": "https://lima.events/en/events/2181",
+      "original_title": "Karaoke with Jim the music man!",
+      "title_uk": "Караоке з Джимом — музичною людиною",
+      "description_uk": "Караоке з Jim the Music Man у Chalkies Bar. Кухня працює до 22:00, останні замовлення — о 21:45. Бронювання столиків: 26343511.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/6f5901a3-396e-419f-9a08-bff48e0980ca.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/6f5901a3-396e-419f-9a08-bff48e0980ca.webp"
+      ],
+      "starts_at": "2026-10-24T20:00:00+03:00",
+      "expires_at": "2026-10-24T23:59:00+03:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2789,
+        "place": {
+          "id": 1103,
+          "city_id": 4,
+          "name": "Chalkies Bar",
+          "address": null,
+          "latitude": 34.85441,
+          "longitude": 32.36931
+        },
+        "city_id": 4,
+        "start_date": "2026-10-24T20:00:00",
+        "end_date": null
+      },
+      "venue": "Chalkies Bar",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.8535799,
+        "longitude": 32.3770025,
+        "precision": "verified_feature",
+        "note": "Координати уточнено за баром Chalkies на Coral Bay strip у Пеї. Адреса Coral Bay strip підтверджується зовнішньою карткою події; початкову зміщену приблизно на 700 м точку відхилено. Точний вхід не перевірено.",
+        "source_url": "https://allevents.in/event/200030562742111",
+        "feature_url": "https://www.openstreetmap.org/node/4987771729",
+        "original_coords_rejected": true
+      },
+      "resource_url": "https://allevents.in/event/200030562742111?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Караоке з Jim the Music Man у Chalkies Bar. Кухня працює до 22:00, останні замовлення — о 21:45. Бронювання столиків: 26343511.\n\nМісце: Chalkies Bar\n\nПоходження координат: Координати уточнено за баром Chalkies на Coral Bay strip у Пеї. Адреса Coral Bay strip підтверджується зовнішньою карткою події; початкову зміщену приблизно на 700 м точку відхилено. Точний вхід не перевірено.\n\nДжерело координат: https://allevents.in/event/200030562742111\n\nОб’єкт на карті: https://www.openstreetmap.org/node/4987771729\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030562742111?utm_source=lima\n\nДжерело: https://lima.events/en/events/2181"
+    },
+    {
+      "lima_id": 2465,
+      "source_url": "https://lima.events/en/events/2465",
+      "original_title": "Joanna Sophia Fun Run/Walk Around the World In 5k CYPRUS",
+      "title_uk": "Joanna Sophia: забіг або прогулянка «Навколо світу за 5 км» на Кіпрі",
+      "description_uk": "Поле About у картці Lima відсутнє. Заголовок анонсує забіг або прогулянку Joanna Sophia Fun Run/Walk Around the World In 5k; Location — Paphos Castle. Умови участі, реєстраційний внесок і контакти в картці не наведені.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/72718c50-e611-46c2-ab8f-a070bec69b81.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/72718c50-e611-46c2-ab8f-a070bec69b81.webp"
+      ],
+      "starts_at": "2026-10-25T16:00:00+02:00",
+      "expires_at": "2026-10-25T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3073,
+        "place": {
+          "id": 535,
+          "city_id": 4,
+          "name": "Paphos Castle",
+          "address": null,
+          "latitude": 34.754167,
+          "longitude": 32.408333
+        },
+        "city_id": 4,
+        "start_date": "2026-10-25T16:00:00",
+        "end_date": null
+      },
+      "venue": "Paphos Castle",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7536703,
+        "longitude": 32.4069592,
+        "precision": "verified_feature",
+        "note": "Координати уточнено за будівлею замку Пафоса на OpenStreetMap. Точний майданчик або вхід заходу біля замку слід уточнити в організатора.",
+        "source_url": "https://www.openstreetmap.org/way/8052789",
+        "feature_url": "https://www.openstreetmap.org/way/8052789",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030769993632?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. Заголовок анонсує забіг або прогулянку Joanna Sophia Fun Run/Walk Around the World In 5k; Location — Paphos Castle. Умови участі, реєстраційний внесок і контакти в картці не наведені.\n\nМісце: Paphos Castle\n\nПоходження координат: Координати уточнено за будівлею замку Пафоса на OpenStreetMap. Точний майданчик або вхід заходу біля замку слід уточнити в організатора.\n\nДжерело координат: https://www.openstreetmap.org/way/8052789\n\nОб’єкт на карті: https://www.openstreetmap.org/way/8052789\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030769993632?utm_source=lima\n\nДжерело: https://lima.events/en/events/2465"
+    },
+    {
+      "lima_id": 2360,
+      "source_url": "https://lima.events/en/events/2360",
+      "original_title": "LUSTRA",
+      "title_uk": "LUSTRA",
+      "description_uk": "Нічний проєкт Resonark у секретній локації. В описі зазначено центр Лімасола, а точну адресу не оприлюднено. Кількість квитків обмежена. Зображення події в картці відсутнє.",
+      "about_missing": false,
+      "image_url": null,
+      "image_urls": [],
+      "starts_at": "2026-10-27T23:00:00+02:00",
+      "expires_at": "2026-10-27T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 2968,
+        "place": {
+          "id": 153,
+          "city_id": 4,
+          "name": "Tba",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-27T23:00:00",
+        "end_date": null
+      },
+      "venue": "Tba",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": null,
+        "longitude": null,
+        "precision": "unresolved",
+        "note": "Координати LUSTRA не досліджувалися: цей запис без зображення пропущено за умовами імпорту. Місце у джерелі позначене TBA.",
+        "source_url": "https://lima.events/en/events/2360",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2540459?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Відсутній URL зображення події.",
+      "import_description": "Нічний проєкт Resonark у секретній локації. В описі зазначено центр Лімасола, а точну адресу не оприлюднено. Кількість квитків обмежена. Зображення події в картці відсутнє.\n\nМісце: Tba\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2540459?utm_source=lima\n\nДжерело: https://lima.events/en/events/2360"
+    },
+    {
+      "lima_id": 2672,
+      "source_url": "https://lima.events/en/events/2672",
+      "original_title": "One Dark Knight: A Batman Musical",
+      "title_uk": "«Темний лицар»: мюзикл про Бетмена",
+      "description_uk": "Оригінальний мюзикл про протистояння Бетмена та лиходіїв Ґотема в театрі Markideio, Пафос. Двері відчиняються о 19:30, вистава починається о 20:00. В About зазначені два покази — 28 та 31 жовтня; цей запис стосується Schedule 28 жовтня. Ціну квитка не наведено.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/9ad54775-560f-42ec-85f0-610cd5035a04.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/9ad54775-560f-42ec-85f0-610cd5035a04.webp"
+      ],
+      "starts_at": "2026-10-28T20:00:00+02:00",
+      "expires_at": "2026-10-28T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3280,
+        "place": {
+          "id": 1495,
+          "city_id": 4,
+          "name": "Markideio Theatre",
+          "address": null,
+          "latitude": 34.7781598,
+          "longitude": 32.4232334
+        },
+        "city_id": 4,
+        "start_date": "2026-10-28T20:00:00",
+        "end_date": null
+      },
+      "venue": "Markideio Theatre",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7781667,
+        "longitude": 32.4231959,
+        "precision": "verified_feature",
+        "note": "Місце підтверджено як Markideion Theater / Markideio Theatre у Пафосі; позначка відповідає будівлі театру на OpenStreetMap, а не гарантовано конкретному входу.",
+        "source_url": "https://www.openstreetmap.org/way/824979277",
+        "feature_url": "https://www.openstreetmap.org/way/824979277",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://www.ticketbox.com.cy/one-dark-knight/28-10-2026?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Оригінальний мюзикл про протистояння Бетмена та лиходіїв Ґотема в театрі Markideio, Пафос. Двері відчиняються о 19:30, вистава починається о 20:00. В About зазначені два покази — 28 та 31 жовтня; цей запис стосується Schedule 28 жовтня. Ціну квитка не наведено.\n\nМісце: Markideio Theatre\n\nПоходження координат: Місце підтверджено як Markideion Theater / Markideio Theatre у Пафосі; позначка відповідає будівлі театру на OpenStreetMap, а не гарантовано конкретному входу.\n\nДжерело координат: https://www.openstreetmap.org/way/824979277\n\nОб’єкт на карті: https://www.openstreetmap.org/way/824979277\n\nКвитки / реєстрація / деталі події: https://www.ticketbox.com.cy/one-dark-knight/28-10-2026?utm_source=lima\n\nДжерело: https://lima.events/en/events/2672"
+    },
+    {
+      "lima_id": 2689,
+      "source_url": "https://lima.events/en/events/2689",
+      "original_title": "Cyprus Property Week: Real Estate Conference in Paphos",
+      "title_uk": "Cyprus Property Week: конференція з нерухомості в Пафосі",
+      "description_uk": "Поле About у картці Lima відсутнє. Заголовок анонсує конференцію з нерухомості Cyprus Property Week у Leonardo Plaza Cypria Maris Beach Hotel & Spa. Програму, умови участі та ціну в картці не наведено.",
+      "about_missing": true,
+      "image_url": "https://lima.events/uploads/events/7e9c7842-f276-4a2c-b8f1-f0dc48ca5428.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/7e9c7842-f276-4a2c-b8f1-f0dc48ca5428.webp"
+      ],
+      "starts_at": "2026-10-31T16:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3298,
+        "place": {
+          "id": 1507,
+          "city_id": 4,
+          "name": "Leonardo Plaza Cypria Maris Beach Hotel & Spa",
+          "address": null,
+          "latitude": 34.7417665,
+          "longitude": 32.432059
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T16:00:00",
+        "end_date": null
+      },
+      "venue": "Leonardo Plaza Cypria Maris Beach Hotel & Spa",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7415984,
+        "longitude": 32.4316015,
+        "precision": "verified_feature",
+        "note": "Місце підтверджено як Leonardo Plaza Cypria Maris Beach Hotel & Spa, 10 Afroditis Avenue; координати уточнено за територією готелю OpenStreetMap. Конкретну залу або вхід заходу не встановлено.",
+        "source_url": "https://www.openstreetmap.org/way/1102929738",
+        "feature_url": "https://www.openstreetmap.org/way/1102929738",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://cypruspropertyweek.com/purchase-ticket/?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Поле About у картці Lima відсутнє. Заголовок анонсує конференцію з нерухомості Cyprus Property Week у Leonardo Plaza Cypria Maris Beach Hotel & Spa. Програму, умови участі та ціну в картці не наведено.\n\nМісце: Leonardo Plaza Cypria Maris Beach Hotel & Spa\n\nПоходження координат: Місце підтверджено як Leonardo Plaza Cypria Maris Beach Hotel & Spa, 10 Afroditis Avenue; координати уточнено за територією готелю OpenStreetMap. Конкретну залу або вхід заходу не встановлено.\n\nДжерело координат: https://www.openstreetmap.org/way/1102929738\n\nОб’єкт на карті: https://www.openstreetmap.org/way/1102929738\n\nКвитки / реєстрація / деталі події: https://cypruspropertyweek.com/purchase-ticket/?utm_source=lima\n\nДжерело: https://lima.events/en/events/2689"
+    },
+    {
+      "lima_id": 2694,
+      "source_url": "https://lima.events/en/events/2694",
+      "original_title": "One Dark Knight: A Batman Musical",
+      "title_uk": "«Темний лицар»: мюзикл про Бетмена",
+      "description_uk": "Оригінальний мюзикл про протистояння Бетмена та лиходіїв Ґотема в театрі Markideio, Пафос. Двері відчиняються о 19:30, вистава починається о 20:00. В About зазначені два покази — 28 та 31 жовтня; цей запис стосується Schedule 31 жовтня. Ціну квитка не наведено.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/1ff73af8-a9b5-4779-a903-9648ca5735a2.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/1ff73af8-a9b5-4779-a903-9648ca5735a2.webp"
+      ],
+      "starts_at": "2026-10-31T20:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3301,
+        "place": {
+          "id": 1495,
+          "city_id": 4,
+          "name": "Markideio Theatre",
+          "address": null,
+          "latitude": 34.7781598,
+          "longitude": 32.4232334
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T20:00:00",
+        "end_date": null
+      },
+      "venue": "Markideio Theatre",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7781667,
+        "longitude": 32.4231959,
+        "precision": "verified_feature",
+        "note": "Місце підтверджено як Markideion Theater / Markideio Theatre у Пафосі; позначка відповідає будівлі театру на OpenStreetMap, а не гарантовано конкретному входу.",
+        "source_url": "https://www.openstreetmap.org/way/824979277",
+        "feature_url": "https://www.openstreetmap.org/way/824979277",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://www.ticketbox.com.cy/one-dark-knight/31-10-2026?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Оригінальний мюзикл про протистояння Бетмена та лиходіїв Ґотема в театрі Markideio, Пафос. Двері відчиняються о 19:30, вистава починається о 20:00. В About зазначені два покази — 28 та 31 жовтня; цей запис стосується Schedule 31 жовтня. Ціну квитка не наведено.\n\nМісце: Markideio Theatre\n\nПоходження координат: Місце підтверджено як Markideion Theater / Markideio Theatre у Пафосі; позначка відповідає будівлі театру на OpenStreetMap, а не гарантовано конкретному входу.\n\nДжерело координат: https://www.openstreetmap.org/way/824979277\n\nОб’єкт на карті: https://www.openstreetmap.org/way/824979277\n\nКвитки / реєстрація / деталі події: https://www.ticketbox.com.cy/one-dark-knight/31-10-2026?utm_source=lima\n\nДжерело: https://lima.events/en/events/2694"
+    },
+    {
+      "lima_id": 2409,
+      "source_url": "https://lima.events/en/events/2409",
+      "original_title": "Traffic Reactor",
+      "title_uk": "Traffic Reactor",
+      "description_uk": "Open-air рейв на приватній віддаленій ділянці на пагорбі поблизу села Пенталія в районі Пафоса. Анонсовані професійні звук і світло, hard techno та інша швидка електронна музика. Початок — 20:00. Організатори закликають берегти природу. У полі ціни Lima — €10; точну адресу ділянки не оприлюднено.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/cac3d11b-9cab-4f5b-ad26-789aef11bdcc.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/cac3d11b-9cab-4f5b-ad26-789aef11bdcc.webp"
+      ],
+      "starts_at": "2026-10-31T20:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3017,
+        "place": {
+          "id": 1356,
+          "city_id": 4,
+          "name": "Traffic Experience",
+          "address": null,
+          "latitude": 34.86,
+          "longitude": 32.62
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T20:00:00",
+        "end_date": null
+      },
+      "venue": "Traffic Experience",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.86,
+        "longitude": 32.62,
+        "precision": "approximate_area",
+        "note": "Захід заявлено на приватній гірській ділянці поблизу Пенталії. Координати з джерела округлені до двох десяткових знаків і є лише орієнтиром району, а не підтвердженим майданчиком чи під'їздом. Точну локацію потрібно отримати в організатора.",
+        "source_url": "https://lima.events/en/events/2409",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2550130?utm_source=lima",
+      "source_price": 10,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Open-air рейв на приватній віддаленій ділянці на пагорбі поблизу села Пенталія в районі Пафоса. Анонсовані професійні звук і світло, hard techno та інша швидка електронна музика. Початок — 20:00. Організатори закликають берегти природу. У полі ціни Lima — €10; точну адресу ділянки не оприлюднено.\n\nМісце: Traffic Experience\n\nКоординати приблизні / не підтверджені незалежно: Захід заявлено на приватній гірській ділянці поблизу Пенталії. Координати з джерела округлені до двох десяткових знаків і є лише орієнтиром району, а не підтвердженим майданчиком чи під'їздом. Точну локацію потрібно отримати в організатора.\n\nДжерело координат: https://lima.events/en/events/2409\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2550130?utm_source=lima\n\nДжерело: https://lima.events/en/events/2409"
+    },
+    {
+      "lima_id": 2500,
+      "source_url": "https://lima.events/en/events/2500",
+      "original_title": "LUNA MORADA: THE HAUNTED MALL - CITY PLAZA NICOSIA (HALLOWEEN EDITION)",
+      "title_uk": "Luna Morada: «Торговий центр із привидами» — City Plaza, Нікосія",
+      "description_uk": "Halloween-вечірка в покинутому торговому центрі City Plaza, Нікосія. Хедлайнер — Yet More; також виступлять Angie, Amyrran, Rokoshka та Selene. Початок о 21:00. Дрескод — Halloween Elegant. В About зазначено продаж квитків на GO-OUT; кнопка Lima веде на Resident Advisor. У полі ціни Lima — €20. Бронювання столиків: +357 99 328000.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/e48c0dfd-b1df-4b60-96dc-3624689786b9.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/e48c0dfd-b1df-4b60-96dc-3624689786b9.webp"
+      ],
+      "starts_at": "2026-10-31T21:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3109,
+        "place": {
+          "id": 153,
+          "city_id": 4,
+          "name": "Tba",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T21:00:00",
+        "end_date": null
+      },
+      "venue": "Tba",
+      "resolved_venue": "City Plaza, Nicosia",
+      "coordinates": {
+        "latitude": 35.1663431,
+        "longitude": 33.3614822,
+        "precision": "verified_feature",
+        "note": "Уточнення TBA: за назвою та описом організатора захід відбудеться в City Plaza, Нікосія, а не в Пафосі. Координати відповідають будівлі City Plaza на Makariou Avenue у Нікосії; конкретний вхід заходу не перевірено.",
+        "source_url": "https://lima.events/en/events/2500",
+        "feature_url": "https://www.openstreetmap.org/way/775195646",
+        "venue_override": "City Plaza, Nicosia",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2555910?utm_source=lima",
+      "source_price": 20,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Halloween-вечірка в покинутому торговому центрі City Plaza, Нікосія. Хедлайнер — Yet More; також виступлять Angie, Amyrran, Rokoshka та Selene. Початок о 21:00. Дрескод — Halloween Elegant. В About зазначено продаж квитків на GO-OUT; кнопка Lima веде на Resident Advisor. У полі ціни Lima — €20. Бронювання столиків: +357 99 328000.\n\nМісце: Tba\n\nУточнення місця з опису або додаткового джерела: City Plaza, Nicosia\n\nПоходження координат: Уточнення TBA: за назвою та описом організатора захід відбудеться в City Plaza, Нікосія, а не в Пафосі. Координати відповідають будівлі City Plaza на Makariou Avenue у Нікосії; конкретний вхід заходу не перевірено.\n\nДжерело координат: https://lima.events/en/events/2500\n\nОб’єкт на карті: https://www.openstreetmap.org/way/775195646\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2555910?utm_source=lima\n\nДжерело: https://lima.events/en/events/2500"
+    },
+    {
+      "lima_id": 2489,
+      "source_url": "https://lima.events/en/events/2489",
+      "original_title": "Halloween 🎃 Party Too Hot For Red",
+      "title_uk": "Геловінська вечірка з Too Hot For Red",
+      "description_uk": "Halloween у Monara Live Music & Sports Bar із живим виступом Too Hot For Red від 21:00 та спеціальними коктейлями. Вхід безкоштовний. Очікується багато гостей: пріоритет бронювання мають відвідувачі, які замовляють їжу; тим, хто приходить лише на напої, радять прибути раніше. Бронювання: 94089168. Сайт: https://monaralivemusicsportsbar.com.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/a28ccd94-ccde-462a-bf65-6016b9434443.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/a28ccd94-ccde-462a-bf65-6016b9434443.webp"
+      ],
+      "starts_at": "2026-10-31T21:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3097,
+        "place": {
+          "id": 117,
+          "city_id": 4,
+          "name": "Monara Live Music & Sports Bar Paphos",
+          "address": null,
+          "latitude": 34.76516349,
+          "longitude": 32.41121
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T21:00:00",
+        "end_date": null
+      },
+      "venue": "Monara Live Music & Sports Bar Paphos",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7655708,
+        "longitude": 32.4113225,
+        "precision": "verified_feature",
+        "note": "Місце зіставлено із закладом Monara на Tombs of the Kings Avenue у Пафосі; координати уточнено за об'єктом OpenStreetMap. Карта класифікує його як ресторан; конкретний вхід заходу не перевірено.",
+        "source_url": "https://www.openstreetmap.org/node/4793814234",
+        "feature_url": "https://www.openstreetmap.org/node/4793814234",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://allevents.in/event/200030800150542?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Halloween у Monara Live Music & Sports Bar із живим виступом Too Hot For Red від 21:00 та спеціальними коктейлями. Вхід безкоштовний. Очікується багато гостей: пріоритет бронювання мають відвідувачі, які замовляють їжу; тим, хто приходить лише на напої, радять прибути раніше. Бронювання: 94089168. Сайт: https://monaralivemusicsportsbar.com.\n\nМісце: Monara Live Music & Sports Bar Paphos\n\nПоходження координат: Місце зіставлено із закладом Monara на Tombs of the Kings Avenue у Пафосі; координати уточнено за об'єктом OpenStreetMap. Карта класифікує його як ресторан; конкретний вхід заходу не перевірено.\n\nДжерело координат: https://www.openstreetmap.org/node/4793814234\n\nОб’єкт на карті: https://www.openstreetmap.org/node/4793814234\n\nКвитки / реєстрація / деталі події: https://allevents.in/event/200030800150542?utm_source=lima\n\nДжерело: https://lima.events/en/events/2489"
+    },
+    {
+      "lima_id": 2472,
+      "source_url": "https://lima.events/en/events/2472",
+      "original_title": "Matrix Halloween Face 2 Face",
+      "title_uk": "Matrix Halloween: віч-на-віч",
+      "description_uk": "Halloween-ніч Matrix із сімома DJ, back-to-back сетами, тематичними візуальними ефектами та важким звучанням. Костюми наполегливо заохочуються. У Location зазначено лише TBA — Nicosia. У полі ціни Lima — €25.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/ede1c932-9f2d-448a-927d-8b0b0979ef49.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/ede1c932-9f2d-448a-927d-8b0b0979ef49.webp"
+      ],
+      "starts_at": "2026-10-31T22:00:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3080,
+        "place": {
+          "id": 1384,
+          "city_id": 4,
+          "name": "Tba - Nicosia",
+          "address": null,
+          "latitude": null,
+          "longitude": null
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T22:00:00",
+        "end_date": null
+      },
+      "venue": "Tba - Nicosia",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": null,
+        "longitude": null,
+        "precision": "unresolved",
+        "note": "Для Matrix Halloween Face 2 Face вказано лише TBA — Нікосія. Точний заклад не встановлено; сторінка Resident Advisor недоступна для перевірки. Координати центру міста замість майданчика не підставлено.",
+        "source_url": "https://ra.co/events/2553311",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2553311?utm_source=lima",
+      "source_price": 25,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": false,
+      "exclusion_reason": "Точне місце та підтверджені або обґрунтовані приблизні координати встановити не вдалося; обов’язкові latitude/longitude не вигадані.",
+      "import_description": "Halloween-ніч Matrix із сімома DJ, back-to-back сетами, тематичними візуальними ефектами та важким звучанням. Костюми наполегливо заохочуються. У Location зазначено лише TBA — Nicosia. У полі ціни Lima — €25.\n\nМісце: Tba - Nicosia\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2553311?utm_source=lima\n\nДжерело: https://lima.events/en/events/2472"
+    },
+    {
+      "lima_id": 2786,
+      "source_url": "https://lima.events/en/events/2786",
+      "original_title": "CYTEC Opening – Hard Halloween",
+      "title_uk": "Відкриття CYTEC — Hard Halloween",
+      "description_uk": "Перша ніч BANK by CYTEC у Пафосі: hard techno, schranz та groove з 22:30 до 04:30. Вік 18+, обов’язковий чинний документ. Продажу на вході НЕ буде: квитки лише через https://cytec.app. На танцполі заборонені телефони, фото й відео; камери заклеюють на вході, телефон можна використовувати лише біля бару для оплати. Дрескод — темний, повністю чорний одяг або Halloween-костюм. Упродовж ночі працюватиме awareness-команда. Попри програму після опівночі, імпортований expires_at — 23:59 31 жовтня за заданим правилом.",
+      "about_missing": false,
+      "image_url": "https://lima.events/uploads/events/57ea6e73-a763-4416-8104-71a8bd10e8a0.webp",
+      "image_urls": [
+        "https://lima.events/uploads/events/57ea6e73-a763-4416-8104-71a8bd10e8a0.webp"
+      ],
+      "starts_at": "2026-10-31T22:30:00+02:00",
+      "expires_at": "2026-10-31T23:59:00+02:00",
+      "timezone": "Europe/Nicosia",
+      "schedule_source": {
+        "id": 3393,
+        "place": {
+          "id": 1563,
+          "city_id": 4,
+          "name": "Bank By Cytec",
+          "address": null,
+          "latitude": 34.78,
+          "longitude": 32.42
+        },
+        "city_id": 4,
+        "start_date": "2026-10-31T22:30:00",
+        "end_date": null
+      },
+      "venue": "Bank By Cytec",
+      "resolved_venue": null,
+      "coordinates": {
+        "latitude": 34.7782776,
+        "longitude": 32.4202707,
+        "precision": "verified_feature",
+        "note": "Офіційний сайт CYTEC підтверджує BANK, Constantinou Kanari 13, старе місто Пафоса. Координати уточнено за однойменним нічним клубом на цій вулиці в OpenStreetMap; початкова точка мала лише два десяткові знаки. Конкретний вхід не перевірено.",
+        "source_url": "https://cytec.app/venue",
+        "feature_url": "https://www.openstreetmap.org/node/11774679387",
+        "original_coords_rejected": false
+      },
+      "resource_url": "https://ra.co/events/2561709?utm_source=lima",
+      "source_price": 0,
+      "price_policy": "0 у структурованому полі Lima не є доказом безкоштовного входу. Ціни та умови з About/афіші мають пріоритет.",
+      "source_aliases": [],
+      "original_title_aliases": [],
+      "sql_included": true,
+      "exclusion_reason": null,
+      "import_description": "Перша ніч BANK by CYTEC у Пафосі: hard techno, schranz та groove з 22:30 до 04:30. Вік 18+, обов’язковий чинний документ. Продажу на вході НЕ буде: квитки лише через https://cytec.app. На танцполі заборонені телефони, фото й відео; камери заклеюють на вході, телефон можна використовувати лише біля бару для оплати. Дрескод — темний, повністю чорний одяг або Halloween-костюм. Упродовж ночі працюватиме awareness-команда. Попри програму після опівночі, імпортований expires_at — 23:59 31 жовтня за заданим правилом.\n\nМісце: Bank By Cytec\n\nПоходження координат: Офіційний сайт CYTEC підтверджує BANK, Constantinou Kanari 13, старе місто Пафоса. Координати уточнено за однойменним нічним клубом на цій вулиці в OpenStreetMap; початкова точка мала лише два десяткові знаки. Конкретний вхід не перевірено.\n\nДжерело координат: https://cytec.app/venue\n\nОб’єкт на карті: https://www.openstreetmap.org/node/11774679387\n\nКвитки / реєстрація / деталі події: https://ra.co/events/2561709?utm_source=lima\n\nДжерело: https://lima.events/en/events/2786"
+    }
+  ]
+}
