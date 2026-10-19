@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Drink, SocialEvent, SocialEventLayer, SocialProfile, Visibility } from './SocialEventCard.tsx';
 import { SocialImageCarousel } from './SocialImageCarousel.tsx';
+import { APARTMENT_LAYER_ENABLED } from '../cyprusMapLayers.ts';
 import { MAX_SOURCE_IMAGE_BYTES, SOCIAL_IMAGE_TYPES } from './compressImage.ts';
 
 const inputStyle = 'w-full rounded-xl border border-[#C5A059]/30 bg-[#1A1A1E] px-3 py-2.5 text-[#F4F4F5] outline-none focus:border-[#C5A059]';
@@ -212,7 +213,7 @@ export function SocialEventForm({
         </div>}
         <button type="button" onClick={onCancel} aria-label={t('social.close')} className="shrink-0 text-2xl text-[#C5A059]">×</button>
       </div>
-      {eventType === 'global' && <label className="block space-y-1">
+      {eventType === 'global' && APARTMENT_LAYER_ENABLED && <label className="block space-y-1">
         <span>{t('social.map_layer')}</span>
         <select value={mapLayer} onChange={(event) => {
           if (event.target.value === 'events' || event.target.value === 'apartments') setMapLayer(event.target.value);

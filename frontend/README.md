@@ -99,6 +99,10 @@ Apartment descriptions also support Markdown tables (GitHub-flavored Markdown);
 ordinary event descriptions keep their existing plain-text/link rendering.
 Use `| Feature | Value |` tables for property attributes and explicitly mark
 missing values or approximate locations rather than substituting defaults.
+The Apartment for sale layer is currently disabled for all users by
+`APARTMENT_LAYER_ENABLED` in `src/components/cyprusMapLayers.ts`; its listings
+remain stored, but the layer selector, map markers, shared listing links, and
+creation-form option stay hidden until the flag is re-enabled.
 
 Before deploying, manually run
 `backend/migrations/029_social_event_map_layers.sql` against PostgreSQL, then

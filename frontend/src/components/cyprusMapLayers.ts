@@ -8,6 +8,8 @@ export type CyprusMapLayer = {
   includesSocialEvent: (event: SocialMapMarker) => boolean;
 };
 
+export const APARTMENT_LAYER_ENABLED = false;
+
 export const DEFAULT_CYPRUS_MAP_LAYER: CyprusMapLayer = {
   id: 'global-events',
   labelKey: 'cyprus_map.global_range',
@@ -26,9 +28,11 @@ export const APARTMENTS_CYPRUS_MAP_LAYER: CyprusMapLayer = {
 
 export const CYPRUS_MAP_LAYERS: readonly CyprusMapLayer[] = [
   DEFAULT_CYPRUS_MAP_LAYER,
-  APARTMENTS_CYPRUS_MAP_LAYER,
+  ...(APARTMENT_LAYER_ENABLED ? [APARTMENTS_CYPRUS_MAP_LAYER] : []),
 ];
 
 export function socialEventMapLayer(event: Pick<SocialMapMarker, 'map_layer'>): CyprusMapLayer {
-  return event.map_layer === 'apartments' ? APARTMENTS_CYPRUS_MAP_LAYER : DEFAULT_CYPRUS_MAP_LAYER;
+  return APARTMENT_LAYER_ENABLED && event.map_layer === 'apartments'
+    ? APARTMENTS_CYPRUS_MAP_LAYER
+    : DEFAULT_CYPRUS_MAP_LAYER;
 }

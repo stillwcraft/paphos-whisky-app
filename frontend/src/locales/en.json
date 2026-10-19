@@ -24,6 +24,7 @@
     "layers": "Layers",
     "global_range": "Global events",
     "apartments_for_sale": "Apartment for sale",
+    "layer_temporarily_hidden": "This map layer is temporarily hidden.",
     "apartments_empty": "No apartments for sale have been placed on the map yet.",
     "all_available": "All available",
     "today": "Today",

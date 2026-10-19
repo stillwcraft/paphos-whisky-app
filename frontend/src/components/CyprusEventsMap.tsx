@@ -16,7 +16,7 @@ import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, t
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 import { CyprusMapLoading } from './CyprusMapLoading.tsx';
 import { cyprusMapCache, type SocialMapMarker } from './cyprusMapCache.ts';
-import { APARTMENTS_CYPRUS_MAP_LAYER, CYPRUS_MAP_LAYERS, DEFAULT_CYPRUS_MAP_LAYER, socialEventMapLayer, type CyprusMapLayer } from './cyprusMapLayers.ts';
+import { APARTMENT_LAYER_ENABLED, APARTMENTS_CYPRUS_MAP_LAYER, CYPRUS_MAP_LAYERS, DEFAULT_CYPRUS_MAP_LAYER, socialEventMapLayer, type CyprusMapLayer } from './cyprusMapLayers.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CARTO_BASEMAP_KEY: string = import.meta.env.VITE_CARTO_BASEMAP_KEY?.trim() ?? '';
@@ -663,6 +663,17 @@ export function CyprusEventsMap({
     let active = true;
     void api.event(initialSocialEventId).then((event) => {
       if (!active) return;
+      if (event.map_layer === 'apartments' && !APARTMENT_LAYER_ENABLED) {
+        ++detailRequestId.current;
+        setSocialDetail(null);
+        setSelectedSocialId(null);
+        setSelected(null);
+        setPanel(null);
+        setDetailLoading(false);
+        setLinkError(t('cyprus_map.layer_temporarily_hidden'));
+        onSocialEventHandled();
+        return;
+      }
       setLinkError(null);
       setSocialDetail(event);
       setSelectedSocialId(event.id);
