@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { SocialImageCarousel } from './SocialImageCarousel.tsx';
 
 export type Drink = 'beer' | 'wine' | 'spirits' | 'cocktails' | 'coffee';
@@ -46,7 +48,20 @@ const drinkIcons: Record<Drink, string> = {
   coffee: '☕',
 };
 
-function Description({ text }: { text: string }) {
+function Description({ text, apartment = false }: { text: string; apartment?: boolean }) {
+  if (apartment) {
+    return (
+      <div className="space-y-3 break-words text-slate-200">
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#C5A059] underline underline-offset-2">{children}</a>,
+          p: ({ children }) => <p className="whitespace-pre-wrap">{children}</p>,
+          table: ({ children }) => <div className="overflow-x-auto"><table className="w-full border-collapse text-left text-sm">{children}</table></div>,
+          th: ({ children }) => <th scope="col" className="border border-[#C5A059]/30 bg-[#29272B] px-3 py-2 font-medium text-[#FFE28A]">{children}</th>,
+          td: ({ children }) => <td className="border border-[#C5A059]/30 px-3 py-2 align-top">{children}</td>,
+        }}>{text}</ReactMarkdown>
+      </div>
+    );
+  }
   return (
     <p className="whitespace-pre-wrap break-words text-slate-200">
       {text.split(/(https?:\/\/[^\s<>]+)/g).map((part, index) => {
@@ -165,7 +180,7 @@ export function SocialEventCard({
               {t('social.global_end')}: {new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(event.expires_at))}
             </p>
           )}
-          {isGlobal ? <Description text={event.description} /> : <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>}
+          {isGlobal ? <Description text={event.description} apartment={event.map_layer === 'apartments'} /> : <p className="whitespace-pre-wrap break-words text-slate-200">{event.description}</p>}
           {!isGlobal && duration && <p className="text-xs text-slate-400">{t('social.duration')}: {t(`social.duration_${duration}`)}</p>}
           <p className="text-xs text-slate-400">{t(`social.visibility_${event.visibility}`)}</p>
           {!isGlobal && event.tagged_friends.length > 0 && (

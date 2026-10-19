@@ -95,6 +95,10 @@ clustering, expiry rules, and global-event date slider. Apartment for sale is
 a separate layer: it shows only apartment listings, without catalog events or
 the event date slider. Both layers use the same marker clustering and cards;
 apartment cards reuse the swipeable, expandable gallery of 1-5 images.
+Apartment descriptions also support Markdown tables (GitHub-flavored Markdown);
+ordinary event descriptions keep their existing plain-text/link rendering.
+Use `| Feature | Value |` tables for property attributes and explicitly mark
+missing values or approximate locations rather than substituting defaults.
 
 Before deploying, manually run
 `backend/migrations/029_social_event_map_layers.sql` against PostgreSQL, then
@@ -113,6 +117,16 @@ global events: upcoming and ongoing listings are shown, while expired or hidden
 listings are not. Shared listing links open the
 corresponding map layer. Both layers share `/api/social/events/map`; no additional
 API request is needed.
+
+`backend/manual_home_cy_apartments_asof_20261019.sql` is a manual-only import of
+the 25 advertisements in the two-page home.cy search snapshot. It includes five
+photos per advertisement, source links, advertised prices and sale/ownership
+caveats. It keeps separate source advertisement IDs, not a claim of 25 distinct
+properties: different agents may advertise the same property. Three positions
+are explicitly approximate; other pins are copied from the source, not surveyed.
+The import requires migration 029 and the updated apartment card renderer, uses
+a 30-day lifetime from execution, and skips existing source IDs/URLs or photos.
+It does not extend or overwrite existing listings when run again.
 
 To add a layer, register a unique `id`, translated `labelKey` (in all three
 locales), `showGlobalRange`, and catalog/social marker predicates in
