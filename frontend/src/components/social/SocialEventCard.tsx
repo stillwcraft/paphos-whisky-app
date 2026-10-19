@@ -4,6 +4,7 @@ import { SocialImageCarousel } from './SocialImageCarousel.tsx';
 
 export type Drink = 'beer' | 'wine' | 'spirits' | 'cocktails' | 'coffee';
 export type Visibility = 'public' | 'friends' | 'anonymous';
+export type SocialEventLayer = 'events' | 'apartments';
 export type SocialProfile = {
   telegram_id: number;
   display_name: string;
@@ -15,6 +16,7 @@ export type SocialProfile = {
 export type SocialEvent = {
   id: number;
   event_type: 'regular' | 'global';
+  map_layer: SocialEventLayer;
   image_urls: string[];
   location: string;
   description: string;

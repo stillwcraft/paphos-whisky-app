@@ -1,4 +1,4 @@
-import type { SocialProfile } from './social/SocialEventCard.tsx';
+import type { SocialEventLayer, SocialProfile } from './social/SocialEventCard.tsx';
 
 export type MapEvent = {
   id: number;
@@ -12,6 +12,7 @@ export type MapEvent = {
 export type SocialMapMarker = {
   id: number;
   event_type: 'regular' | 'global';
+  map_layer: SocialEventLayer;
   drink: 'beer' | 'wine' | 'spirits' | 'cocktails' | 'coffee';
   image_url: string | null;
   latitude: number;

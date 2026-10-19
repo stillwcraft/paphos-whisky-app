@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Drink, SocialEvent, SocialProfile, Visibility } from './SocialEventCard.tsx';
+import type { Drink, SocialEvent, SocialEventLayer, SocialProfile, Visibility } from './SocialEventCard.tsx';
 import { SocialImageCarousel } from './SocialImageCarousel.tsx';
 import { MAX_SOURCE_IMAGE_BYTES, SOCIAL_IMAGE_TYPES } from './compressImage.ts';
 
@@ -25,6 +25,7 @@ export type RegularEventDraft = EventDraftBase & {
 
 export type GlobalEventDraft = EventDraftBase & {
   event_type: 'global';
+  map_layer: SocialEventLayer;
   image_urls: string[];
   starts_at: string;
   expires_at: string;
@@ -37,7 +38,7 @@ export type SocialEventUpdateDraft = EventDraftBase & {
   expires_at: string;
 } & (
   { event_type: 'regular'; capacity: number | null }
-  | { event_type: 'global'; image_urls: string[] }
+  | { event_type: 'global'; map_layer: SocialEventLayer; image_urls: string[] }
 );
 
 function localDateTime(value: string): string {
@@ -61,6 +62,7 @@ export function SocialEventForm({
   LocationPicker,
   isAdmin,
   editingEvent = null,
+  initialMapLayer = 'events',
   busy,
   error,
   onCancel,
@@ -70,6 +72,7 @@ export function SocialEventForm({
   friends: SocialProfile[];
   isAdmin: boolean;
   editingEvent?: SocialEvent | null;
+  initialMapLayer?: SocialEventLayer;
   LocationPicker: ComponentType<{
     latitude: number | null;
     longitude: number | null;
@@ -83,7 +86,11 @@ export function SocialEventForm({
   onUpdate: (draft: SocialEventUpdateDraft, photo?: File) => void;
 }) {
   const { t } = useTranslation();
-  const [eventType, setEventType] = useState<'regular' | 'global'>(editingEvent?.event_type ?? 'regular');
+  const [eventType, setEventType] = useState<'regular' | 'global'>(
+    editingEvent?.event_type ?? (isAdmin && initialMapLayer === 'apartments' ? 'global' : 'regular'),
+  );
+  const [mapLayer, setMapLayer] = useState<SocialEventLayer>(editingEvent?.map_layer ?? initialMapLayer);
+  const isApartment = eventType === 'global' && mapLayer === 'apartments';
   const [title, setTitle] = useState(editingEvent?.location ?? '');
   const [regularDescription, setRegularDescription] = useState(editingEvent?.event_type === 'regular' ? editingEvent.description : '');
   const [globalDescription, setGlobalDescription] = useState(editingEvent?.event_type === 'global' ? editingEvent.description : '');
@@ -164,7 +171,7 @@ export function SocialEventForm({
           setPhotoError(t('social.global_image_required'));
           return;
         }
-        onUpdate({ ...base, ...dates, event_type: 'global', image_urls: imageUrls });
+        onUpdate({ ...base, ...dates, event_type: 'global', map_layer: mapLayer, image_urls: imageUrls });
       } else {
         onUpdate({ ...base, ...dates, event_type: 'regular', capacity: capacity ? Number(capacity) : null }, photo ?? undefined);
       }
@@ -185,7 +192,7 @@ export function SocialEventForm({
         setPhotoError(t('social.global_invalid_dates'));
         return;
       }
-      onSubmit({ ...base, event_type: 'global', image_urls: imageUrls, starts_at: new Date(start).toISOString(), expires_at: new Date(end).toISOString() });
+      onSubmit({ ...base, event_type: 'global', map_layer: mapLayer, image_urls: imageUrls, starts_at: new Date(start).toISOString(), expires_at: new Date(end).toISOString() });
     } else if (photo) {
       onSubmit({ ...base, event_type: 'regular', duration, start_mode: startMode, capacity: capacity ? Number(capacity) : null, tagged_friend_ids: tagged }, photo);
     }
@@ -205,7 +212,16 @@ export function SocialEventForm({
         </div>}
         <button type="button" onClick={onCancel} aria-label={t('social.close')} className="shrink-0 text-2xl text-[#C5A059]">×</button>
       </div>
-      <input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className={inputStyle} placeholder={t(eventType === 'global' ? 'social.global_name' : 'social.place')} aria-label={t(eventType === 'global' ? 'social.global_name' : 'social.place')} />
+      {eventType === 'global' && <label className="block space-y-1">
+        <span>{t('social.map_layer')}</span>
+        <select value={mapLayer} onChange={(event) => {
+          if (event.target.value === 'events' || event.target.value === 'apartments') setMapLayer(event.target.value);
+        }} className={inputStyle}>
+          <option value="events">{t('cyprus_map.global_range')}</option>
+          <option value="apartments">{t('cyprus_map.apartments_for_sale')}</option>
+        </select>
+      </label>}
+      <input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} className={inputStyle} placeholder={t(isApartment ? 'social.apartment_name' : eventType === 'global' ? 'social.global_name' : 'social.place')} aria-label={t(isApartment ? 'social.apartment_name' : eventType === 'global' ? 'social.global_name' : 'social.place')} />
       {eventType === 'global' ? (
         <div className="space-y-2">
           <label htmlFor="global-image-url" className="block">{t('social.global_image_urls')}</label>
@@ -304,7 +320,7 @@ export function SocialEventForm({
       {(photoError || error) && <p role="alert" className="text-red-300">{photoError || error}</p>}
       <button type="submit" disabled={busy || (eventType === 'global' && imageUrls.length === 0)} aria-busy={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#C5A059] to-[#8A5A2B] px-4 py-3 font-semibold text-[#141417] disabled:opacity-50">
         {busy && <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-[#141417]/30 border-t-[#141417]" />}
-        {t(busy ? editingEvent ? 'social.saving_event' : 'social.creating' : editingEvent ? 'social.save_event' : 'social.create')}
+        {t(busy ? editingEvent ? 'social.saving_event' : 'social.creating' : editingEvent ? 'social.save_event' : isApartment ? 'social.create_listing' : 'social.create')}
       </button>
     </form>
   );

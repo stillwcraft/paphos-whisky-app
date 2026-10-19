@@ -63,6 +63,7 @@ export class SocialApi {
   }
   createGlobalEvent(draft: GlobalEventDraft) {
     return this.request<SocialEvent>('/events/global', 'POST', {
+      map_layer: draft.map_layer,
       location: draft.title,
       description: draft.description,
       latitude: draft.latitude,
@@ -84,7 +85,7 @@ export class SocialApi {
       visibility: draft.visibility,
       starts_at: draft.starts_at,
       expires_at: draft.expires_at,
-      ...(draft.event_type === 'global' ? { image_urls: draft.image_urls } : {
+      ...(draft.event_type === 'global' ? { map_layer: draft.map_layer, image_urls: draft.image_urls } : {
         capacity: draft.capacity,
         ...(photoKey ? { photo_key: photoKey } : {}),
       }),

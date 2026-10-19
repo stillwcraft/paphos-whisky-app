@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = "sqlite://"
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import create_engine, event as sqlalchemy_event
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -186,7 +187,7 @@ class SocialTest(unittest.TestCase):
         self.actor = 4
         invalid = [
             {"capacity": 1}, {"description": "a" * 401}, {"image_urls": []},
-            {"owner_id": 4}, {"event_type": "global"}, {"photo_key": foreign_key},
+            {"owner_id": 4}, {"event_type": "global"}, {"map_layer": "apartments"}, {"photo_key": foreign_key},
             {"photo_key": "event/" + "a" * 32 + ".jpg"}, {"photo_key": None},
             {"photo_key": "https://example.test/photo.jpg"},
             {"expires_at": (social.now() - timedelta(seconds=1)).isoformat()},
@@ -287,6 +288,7 @@ class SocialTest(unittest.TestCase):
         created = result.json()
         event_id = created["id"]
         self.assertEqual(created["event_type"], "global")
+        self.assertEqual(created["map_layer"], "events")
         self.assertEqual(created["image_urls"], payload["image_urls"])
         self.assertEqual(created["photo_url"], payload["image_urls"][0])
         self.signed_client.assert_not_called()
@@ -304,6 +306,7 @@ class SocialTest(unittest.TestCase):
         regular = self.create()
         details = self.request("GET", f"/events/{regular}").json()
         self.assertEqual(details["event_type"], "regular")
+        self.assertEqual(details["map_layer"], "events")
         self.assertEqual(details["image_urls"], [])
         self.assertEqual(details["photo_url"], "https://example.test/signed-image")
         self.assertEqual(details["attendee_count"], 1)
@@ -313,10 +316,12 @@ class SocialTest(unittest.TestCase):
             "description": "Coffee", "drink": "coffee", "visibility": "public",
             "latitude": 34.77, "longitude": 32.42, "location": "Paphos",
             "start": "now", "ttl": "1h", "photo_key": self.uploaded_photo(),
-            "event_type": "global", "image_urls": ["https://images.example.test/other.jpg"],
+            "event_type": "global", "map_layer": "apartments",
+            "image_urls": ["https://images.example.test/other.jpg"],
         })
         self.assertEqual(injected.status_code, 201, injected.text)
         self.assertEqual(injected.json()["event_type"], "regular")
+        self.assertEqual(injected.json()["map_layer"], "events")
         self.assertIsNotNone(injected.json()["photo_url"])
 
     def test_global_validation(self):
@@ -339,6 +344,7 @@ class SocialTest(unittest.TestCase):
             {"description": "a" * 5001},
             {"latitude": 37}, {"longitude": 31}, {"drink": "soda"},
             {"visibility": "secret"}, {"location": ""},
+            {"map_layer": "unknown"}, {"map_layer": None},
         ]
         for update in invalid:
             with self.subTest(update=update):
@@ -350,6 +356,84 @@ class SocialTest(unittest.TestCase):
             description="a" * 5000, image_urls=["https://images.example.test/one.jpg"],
         ))
         self.assertEqual(result.status_code, 201, result.text)
+
+    def test_apartment_layer_reuses_global_permissions_gallery_and_markers(self):
+        images = [f"https://images.example.test/apartment-{i}.jpg" for i in range(5)]
+        payload = self.global_payload(map_layer="apartments", image_urls=images)
+        self.assertEqual(self.request("POST", "/events/global", json=payload).status_code, 403)
+        self.actor = 4
+        result = self.request("POST", "/events/global", json=payload)
+        self.assertEqual(result.status_code, 201, result.text)
+        apartment = result.json()
+        event_id = apartment["id"]
+        self.assertEqual(apartment["event_type"], "global")
+        self.assertEqual(apartment["map_layer"], "apartments")
+        self.assertEqual(apartment["image_urls"], images)
+        self.assertEqual(apartment["photo_url"], images[0])
+        self.assertEqual(apartment["attendees"], [])
+        self.assertIsNone(apartment["join_status"])
+        global_id = self.request("POST", "/events/global", json=self.global_payload()).json()["id"]
+        self.actor = 1
+        regular_id = self.create()
+        markers = {e["id"]: e for e in self.request("GET", "/events/map").json()}
+        self.assertEqual(markers[event_id]["map_layer"], "apartments")
+        self.assertEqual(markers[event_id]["image_url"], images[0])
+        self.assertEqual(markers[global_id]["map_layer"], "events")
+        self.assertEqual(markers[regular_id]["map_layer"], "events")
+        self.assertEqual(self.request("GET", f"/events/{event_id}").json()["image_urls"], images)
+        self.assertEqual(self.request("PUT", f"/admin/events/{event_id}", json=payload).status_code, 403)
+        self.signed_client.reset_mock()
+        with self.Session() as db:
+            row = db.get(models.SocialEvent, event_id)
+            self.assertIsNone(row.photo_key)
+            row.hidden = True
+            db.commit()
+        self.assertNotIn(event_id, {e["id"] for e in self.request("GET", "/events/map").json()})
+        self.assertEqual(self.request("GET", f"/events/{event_id}").status_code, 404)
+        with self.Session() as db:
+            row = db.get(models.SocialEvent, event_id)
+            row.hidden = False
+            row.expires_at = social.now() - timedelta(seconds=1)
+            db.commit()
+        self.assertNotIn(event_id, {e["id"] for e in self.request("GET", "/events/map").json()})
+        self.signed_client.assert_not_called()
+
+    def test_apartment_edit_preserves_layer_for_older_clients_and_can_move_layers(self):
+        self.actor = 4
+        result = self.request("POST", "/events/global", json=self.global_payload(map_layer="apartments"))
+        self.assertEqual(result.status_code, 201, result.text)
+        event_id = result.json()["id"]
+        replacement = self.global_payload(image_urls=[
+            "https://images.example.test/new-1.jpg", "https://images.example.test/new-2.jpg",
+        ])
+        response = self.request("PUT", f"/admin/events/{event_id}", json=replacement)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["map_layer"], "apartments")
+        self.assertEqual(response.json()["image_urls"], replacement["image_urls"])
+        for layer in ("unknown", None):
+            response = self.request("PUT", f"/admin/events/{event_id}", json={**replacement, "map_layer": layer})
+            self.assertEqual(response.status_code, 422, response.text)
+        for layer in ("events", "apartments"):
+            response = self.request("PUT", f"/admin/events/{event_id}", json={**replacement, "map_layer": layer})
+            self.assertEqual(response.status_code, 200, response.text)
+            self.assertEqual(response.json()["map_layer"], layer)
+            marker = next(e for e in self.request("GET", "/events/map").json() if e["id"] == event_id)
+            self.assertEqual(marker["map_layer"], layer)
+        invalid = self.request("PUT", f"/admin/events/{event_id}", json={
+            **replacement, "map_layer": "apartments",
+            "image_urls": ["https://images.example.test/a.jpg"] * 6,
+        })
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
+    def test_map_layer_constraint_rejects_regular_apartment_rows(self):
+        event_id = self.create()
+        with self.Session() as db:
+            row = db.get(models.SocialEvent, event_id)
+            self.assertEqual(row.map_layer, "events")
+            row.map_layer = "apartments"
+            with self.assertRaises(IntegrityError):
+                db.commit()
+        self.assertEqual(self.request("GET", f"/events/{event_id}").json()["map_layer"], "events")
 
     def test_global_ongoing_and_upcoming_events_are_visible_and_chat_without_join(self):
         self.actor = 4
@@ -448,7 +532,7 @@ class SocialTest(unittest.TestCase):
         self.assertEqual(set(markers), {global_id, anonymous_id, regular_id})
         self.assertEqual(set(markers[global_id]), {
             "id", "latitude", "longitude", "event_type", "expires_at",
-            "starts_at", "drink", "image_url",
+            "starts_at", "drink", "image_url", "map_layer",
         })
         self.assertEqual(markers[global_id]["image_url"], self.global_payload()["image_urls"][0])
         self.assertIsNone(markers[regular_id]["image_url"])

@@ -91,8 +91,28 @@ shows actual streets. Keep the current provider's attribution visible.
 The Layers button above the location button selects one marker layer at a
 time; it does not change the basemap. The default Global events layer preserves
 the existing catalog and visible social markers (including regular meetups),
-clustering, expiry rules, and global-event date slider. Only this layer is
-currently offered; no database migration or additional API request is needed.
+clustering, expiry rules, and global-event date slider. Apartment for sale is
+a separate layer: it shows only apartment listings, without catalog events or
+the event date slider. Both layers use the same marker clustering and cards;
+apartment cards reuse the swipeable, expandable gallery of 1-5 images.
+
+Before deploying, manually run
+`backend/migrations/029_social_event_map_layers.sql` against PostgreSQL, then
+deploy the backend before the frontend. The migration adds
+`social_events.map_layer`, defaulting existing rows and manual imports to
+`events`. Listings use `event_type = 'global'` and `map_layer = 'apartments'`;
+regular meetups must remain in `events`. No existing event is reclassified.
+
+Administrators can create a listing with the plus button on Apartment for sale,
+or choose its map layer in the global-event form. The same selector is available
+when editing a global event or listing. Images are entered as HTTPS URLs;
+the first image becomes the map marker, and all images appear in the card.
+Creation/editing/deletion remain admin-only, with the existing global-event
+visibility, chat, share, and expiry behavior. Start/end dates are required as for
+global events: upcoming and ongoing listings are shown, while expired or hidden
+listings are not. Shared listing links open the
+corresponding map layer. Both layers share `/api/social/events/map`; no additional
+API request is needed.
 
 To add a layer, register a unique `id`, translated `labelKey` (in all three
 locales), `showGlobalRange`, and catalog/social marker predicates in

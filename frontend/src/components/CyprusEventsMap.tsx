@@ -16,7 +16,7 @@ import { SocialAgeGate, SocialChatPanel, SocialReportsPanel, type ChatMessage, t
 import { SocialApi, SocialApiError } from './social/socialApi.ts';
 import { CyprusMapLoading } from './CyprusMapLoading.tsx';
 import { cyprusMapCache, type SocialMapMarker } from './cyprusMapCache.ts';
-import { CYPRUS_MAP_LAYERS, DEFAULT_CYPRUS_MAP_LAYER, type CyprusMapLayer } from './cyprusMapLayers.ts';
+import { APARTMENTS_CYPRUS_MAP_LAYER, CYPRUS_MAP_LAYERS, DEFAULT_CYPRUS_MAP_LAYER, socialEventMapLayer, type CyprusMapLayer } from './cyprusMapLayers.ts';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const CARTO_BASEMAP_KEY: string = import.meta.env.VITE_CARTO_BASEMAP_KEY?.trim() ?? '';
@@ -431,6 +431,7 @@ export function CyprusEventsMap({
   const [now, setNow] = useState(() => Date.now());
   const [globalRange, setGlobalRange] = useState(GLOBAL_RANGE_MAX);
   const [activeLayer, setActiveLayer] = useState(DEFAULT_CYPRUS_MAP_LAYER);
+  const isApartmentLayer = activeLayer.id === APARTMENTS_CYPRUS_MAP_LAYER.id;
   const [socialEvents, setSocialEvents] = useState<SocialMapMarker[]>(() => cyprusMapCache.getMarkers(userId) ?? []);
   const [socialDetail, setSocialDetail] = useState<SocialEvent | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -665,6 +666,7 @@ export function CyprusEventsMap({
       setLinkError(null);
       setSocialDetail(event);
       setSelectedSocialId(event.id);
+      setActiveLayer(socialEventMapLayer(event));
       onSocialEventHandled();
     }).catch((reason: unknown) => {
       if (!active) return;
@@ -906,10 +908,10 @@ export function CyprusEventsMap({
                 <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
               </svg>
             </button>
-            <button
+            {(!isApartmentLayer || isAdmin) && <button
               type="button"
-              aria-label={t('social.create')}
-              title={t('social.create')}
+              aria-label={t(isApartmentLayer ? 'social.create_listing' : 'social.create')}
+              title={t(isApartmentLayer ? 'social.create_listing' : 'social.create')}
               disabled={busy}
               onClick={openCreate}
               className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
@@ -917,15 +919,16 @@ export function CyprusEventsMap({
               <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
                 <path d="M12 5v14M5 12h14" />
               </svg>
-            </button>
+            </button>}
           </div>
         </div>
       )}
       {error && <p role="alert" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-sm text-red-300">{error}</p>}
-      {!error && !mapLoading && !loadFailed && !socialError && eventsResponseEmpty && socialResponseEmpty
+      {!error && !mapLoading && !loadFailed && !socialError
+        && (isApartmentLayer || (eventsResponseEmpty && socialResponseEmpty))
         && layerCatalogEvents.length === 0 && activeSocialEvents.length === 0 && (
         <p role="status" className="absolute bottom-16 left-4 right-4 z-[1000] rounded-xl bg-[#141417]/95 p-3 text-center text-sm text-slate-300">
-          {t('cyprus_map.empty')}
+          {t(isApartmentLayer ? 'cyprus_map.apartments_empty' : 'cyprus_map.empty')}
         </p>
       )}
       {(locationError || linkError || socialError) && <p role="alert" className="absolute left-4 right-4 top-28 z-[1200] rounded-xl bg-[#351D21] p-3 text-sm text-red-200">{locationError || linkError || socialError}</p>}
@@ -975,6 +978,7 @@ export function CyprusEventsMap({
         <SocialEventForm
           key={panel === 'edit' ? `edit-${selectedSocial?.id}` : 'create'}
           editingEvent={panel === 'edit' ? selectedSocial : undefined}
+          initialMapLayer={isApartmentLayer ? 'apartments' : 'events'}
           friends={friends}
           isAdmin={isAdmin}
           LocationPicker={EventLocationPicker}
@@ -999,6 +1003,7 @@ export function CyprusEventsMap({
               }
             }
             await reloadSocial();
+            setActiveLayer(draft.event_type === 'global' ? socialEventMapLayer(draft) : DEFAULT_CYPRUS_MAP_LAYER);
             setPanel(null);
           })}
           onUpdate={(draft: SocialEventUpdateDraft, photo?: File) => void run(async () => {
@@ -1007,6 +1012,7 @@ export function CyprusEventsMap({
             const updated = await api.updateEvent(selectedSocial.id, draft, photoKey);
             setSocialDetail(updated);
             await reloadSocial();
+            setActiveLayer(socialEventMapLayer(updated));
             setPanel(null);
           })}
         />

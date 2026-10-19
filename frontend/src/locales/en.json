@@ -23,6 +23,8 @@
     "my_location": "Center on my location",
     "layers": "Layers",
     "global_range": "Global events",
+    "apartments_for_sale": "Apartment for sale",
+    "apartments_empty": "No apartments for sale have been placed on the map yet.",
     "all_available": "All available",
     "today": "Today",
     "days_ahead": "Days including today: {{count}}",
@@ -39,6 +41,9 @@
   },
   "social": {
     "create": "Create event",
+    "create_listing": "Create listing",
+    "map_layer": "Map layer",
+    "apartment_name": "Apartment listing title",
     "one_active_event": "You already have an active event. You can create another after it ends.",
     "creating": "Creating event...",
     "create_title": "New event",

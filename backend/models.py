@@ -114,11 +114,15 @@ class SocialEvent(Base):
         CheckConstraint("event_type IN ('regular', 'global')", name="social_events_event_type"),
         CheckConstraint("event_type = 'global' OR photo_key IS NOT NULL",
                         name="social_events_regular_photo"),
+        CheckConstraint("map_layer IN ('events', 'apartments') AND "
+                        "(event_type = 'global' OR map_layer = 'events')",
+                        name="social_events_map_layer"),
     )
     id = Column(Integer, primary_key=True)
     owner_id = Column(BigInteger, nullable=False, index=True)
     description = Column(String(5000), nullable=False)
     event_type = Column(String(10), nullable=False, default="regular", server_default="regular")
+    map_layer = Column(String(10), nullable=False, default="events", server_default="events")
     image_urls = Column(I18N_JSON, nullable=False, default=list, server_default="[]")
     drink = Column(String(12), nullable=False)
     visibility = Column(String(12), nullable=False)

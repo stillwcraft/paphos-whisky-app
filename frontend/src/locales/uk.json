@@ -23,6 +23,8 @@
     "my_location": "Показати моє місцеперебування",
     "layers": "Шари",
     "global_range": "Глобальні події",
+    "apartments_for_sale": "Apartment for sale",
+    "apartments_empty": "На мапі ще немає оголошень про продаж квартир.",
     "all_available": "Усі доступні",
     "today": "Сьогодні",
     "days_ahead": "Днів, включно із сьогодні: {{count}}",
@@ -39,6 +41,9 @@
   },
   "social": {
     "create": "Створити подію",
+    "create_listing": "Створити оголошення",
+    "map_layer": "Шар мапи",
+    "apartment_name": "Заголовок оголошення про продаж квартири",
     "one_active_event": "У вас уже є активна подія. Нову можна створити після її завершення.",
     "creating": "Створюємо подію...",
     "create_title": "Нова подія",

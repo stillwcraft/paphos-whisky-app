@@ -13,9 +13,22 @@ export const DEFAULT_CYPRUS_MAP_LAYER: CyprusMapLayer = {
   labelKey: 'cyprus_map.global_range',
   showGlobalRange: true,
   includesCatalogEvent: () => true,
-  includesSocialEvent: () => true,
+  includesSocialEvent: (event) => (event.map_layer ?? 'events') === 'events',
+};
+
+export const APARTMENTS_CYPRUS_MAP_LAYER: CyprusMapLayer = {
+  id: 'apartments-for-sale',
+  labelKey: 'cyprus_map.apartments_for_sale',
+  showGlobalRange: false,
+  includesCatalogEvent: () => false,
+  includesSocialEvent: (event) => event.event_type === 'global' && event.map_layer === 'apartments',
 };
 
 export const CYPRUS_MAP_LAYERS: readonly CyprusMapLayer[] = [
   DEFAULT_CYPRUS_MAP_LAYER,
+  APARTMENTS_CYPRUS_MAP_LAYER,
 ];
+
+export function socialEventMapLayer(event: Pick<SocialMapMarker, 'map_layer'>): CyprusMapLayer {
+  return event.map_layer === 'apartments' ? APARTMENTS_CYPRUS_MAP_LAYER : DEFAULT_CYPRUS_MAP_LAYER;
+}

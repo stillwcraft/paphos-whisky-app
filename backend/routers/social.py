@@ -230,7 +230,7 @@ def event_json(db, e, viewer, moderator=False):
     # Anonymous event participants cannot infer the organizer through tags or attendee lists.
     return {
         "id": e.id, "description": e.description, "drink": e.drink,
-        "event_type": e.event_type, "image_urls": e.image_urls or [],
+        "event_type": e.event_type, "map_layer": e.map_layer, "image_urls": e.image_urls or [],
         "visibility": e.visibility, "latitude": e.latitude, "longitude": e.longitude,
         "location": e.location, "photo_url": event_photo_url(e, moderator),
         "starts_at": utc(e.starts_at).isoformat(), "expires_at": utc(e.expires_at).isoformat(),
@@ -309,6 +309,7 @@ class ScheduledEventFields(BaseModel):
 
 
 class GlobalEventCreate(ScheduledEventFields):
+    map_layer: Literal["events", "apartments"] = "events"
     image_urls: list[str] = Field(min_length=1, max_length=5)
 
     @field_validator("image_urls")
@@ -587,7 +588,7 @@ def create_global_event(data: GlobalEventCreate, user=Depends(admin()), db: Sess
     if data.expires_at <= now() or data.expires_at <= data.starts_at:
         fail(422, "Event must expire in the future and after it starts")
     e = m.SocialEvent(
-        owner_id=uid(user), event_type="global", image_urls=data.image_urls,
+        owner_id=uid(user), event_type="global", map_layer=data.map_layer, image_urls=data.image_urls,
         description=data.description, drink=data.drink, visibility=data.visibility,
         latitude=data.latitude, longitude=data.longitude, location=data.location,
         starts_at=data.starts_at, expires_at=data.expires_at,
@@ -623,13 +624,13 @@ def map_events(user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     rows = db.query(
         m.SocialEvent.id, m.SocialEvent.latitude, m.SocialEvent.longitude,
-        m.SocialEvent.event_type, m.SocialEvent.expires_at, m.SocialEvent.starts_at,
+        m.SocialEvent.event_type, m.SocialEvent.map_layer, m.SocialEvent.expires_at, m.SocialEvent.starts_at,
         m.SocialEvent.drink, m.SocialEvent.image_urls,
     ).filter(*visible_event_filter(uid(user))).order_by(m.SocialEvent.id.desc()).all()
     return [
         {
             "id": e.id, "latitude": e.latitude, "longitude": e.longitude,
-            "event_type": e.event_type, "expires_at": utc(e.expires_at).isoformat(),
+            "event_type": e.event_type, "map_layer": e.map_layer, "expires_at": utc(e.expires_at).isoformat(),
             "starts_at": utc(e.starts_at).isoformat(), "drink": e.drink,
             "image_url": (e.image_urls or [None])[0] if e.event_type == "global" else None,
         }
@@ -850,6 +851,8 @@ def update_admin_event(event_id: int, data: dict, user=Depends(admin()), db: Ses
         e.capacity = update.capacity
     else:
         e.image_urls = update.image_urls
+        if "map_layer" in update.model_fields_set:
+            e.map_layer = update.map_layer
     for field in ("location", "description", "latitude", "longitude", "drink",
                   "visibility", "starts_at", "expires_at"):
         setattr(e, field, getattr(update, field))
