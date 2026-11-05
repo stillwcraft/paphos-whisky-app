@@ -239,9 +239,11 @@ visible as overlays. Viewer videos have no native controls intercepting swipes:
 tapping the video toggles an overlay with play/pause, seek and explicit audio
 controls. The seek control waits for a finite media duration; keyboard users can
 toggle the overlay with Enter/Space. Drag-generated clicks are suppressed so a
-swipe does not also open the video panel. Sandboxed HTML keeps its native
-scrolling and uses transparent swipe gutters inside the protected viewport edges;
-scripts and parent access remain disabled.
+swipe does not also open the video panel. Viewer static HTML slides are
+display-only, with a transparent full-area swipe surface over the iframe instead
+of narrow edge rails; touches do not interact with or scroll the embedded HTML.
+HTML in interactive tabs retains native scrolling and transparent swipe gutters.
+Scripts and parent access remain disabled in both cases.
 
 On minimize the client closes its socket. On visibility restore or network
 recovery it reconnects, authenticates and fetches an HTTP snapshot in parallel.
@@ -263,14 +265,16 @@ Horizontal slides use `touch-action: pan-y`. Gallery gesture surfaces use
 distance thresholds, multi-touch cancellation, interactive-element exclusion,
 and 24px edge gutters reduce gesture conflicts. Native iOS system edge gestures
 cannot be guaranteed cancellable; gestures intentionally do not begin there.
-Buttons provide non-gesture navigation and accessibility fallbacks.
+Presenter buttons provide non-gesture navigation and accessibility fallbacks.
 
 Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe.
 Arbitrary scripts and parent/app navigation are deliberately unsupported;
 animations use CSS or the allowlisted entry names documented above.
-Iframe gestures do not bubble into React: swipe on the surrounding stage/gutters
-or use the slide navigation buttons. Typed tab routes dispatch into the app's
-existing tab controller, close presentation mode and restore Telegram gestures.
+Iframe gestures do not bubble into React: viewer static slides use a full-area
+overlay to route touches to the stage, while interactive tab HTML uses surrounding
+swipe gutters. Presentation controls remain above the static overlay; presenter
+slide navigation buttons remain available. Typed tab routes dispatch into the
+app's existing tab controller, close presentation mode and restore Telegram gestures.
 
 ## Checks
 

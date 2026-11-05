@@ -9,8 +9,8 @@ import { SwipeController } from './SwipeController';
 import { presentationThemeStyle } from './presentationTheme';
 import { PresentationIcon } from './PresentationIcon';
 
-function HtmlContent({ html, css = '', title, theme, viewer = false }: {
-  html: string; css?: string; title: string; theme?: PresentationTheme | null; viewer?: boolean;
+function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide = false }: {
+  html: string; css?: string; title: string; theme?: PresentationTheme | null; viewer?: boolean; staticSlide?: boolean;
 }) {
   const { t } = useTranslation();
   // No scripts, same-origin access, top navigation, forms, or SDK access inside author HTML.
@@ -19,8 +19,10 @@ function HtmlContent({ html, css = '', title, theme, viewer = false }: {
   const frame = <iframe title={title || t('presentation.content')} sandbox="" referrerPolicy="no-referrer"
     className="presentation-html" srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>:root{${variables}}body{margin:0;padding:16px;background:var(--presentation-background);color:var(--presentation-text);font-family:var(--presentation-font)}a{color:var(--presentation-primary)}img{max-width:100%}${css}</style></head><body>${html}</body></html>`} />;
   return viewer ? <div className="presentation-html-frame">{frame}
-    <div className="presentation-html-swipe-rail presentation-html-swipe-rail--left" aria-hidden="true" />
-    <div className="presentation-html-swipe-rail presentation-html-swipe-rail--right" aria-hidden="true" />
+    {staticSlide ? <div className="presentation-html-swipe-surface" aria-hidden="true" /> : <>
+      <div className="presentation-html-swipe-rail presentation-html-swipe-rail--left" aria-hidden="true" />
+      <div className="presentation-html-swipe-rail presentation-html-swipe-rail--right" aria-hidden="true" />
+    </>}
   </div> : frame;
 }
 
@@ -227,7 +229,7 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
     case 'static':
       content = <>{slide.image && <PhotoContent photo={slide.image} language={language} />}
         {slide.html && <HtmlContent html={typeof slide.html === 'string' ? slide.html : localize(slide.html, language)}
-          css={slide.css} title={title} theme={theme} viewer={viewer} />}</>;
+          css={slide.css} title={title} theme={theme} viewer={viewer} staticSlide />}</>;
       break;
     case 'video':
       content = active ? <VideoSlide slide={slide} viewer={viewer} /> : null;
