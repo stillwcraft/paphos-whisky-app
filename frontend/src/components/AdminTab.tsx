@@ -8,6 +8,9 @@ import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useIn
 import { AdminArticles } from '@/components/AdminArticles.tsx';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const AdminPresentationsPanel = lazy(() => import('@/components/presentation/AdminPresentationsPanel').then(
+  ({ AdminPresentationsPanel: Panel }) => ({ default: Panel }),
+));
 const EventLocationPicker = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ EventLocationPicker: Picker }) => ({ default: Picker }),
 ));
@@ -247,7 +250,9 @@ function BottleFields({ backgrounds, form, setForm, includeLabel }: { background
   </div>;
 }
 
-export function AdminTab({ onOpenSocialReports }: { onOpenSocialReports: () => void }) {
+export function AdminTab({ onOpenSocialReports, onPresentationBroadcastStarted }: {
+  onOpenSocialReports: () => void; onPresentationBroadcastStarted: () => void;
+}) {
   const { t } = useTranslation();
   const initDataRaw = useSignal(initData.raw);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -460,6 +465,11 @@ export function AdminTab({ onOpenSocialReports }: { onOpenSocialReports: () => v
   return <div style={pageStyle}>
     {message && <p style={messageStyle}>{message}</p>}
     <button type="button" style={buttonStyle} onClick={onOpenSocialReports}>{t('social.admin_reports')}</button>
+    <Accordion title={t('presentation.manage')}>
+      <Suspense fallback={<p>{t('common.loading')}</p>}>
+        <AdminPresentationsPanel onBroadcastStarted={onPresentationBroadcastStarted} />
+      </Suspense>
+    </Accordion>
     <Accordion title="📅 Manage Events">
       <form onSubmit={saveEvent} style={formStyle}>
         <I18nTextEditor label="Title" required translations={eventForm.title_i18n} onChange={(title_i18n) => setEventForm({ ...eventForm, title: title_i18n.en, title_i18n })} />

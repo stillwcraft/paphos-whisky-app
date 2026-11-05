@@ -2,7 +2,7 @@ import os
 import unittest
 from copy import deepcopy
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 os.environ.setdefault("DATABASE_URL", "sqlite://")
 
@@ -10,22 +10,29 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from pydantic import ValidationError
-from sqlalchemy import create_engine
+from sqlalchemy import BigInteger, create_engine
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from presentation import PresentationRoomRecord, create_presentation_router, write_record
+from presentation import (
+    PresentationBroadcastRecord, PresentationRoomRecord, create_presentation_router,
+    read_room_summaries, write_record,
+)
 from schemas.presentation import PresentationManifest, public_slide
+
+
+PRESENTER_ID = 2 ** 33 + 123
 
 
 def authenticate(authorization=Header(default=None)):
     if authorization not in {"tma presenter", "tma viewer", "tma viewer2"}:
         raise HTTPException(401, "Invalid Telegram authentication")
-    return SimpleNamespace(telegram_id={"tma presenter": 1, "tma viewer": 2, "tma viewer2": 3}[authorization])
+    return SimpleNamespace(telegram_id={"tma presenter": PRESENTER_ID, "tma viewer": 2, "tma viewer2": 3}[authorization])
 
 
 def require_admin(user=Depends(authenticate)):
-    if user.telegram_id != 1:
+    if user.telegram_id != PRESENTER_ID:
         raise HTTPException(403, "Admin access required")
     return user
 
@@ -72,6 +79,7 @@ class PresentationTest(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
         PresentationRoomRecord.__table__.create(self.engine)
+        PresentationBroadcastRecord.__table__.create(self.engine)
         self.patch = patch("presentation.SessionLocal", sessionmaker(bind=self.engine))
         self.patch.start()
         self.app = self.make_app()
@@ -94,9 +102,108 @@ class PresentationTest(unittest.TestCase):
     def connect(self, token):
         return self.client.websocket_connect(f"{self.path}/ws")
 
-    def auth_socket(self, ws, token):
-        ws.send_json({"type": "auth", "init_data": token})
+    def auth_socket(self, ws, token, broadcast_only=False):
+        ws.send_json({"type": "auth", "init_data": token, "broadcast_only": broadcast_only})
         return ws.receive_json()
+
+    def test_room_filter_uses_bigint_for_json_and_parameter_on_postgresql(self):
+        db = MagicMock()
+        query = db.query.return_value.filter.return_value
+        query.count.return_value = 0
+        query.order_by.return_value.offset.return_value.limit.return_value.all.return_value = []
+        with patch("presentation.SessionLocal") as sessions:
+            sessions.return_value.__enter__.return_value = db
+            self.assertEqual(read_room_summaries(PRESENTER_ID, 20, 0)["total"], 0)
+        condition = db.query.return_value.filter.call_args.args[0]
+        self.assertIsInstance(condition.left.type, BigInteger)
+        self.assertIsInstance(condition.right.type, BigInteger)
+        self.assertEqual(condition.right.value, PRESENTER_ID)
+        for dialect in (postgresql.dialect(), postgresql.psycopg.dialect()):
+            compiled = condition.compile(dialect=dialect)
+            self.assertIn("AS BIGINT", str(compiled))
+            self.assertNotIn("AS INTEGER", str(compiled))
+            self.assertIsInstance(compiled.binds["presenter_id"].type, BigInteger)
+
+    def test_broadcast_lifecycle_is_private_admin_only_and_preserves_progress(self):
+        active_path = "/api/presentations/broadcast"
+        broadcast_path = self.path + "/broadcast"
+        presenter_headers = {"Authorization": "tma presenter"}
+        viewer_headers = {"Authorization": "tma viewer"}
+        self.assertEqual(self.client.get(active_path).status_code, 401)
+        self.assertEqual(self.client.get(active_path, headers=viewer_headers).json(), {"room_id": None})
+        self.assertEqual(self.client.post(broadcast_path, headers=viewer_headers).status_code, 403)
+        self.assertEqual(self.client.delete(broadcast_path, headers=viewer_headers).status_code, 403)
+        self.assertEqual(self.client.get(self.path, params={"broadcast_only": True},
+                                         headers=viewer_headers).status_code, 409)
+        self.assertEqual(self.client.post(broadcast_path, headers=presenter_headers).json(),
+                         {"room_id": self.room_id})
+        response = self.client.get(active_path, headers=viewer_headers)
+        self.assertEqual(response.headers["cache-control"], "private, no-store")
+        self.assertEqual(response.json(), {"room_id": self.room_id})
+        with self.connect("presenter") as presenter, self.connect("viewer") as viewer, self.connect("viewer2") as direct:
+            self.assertEqual(self.auth_socket(presenter, "presenter", True)["role"], "presenter")
+            self.assertEqual(self.auth_socket(viewer, "viewer", True)["role"], "viewer")
+            self.auth_socket(direct, "viewer2")
+            viewer.send_json({"type": "advance", "index": 1})
+            self.assertEqual(viewer.receive_json()["type"], "error")
+            presenter.send_json({"type": "advance", "index": 1})
+            presenter.receive_json()
+            state = viewer.receive_json()
+            direct.receive_json()
+            self.assertEqual(state["current_slide_index"], 1)
+            self.assertNotIn("answers", str(state))
+            self.assertNotIn("private-future", str(state))
+            self.assertEqual(self.client.delete(broadcast_path, headers=presenter_headers).status_code, 204)
+            for ws in (presenter, viewer):
+                self.assertEqual(ws.receive_json(), {"type": "broadcast_changed"})
+                with self.assertRaises(WebSocketDisconnect) as caught:
+                    ws.receive_json()
+                self.assertEqual(caught.exception.code, 4005)
+            direct.send_json({"type": "sync"})
+            self.assertEqual(direct.receive_json()["current_slide_index"], 1)
+        self.assertEqual(self.client.get(active_path, headers=viewer_headers).json(), {"room_id": None})
+        self.assertEqual(self.client.get(self.path, params={"broadcast_only": True},
+                                         headers=viewer_headers).status_code, 409)
+        with self.connect("viewer") as viewer:
+            self.assertEqual(self.auth_socket(viewer, "viewer", True)["type"], "error")
+            with self.assertRaises(WebSocketDisconnect) as caught:
+                viewer.receive_json()
+            self.assertEqual(caught.exception.code, 4005)
+        saved = self.client.get(self.path, headers=viewer_headers).json()
+        self.assertEqual(saved["current_slide_index"], 1)
+        self.assertEqual(saved["max_unlocked_slide_index"], 1)
+        self.assertEqual(self.client.post(broadcast_path, headers=presenter_headers).status_code, 200)
+        self.assertEqual(self.client.get(self.path, params={"broadcast_only": True},
+                                         headers=viewer_headers).json(), saved)
+
+    def test_broadcast_switch_restart_ownership_and_deletion(self):
+        active_path = "/api/presentations/broadcast"
+        headers = {"Authorization": "tma presenter"}
+        viewer_headers = {"Authorization": "tma viewer"}
+        self.client.post(self.path + "/broadcast", headers=headers)
+        write_record("f" * 32, {
+            "manifest": MANIFEST, "presenter_id": 99, "current_slide_index": 0,
+            "max_unlocked_slide_index": 0, "revision": 0, "responses": {},
+        })
+        self.assertEqual(self.client.post("/api/presentations/rooms/" + "f" * 32 + "/broadcast",
+                                         headers=headers).status_code, 403)
+        second = self.client.post("/api/presentations/rooms", json=MANIFEST, headers=headers).json()["room_id"]
+        second_path = "/api/presentations/rooms/" + second
+        with self.connect("viewer") as viewer:
+            self.auth_socket(viewer, "viewer", True)
+            self.assertEqual(self.client.post(second_path + "/broadcast", headers=headers).status_code, 200)
+            self.assertEqual(viewer.receive_json(), {"type": "broadcast_changed"})
+        self.assertEqual(self.client.get(active_path, headers=viewer_headers).json(), {"room_id": second})
+        self.assertEqual(self.client.delete(self.path + "/broadcast", headers=headers).status_code, 409)
+        with TestClient(self.make_app()) as restarted:
+            self.assertEqual(restarted.get(active_path, headers=viewer_headers).json(), {"room_id": second})
+            self.assertEqual(restarted.get(second_path, params={"broadcast_only": True},
+                                           headers=viewer_headers).json()["role"], "viewer")
+        with self.client.websocket_connect(second_path + "/ws") as viewer:
+            self.auth_socket(viewer, "viewer", True)
+            self.assertEqual(self.client.delete(second_path, headers=headers).status_code, 204)
+            self.assertEqual(viewer.receive_json(), {"type": "broadcast_changed"})
+        self.assertEqual(self.client.get(active_path, headers=viewer_headers).json(), {"room_id": None})
 
     def test_initial_http_and_ws_never_disclose_future(self):
         response = self.client.get(self.path, headers={"Authorization": "tma viewer"})

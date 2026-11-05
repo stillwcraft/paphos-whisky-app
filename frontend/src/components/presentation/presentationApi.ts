@@ -20,6 +20,7 @@ const roomPageSchema = z.object({
   has_more: z.boolean(),
 });
 const createdRoomSchema = z.object({ room_id: z.string().regex(/^[a-f0-9]{32}$/) });
+const broadcastSchema = z.object({ room_id: createdRoomSchema.shape.room_id.nullable() });
 const errorSchema = z.object({
   detail: z.union([
     z.string(),
@@ -31,9 +32,10 @@ export type PresentationRoomSummary = z.infer<typeof roomSummarySchema>;
 export class PresentationApi {
   constructor(private readonly initDataRaw: string) {}
 
-  private async request(path: string, signal: AbortSignal, body?: unknown): Promise<unknown> {
+  private async request(path: string, signal: AbortSignal, body?: unknown,
+    method = body === undefined ? 'GET' : 'POST'): Promise<unknown> {
     const response = await fetch(`${PRESENTATION_API_URL}/api/presentations${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
+      method,
       headers: {
         ...telegramAuthHeaders(this.initDataRaw),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
@@ -42,6 +44,7 @@ export class PresentationApi {
       cache: 'no-store',
       signal,
     });
+    if (response.status === 204) return null;
     const text = await response.text();
     let payload: unknown;
     try {
@@ -66,5 +69,17 @@ export class PresentationApi {
 
   async upload(manifest: unknown, signal: AbortSignal) {
     return createdRoomSchema.parse(await this.request('/rooms', signal, manifest));
+  }
+
+  async broadcast(signal: AbortSignal) {
+    return broadcastSchema.parse(await this.request('/broadcast', signal));
+  }
+
+  async startBroadcast(roomId: string, signal: AbortSignal) {
+    return createdRoomSchema.parse(await this.request(`/rooms/${encodeURIComponent(roomId)}/broadcast`, signal, undefined, 'POST'));
+  }
+
+  async stopBroadcast(roomId: string, signal: AbortSignal) {
+    await this.request(`/rooms/${encodeURIComponent(roomId)}/broadcast`, signal, undefined, 'DELETE');
   }
 }

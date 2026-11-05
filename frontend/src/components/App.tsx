@@ -19,13 +19,14 @@ const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').th
 const PresentationScreen = lazy(() => import('@/components/presentation/PresentationScreen').then(
   ({ PresentationScreen: Screen }) => ({ default: Screen }),
 ));
-const AdminPresentationsTab = lazy(() => import('@/components/presentation/AdminPresentationsTab').then(
-  ({ AdminPresentationsTab: Tab }) => ({ default: Tab }),
+const PresentationBroadcastTab = lazy(() => import('@/components/presentation/PresentationBroadcastTab').then(
+  ({ PresentationBroadcastTab: Tab }) => ({ default: Tab }),
 ));
 
 type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin' | 'presentations';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
+const PRESENTATION_TEST_VIEWER_ID = 741623645;
 
 type Tab = {
   id: TabId;
@@ -49,16 +50,18 @@ type FooterProps = {
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
   showArticlesTab: boolean;
+  showPresentationsTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showPresentationsTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
     cyprusMapTab,
     ...(showArticlesTab ? [articlesTab] : []),
     ...tabs.slice(1),
-    ...(isAdmin ? [presentationsTab, adminTab] : []),
+    ...(showPresentationsTab ? [presentationsTab] : []),
+    ...(isAdmin ? [adminTab] : []),
   ];
 
   return (
@@ -110,6 +113,7 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
+  const showPresentationsTab = isAdmin || initDataState?.user?.id === PRESENTATION_TEST_VIEWER_ID;
   const activeCyprusMap = activeTab === 'cyprus-map';
   const dockedFooter = activeCyprusMap || activeTab === 'profile';
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title')
@@ -193,7 +197,7 @@ export function App() {
       return;
     }
 
-    const matchingTab = [...tabs, articlesTab, cyprusMapTab].find((tab) => tab.id === startParam);
+    const matchingTab = [...tabs, articlesTab, cyprusMapTab, presentationsTab].find((tab) => tab.id === startParam);
     if (matchingTab) {
       setActiveTab(matchingTab.id);
     }
@@ -261,12 +265,14 @@ export function App() {
               onSelectedDistilleryHandled={clearMapDistillery}
               onClose={closeMap}
             />
-          ) : activeTab === 'presentations' && isAdmin ? (
+          ) : activeTab === 'presentations' && showPresentationsTab ? (
             <Suspense fallback={<p>{t('common.loading')}</p>}>
-              <AdminPresentationsTab onOpen={setPresentationRoom} />
+              <PresentationBroadcastTab isAdmin={isAdmin} onClose={() => setActiveTab('events')}
+                onRoute={setActiveTab} onManage={() => setActiveTab('admin')} />
             </Suspense>
           ) : activeTab === 'admin' && isAdmin ? (
-            <AdminTab onOpenSocialReports={showSocialReports} />
+            <AdminTab onOpenSocialReports={showSocialReports}
+              onPresentationBroadcastStarted={() => setActiveTab('presentations')} />
           ) : (
             <div className="flex min-h-screen items-center justify-center text-center">
               <div>
@@ -284,6 +290,7 @@ export function App() {
           onTabChange={setActiveTab}
           isAdmin={isAdmin}
           showArticlesTab={showArticlesTab}
+          showPresentationsTab={showPresentationsTab}
         />
       )}
     </div>

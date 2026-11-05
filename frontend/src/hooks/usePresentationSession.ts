@@ -11,15 +11,17 @@ const wireMessageSchema = z.union([
   sessionStateSchema,
   z.object({ type: z.literal('pong') }),
   z.object({ type: z.literal('error'), message: z.string() }),
+  z.object({ type: z.literal('broadcast_changed') }),
 ]);
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'offline' | 'error';
 
-export function usePresentationSession(roomId: string, initDataRaw: string | undefined) {
+export function usePresentationSession(roomId: string, initDataRaw: string | undefined, broadcastOnly = false) {
   const [state, setState] = useState<PresentationState | null>(null);
   const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<Status>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [broadcastEnded, setBroadcastEnded] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const latest = useRef<PresentationState | null>(null);
 
@@ -29,6 +31,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     setIndex(0);
     setError(null);
     setPending(false);
+    setBroadcastEnded(false);
     if (!initDataRaw) {
       setStatus('error');
       setError(i18n.t('presentation.auth_required'));
@@ -43,6 +46,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     let fallback: AbortController | undefined;
     let lastMessage = Date.now();
     const url = new URL(`${PRESENTATION_API_URL}/api/presentations/rooms/${encodeURIComponent(roomId)}`, window.location.origin);
+    if (broadcastOnly) url.searchParams.set('broadcast_only', 'true');
 
     const apply = (next: PresentationState, forceJump: boolean) => {
       if (next.room_id !== roomId) throw new Error('Presentation room mismatch');
@@ -60,6 +64,14 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
       socket.current?.close();
       socket.current = null;
     };
+    const endBroadcast = () => {
+      fatal = true;
+      stopTransport();
+      setState(null);
+      latest.current = null;
+      setPending(false);
+      setBroadcastEnded(true);
+    };
     const connect = () => {
       if (disposed || fatal || document.visibilityState !== 'visible') return;
       stopTransport();
@@ -73,6 +85,10 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
         headers: telegramAuthHeaders(initDataRaw), cache: 'no-store', signal: fallback.signal,
       }).then(async response => {
         if (!response.ok) {
+          if (broadcastOnly && response.status === 409) {
+            if (isCurrent()) endBroadcast();
+            return;
+          }
           if ([401, 403, 404].includes(response.status) && isCurrent()) {
             fatal = true;
             stopTransport();
@@ -93,6 +109,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
 
       const wsUrl = new URL(url);
       wsUrl.pathname += '/ws';
+      wsUrl.search = '';
       wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
       const ws = new WebSocket(wsUrl);
       socket.current = ws;
@@ -100,7 +117,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
       lastMessage = Date.now();
       ws.onopen = () => {
         if (!isCurrent()) return;
-        ws.send(JSON.stringify({ type: 'auth', init_data: initDataRaw }));
+        ws.send(JSON.stringify({ type: 'auth', init_data: initDataRaw, broadcast_only: broadcastOnly }));
       };
       ws.onmessage = event => {
         if (!isCurrent()) return;
@@ -108,7 +125,9 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
           if (typeof event.data !== 'string') throw new Error('Expected a presentation text frame');
           const message = wireMessageSchema.parse(JSON.parse(event.data));
           lastMessage = Date.now();
-          if (message.type === 'state') {
+          if (message.type === 'broadcast_changed') {
+            endBroadcast();
+          } else if (message.type === 'state') {
             apply(message, !synced);
             synced = true;
             attempt = 0;
@@ -131,6 +150,10 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
         if (!isCurrent()) return;
         clearInterval(heartbeat);
         setPending(false);
+        if (broadcastOnly && event.code === 4005) {
+          endBroadcast();
+          return;
+        }
         if ([4001, 4004, 1008, 1002].includes(event.code)) {
           fatal = true;
           setStatus('error');
@@ -173,7 +196,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('online', online);
     };
-  }, [roomId, initDataRaw]);
+  }, [roomId, initDataRaw, broadcastOnly]);
 
   const send = useCallback((command: PresentationCommand) => {
     if (status !== 'connected' || pending || socket.current?.readyState !== WebSocket.OPEN) {
@@ -199,5 +222,5 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     if (latest.current) setIndex(latest.current.current_slide_index);
   }, []);
 
-  return { state, index, status, error, pending, send, navigate, followPresenter };
+  return { state, index, status, error, pending, broadcastEnded, send, navigate, followPresenter };
 }

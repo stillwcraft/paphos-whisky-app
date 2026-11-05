@@ -2,8 +2,9 @@
 
 ## Running and opening a room
 
-Run migration `migrations/030_presentation_rooms.sql` against an existing database;
-normal application startup also creates the table using SQLAlchemy metadata.
+Run migrations `migrations/030_presentation_rooms.sql` and
+`migrations/031_presentation_broadcast.sql` against an existing database;
+normal application startup also creates the tables using SQLAlchemy metadata.
 Install `requirements.txt`, set the existing `BOT_TOKEN`, `ADMIN_TELEGRAM_ID` and
 `DATABASE_URL`, and run **one worker / one replica**:
 
@@ -21,9 +22,8 @@ credentials in its first frame, not a query string.
 
 ### Uploading through the Mini App
 
-The navigation panel has an admin-only **Presentations** tab using
-`frontend/public/assets/nav/Fav.webp`. Open it, select a `.json` file (up to 2 MB),
-click **Upload JSON**, then **Open presentation**. The server validates the DSL
+Open **Admin → Manage presentations**, select a `.json` file (up to 2 MB),
+click **Upload JSON**, then **Start broadcast** on a saved presentation. The server validates the DSL
 and saves it in `presentation_rooms.payload.manifest` in the configured database.
 No repository folder upload or rebuild is required for each presentation.
 Media files must already have HTTPS URLs in the manifest; this form uploads only
@@ -33,8 +33,41 @@ that would publicly expose future slides and answer keys.
 The saved list persists across browser/device reloads and lists only rooms owned
 by the authenticated admin, with paginated `GET /api/presentations/rooms`.
 The list endpoint and room creation both enforce admin authentication on the server.
-Only the navigation/import UI is admin-only for now; existing attendee room links
-continue to work, with future-slide redaction.
+Upload, saved-room listing and broadcast mutations enforce admin authentication;
+only the owning presenter can start or stop a room's broadcast.
+Owner filtering uses `BIGINT` for both the JSON-extracted Telegram ID and the
+comparison parameter, so IDs exceeding PostgreSQL's 32-bit `INTEGER` range work.
+
+### Live broadcast tab
+
+The **Presentations** navigation tab retains `frontend/public/assets/nav/Fav.webp`
+and is visible to the configured admin and the explicitly allowlisted test viewer.
+The test viewer gets no admin/import/catalog controls; roles and slide activation
+remain server-authorized. This navigation allowlist does not grant admin privileges
+or change existing invitation-link access.
+
+There is one active broadcast for the app, persisted in `presentation_broadcast`.
+Starting another saved presentation replaces it. The admin is taken to the
+**Presentations** tab to control slides and **Stop broadcast**; attendees opening
+the tab automatically join the active room as viewers. With no broadcast, the
+tab shows a waiting message and discovers a new broadcast within five seconds.
+Discovery pauses while the app is hidden and runs immediately on return/online.
+It returns only the active room ID, not the private saved catalog or future content.
+
+`GET /api/presentations/broadcast` requires Telegram authentication and returns
+`{"room_id": "<active ID or null>"}`. Admin-only
+`POST /api/presentations/rooms/{id}/broadcast` starts/replaces the broadcast;
+`DELETE /api/presentations/rooms/{id}/broadcast` stops it without deleting the
+manifest, progression or responses. Resuming a saved room resumes its saved state.
+An attempt to stop a different, no-longer-active room returns 409.
+
+Tab sessions use HTTP `?broadcast_only=true` and include `"broadcast_only": true`
+in their first WS auth frame. These subscriptions are accepted only for the
+currently active room. On stop/replacement/deletion they receive
+`{"type":"broadcast_changed"}` and close with code 4005, clearing slide/media
+content and rediscovering the broadcast. Regular invitation-link sessions retain
+their existing behavior and can still resume a saved room independently of
+broadcast status.
 
 ### Uploading through the API
 

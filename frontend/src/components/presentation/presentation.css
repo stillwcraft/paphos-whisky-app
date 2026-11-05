@@ -34,6 +34,7 @@
 .presentation-caption { text-align: center; margin: 8px 0 12px; }
 .presentation-screen input { display: block; max-width: 100%; }
 .presentation-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.presentation-screen header .presentation-controls { flex-wrap: wrap; }
 .presentation-swipe { touch-action: pan-y; overscroll-behavior-x: none; }
 /* Both axes are implemented here; pan-y would let the UA cancel gallery touches. */
 .presentation-swipe--gallery { touch-action: none; }

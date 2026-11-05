@@ -9,7 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import Column, JSON, String
+from sqlalchemy import BigInteger, Column, ForeignKey, JSON, String, bindparam, cast
 
 from database import Base, SessionLocal
 from schemas.presentation import Command, PresentationManifest, public_slide
@@ -25,6 +25,28 @@ class PresentationRoomRecord(Base):
     payload = Column(JSON, nullable=False)
 
 
+class PresentationBroadcastRecord(Base):
+    __tablename__ = "presentation_broadcast"
+    id = Column(String(6), primary_key=True)
+    room_id = Column(String(32), ForeignKey("presentation_rooms.id", ondelete="SET NULL"), nullable=True)
+
+
+def read_broadcast():
+    with SessionLocal() as db:
+        record = db.get(PresentationBroadcastRecord, "active")
+        return record.room_id if record else None
+
+
+def write_broadcast(room_id):
+    with SessionLocal() as db:
+        record = db.get(PresentationBroadcastRecord, "active")
+        if record is None:
+            db.add(PresentationBroadcastRecord(id="active", room_id=room_id))
+        else:
+            record.room_id = room_id
+        db.commit()
+
+
 def read_record(room_id):
     with SessionLocal() as db:
         record = db.get(PresentationRoomRecord, room_id)
@@ -34,7 +56,8 @@ def read_record(room_id):
 def read_room_summaries(presenter_id, limit, offset):
     with SessionLocal() as db:
         query = db.query(PresentationRoomRecord).filter(
-            PresentationRoomRecord.payload["presenter_id"].as_integer() == presenter_id,
+            cast(PresentationRoomRecord.payload["presenter_id"].as_string(), BigInteger)
+            == bindparam("presenter_id", presenter_id, type_=BigInteger),
         )
         total = query.count()
         records = query.order_by(PresentationRoomRecord.id.desc()).offset(offset).limit(limit).all()
@@ -67,6 +90,9 @@ def delete_record(room_id):
     with SessionLocal() as db:
         record = db.get(PresentationRoomRecord, room_id)
         if record:
+            broadcast = db.get(PresentationBroadcastRecord, "active")
+            if broadcast and broadcast.room_id == room_id:
+                broadcast.room_id = None
             db.delete(record)
             db.commit()
 
@@ -75,6 +101,7 @@ def delete_record(room_id):
 class Client:
     socket: WebSocket
     user_id: int
+    broadcast_only: bool = False
 
 
 @dataclass
@@ -151,8 +178,18 @@ class WebSocketManager:
         await asyncio.gather(*(self.send(room, client, room.snapshot(client.user_id))
                                for client in list(room.clients.values())))
 
+    async def end_broadcast(self, room_id):
+        room = self.rooms.get(room_id)
+        if room:
+            clients = [client for client in room.clients.values() if client.broadcast_only]
+            await asyncio.gather(*(self.send(room, client, {"type": "broadcast_changed"}) for client in clients))
+            for client in clients:
+                room.clients.pop(id(client.socket), None)
+            await asyncio.gather(*(self.close(client.socket, 4005) for client in clients))
+            self.evict_idle(room)
+
     async def command(self, room, client, command):
-        if self.rooms.get(room.id) is not room:
+        if self.rooms.get(room.id) is not room or id(client.socket) not in room.clients:
             raise HTTPException(404, "Presentation room closed")
         if command.type == "ping":
             await self.send(room, client, {"type": "pong"})
@@ -200,13 +237,19 @@ class WebSocketManager:
         await self.broadcast(room)
 
     def evict_idle(self, room):
-        if not room.clients:
+        if not room.clients and self.rooms.get(room.id) is room:
             self.rooms.pop(room.id, None)
 
 
 def create_presentation_router(authenticate, require_admin):
     router = APIRouter(prefix="/api/presentations", tags=["presentations"])
     manager = WebSocketManager()
+
+    @router.get("/broadcast")
+    async def get_broadcast(response: Response, user=Depends(authenticate)):
+        response.headers["Cache-Control"] = "private, no-store"
+        async with manager.lock:
+            return {"room_id": await run_in_threadpool(read_broadcast)}
 
     @router.get("/rooms")
     async def list_rooms(response: Response, limit: int = Query(20, ge=1, le=50),
@@ -226,10 +269,44 @@ def create_presentation_router(authenticate, require_admin):
         await run_in_threadpool(write_record, room_id, payload)
         return {"room_id": room_id}
 
-    @router.get("/rooms/{room_id}")
-    async def get_state(room_id: str, response: Response, user=Depends(authenticate)):
+    @router.post("/rooms/{room_id}/broadcast")
+    async def start_broadcast(room_id: str, response: Response, user=Depends(require_admin)):
         response.headers["Cache-Control"] = "private, no-store"
         async with manager.lock:
+            room = await manager.room(room_id)
+            try:
+                if user.telegram_id != room.payload["presenter_id"]:
+                    raise HTTPException(403, "Only the room presenter can broadcast it")
+                previous = await run_in_threadpool(read_broadcast)
+                await run_in_threadpool(write_broadcast, room_id)
+                if previous and previous != room_id:
+                    await manager.end_broadcast(previous)
+                return {"room_id": room_id}
+            finally:
+                manager.evict_idle(room)
+
+    @router.delete("/rooms/{room_id}/broadcast", status_code=204)
+    async def stop_broadcast(room_id: str, user=Depends(require_admin)):
+        async with manager.lock:
+            room = await manager.room(room_id)
+            try:
+                if user.telegram_id != room.payload["presenter_id"]:
+                    raise HTTPException(403, "Only the room presenter can stop its broadcast")
+                if await run_in_threadpool(read_broadcast) != room_id:
+                    raise HTTPException(409, "This presentation is not being broadcast")
+                await run_in_threadpool(write_broadcast, None)
+                await manager.end_broadcast(room_id)
+            finally:
+                manager.evict_idle(room)
+        return Response(status_code=204)
+
+    @router.get("/rooms/{room_id}")
+    async def get_state(room_id: str, response: Response, broadcast_only: bool = False,
+                        user=Depends(authenticate)):
+        response.headers["Cache-Control"] = "private, no-store"
+        async with manager.lock:
+            if broadcast_only and await run_in_threadpool(read_broadcast) != room_id:
+                raise HTTPException(409, "This presentation is not being broadcast")
             room = await manager.room(room_id)
             state = room.snapshot(user.telegram_id)
             manager.evict_idle(room)
@@ -242,6 +319,7 @@ def create_presentation_router(authenticate, require_admin):
             if user.telegram_id != room.payload["presenter_id"]:
                 raise HTTPException(403, "Only the room presenter can close it")
             await run_in_threadpool(delete_record, room_id)
+            await manager.end_broadcast(room_id)
             manager.rooms.pop(room_id, None)
             await asyncio.gather(*(manager.close(client.socket, 4004) for client in list(room.clients.values())))
         return Response(status_code=204)
@@ -264,9 +342,14 @@ def create_presentation_router(authenticate, require_admin):
             if not isinstance(message, dict) or message.get("type") != "auth" or not isinstance(message.get("init_data"), str):
                 raise HTTPException(401, "Authentication required")
             user = authenticate(authorization=f'tma {message["init_data"]}')
+            broadcast_only = message.get("broadcast_only", False)
+            if not isinstance(broadcast_only, bool):
+                raise HTTPException(422, "Invalid broadcast subscription")
             async with manager.lock:
+                if broadcast_only and await run_in_threadpool(read_broadcast) != room_id:
+                    raise HTTPException(409, "This presentation is not being broadcast")
                 room = await manager.room(room_id)
-                client = Client(socket, user.telegram_id)
+                client = Client(socket, user.telegram_id, broadcast_only)
                 room.clients[id(socket)] = client
                 await manager.send(room, client, room.snapshot(user.telegram_id))
             timestamps = []
@@ -288,7 +371,8 @@ def create_presentation_router(authenticate, require_admin):
                         await manager.send(room, client, {"type": "error", "message": exc.detail})
         except HTTPException as exc:
             await socket.send_json({"type": "error", "message": exc.detail})
-            await socket.close(code=4001 if exc.status_code == 401 else 4004 if exc.status_code == 404 else 1008)
+            code = {401: 4001, 404: 4004, 409: 4005}.get(exc.status_code, 1008)
+            await socket.close(code=code)
         except (json.JSONDecodeError, asyncio.TimeoutError):
             await socket.close(code=1008)
         except WebSocketDisconnect:
