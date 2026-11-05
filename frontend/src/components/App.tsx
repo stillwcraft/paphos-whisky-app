@@ -16,8 +16,14 @@ import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ CyprusEventsMap: Map }) => ({ default: Map }),
 ));
+const PresentationScreen = lazy(() => import('@/components/presentation/PresentationScreen').then(
+  ({ PresentationScreen: Screen }) => ({ default: Screen }),
+));
+const AdminPresentationsTab = lazy(() => import('@/components/presentation/AdminPresentationsTab').then(
+  ({ AdminPresentationsTab: Tab }) => ({ default: Tab }),
+));
 
-type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin';
+type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin' | 'presentations';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
 
@@ -36,6 +42,7 @@ const tabs: Tab[] = [
 const articlesTab: Tab = { id: 'articles', labelKey: 'tabs.articles', iconSrc: '/assets/nav/News.webp' };
 const cyprusMapTab: Tab = { id: 'cyprus-map', labelKey: 'cyprus_map.open_map', iconSrc: '/assets/nav/Globe.webp' };
 const adminTab: Tab = { id: 'admin', labelKey: 'tabs.admin', iconSrc: '/assets/nav/Admin.webp' };
+const presentationsTab: Tab = { id: 'presentations', labelKey: 'presentation.tab', iconSrc: '/assets/nav/Fav.webp' };
 
 type FooterProps = {
   activeTab: TabId;
@@ -51,12 +58,12 @@ function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProp
     cyprusMapTab,
     ...(showArticlesTab ? [articlesTab] : []),
     ...tabs.slice(1),
-    ...(isAdmin ? [adminTab] : []),
+    ...(isAdmin ? [presentationsTab, adminTab] : []),
   ];
 
   return (
     <footer className={`${activeTab === 'cyprus-map' || activeTab === 'profile' ? 'relative shrink-0' : 'fixed inset-x-0 bottom-0'} z-10 border-t border-[#C5A059]/15 bg-[#0A0A0B] px-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur`}>
-      <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between">
+      <nav aria-label={t('common.main_navigation')} className="mx-auto flex max-w-md justify-between overflow-x-auto">
         {visibleTabs.map(({ id, labelKey, iconSrc }) => {
           const isActive = activeTab === id;
 
@@ -66,7 +73,7 @@ function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProp
               type="button"
               aria-current={isActive ? 'page' : undefined}
               onClick={() => onTabChange(id)}
-              className={`flex min-w-0 flex-1 flex-col items-center rounded-lg px-1 py-1 text-[10px] transition-all duration-300 ease-out ${
+              className={`flex ${visibleTabs.length > 7 ? 'min-w-16' : 'min-w-0'} flex-1 flex-col items-center rounded-lg px-1 py-1 text-[10px] transition-all duration-300 ease-out ${
                 isActive ? 'text-[#C5A059] font-medium' : 'text-[#6E6D6A] font-normal hover:text-[#F4F4F5]'
               }`}
             >
@@ -93,6 +100,7 @@ function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProp
 export function App() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabId>('events');
+  const [presentationRoom, setPresentationRoom] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const [selectedSocialEventId, setSelectedSocialEventId] = useState<number | null>(null);
   const [openSocialReports, setOpenSocialReports] = useState(false);
@@ -104,7 +112,8 @@ export function App() {
   const showArticlesTab = import.meta.env.DEV || isAdmin;
   const activeCyprusMap = activeTab === 'cyprus-map';
   const dockedFooter = activeCyprusMap || activeTab === 'profile';
-  const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title') : t(`tabs.${activeTab}`);
+  const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title')
+    : activeTab === 'presentations' ? t('presentation.tab') : t(`tabs.${activeTab}`);
   const clearSelectedEvent = useCallback(() => setSelectedEventId(null), []);
   const clearSelectedSocialEvent = useCallback(() => setSelectedSocialEventId(null), []);
   const clearOpenSocialReports = useCallback(() => setOpenSocialReports(false), []);
@@ -157,6 +166,12 @@ export function App() {
       return;
     }
 
+    const presentationMatch = /^presentation_([a-f0-9]{32})$/.exec(startParam);
+    if (presentationMatch) {
+      setPresentationRoom(presentationMatch[1]);
+      return;
+    }
+
     const eventMatch = /^event_(\d+)$/.exec(startParam);
     if (eventMatch) {
       setActiveTab('events');
@@ -193,6 +208,13 @@ export function App() {
       setActiveTab('cyprus-map');
     }
   }, []);
+
+  if (presentationRoom) {
+    return <Suspense fallback={<p>{t('common.loading')}</p>}>
+      <PresentationScreen roomId={presentationRoom} onClose={() => setPresentationRoom(null)}
+        onRoute={route => { setActiveTab(route); setPresentationRoom(null); }} />
+    </Suspense>;
+  }
 
   return (
     <div className={`${dockedFooter ? 'flex h-[100dvh] flex-col overflow-hidden' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
@@ -239,6 +261,10 @@ export function App() {
               onSelectedDistilleryHandled={clearMapDistillery}
               onClose={closeMap}
             />
+          ) : activeTab === 'presentations' && isAdmin ? (
+            <Suspense fallback={<p>{t('common.loading')}</p>}>
+              <AdminPresentationsTab onOpen={setPresentationRoom} />
+            </Suspense>
           ) : activeTab === 'admin' && isAdmin ? (
             <AdminTab onOpenSocialReports={showSocialReports} />
           ) : (

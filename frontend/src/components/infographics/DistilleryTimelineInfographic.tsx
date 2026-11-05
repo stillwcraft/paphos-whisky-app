@@ -29,6 +29,8 @@ const timelineSources: Record<string, { label: string; url: string }[]> = {
   raasay: [{ label: 'Raasay Distillery', url: 'https://raasaydistillery.com' }],
   springbank: [{ label: 'Springbank', url: 'https://www.springbank.scot' }],
   talisker: [{ label: 'Malts', url: 'https://www.malts.com' }],
+  'the dalmore': [{ label: 'The Dalmore', url: 'https://www.thedalmore.com' }],
+  dalmore: [{ label: 'The Dalmore', url: 'https://www.thedalmore.com' }]
 };
 
 export type DistilleryMilestone = {

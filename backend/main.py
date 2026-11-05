@@ -23,6 +23,7 @@ from routers.infographics import distillery_router as distillery_infographics_ro
 from routers.infographics import router as infographics_router
 from routers.whisky_trail import router as whisky_trail_router
 from schemas.article import ArticleBase, ArticleCreate, ArticleResponse, ArticleUpdate, InteractiveSlide
+from presentation import create_presentation_router
 
 # Автоматически создаем таблицы в Supabase при старте, если их еще нет
 models.Base.metadata.create_all(bind=engine)
@@ -928,6 +929,7 @@ app.include_router(distillery_infographics_router)
 app.include_router(infographics_admin_router, dependencies=[Depends(require_admin)])
 from routers.social import router as social_router
 app.include_router(social_router)
+app.include_router(create_presentation_router(get_authenticated_telegram_user, require_admin))
 
 
 # --- Схемы валидации данных (Pydantic) ---
