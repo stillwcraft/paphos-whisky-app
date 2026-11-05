@@ -72,6 +72,42 @@ manifest editor. The API's OpenAPI schema exposes the
 discriminated slide models for authoring. `answers` is optional server-only poll
 metadata and is **never** delivered to clients (no answer-reveal command).
 
+### Supported authoring fields
+
+Existing manifests remain compatible. The server also accepts these authoring
+aliases and stores/broadcasts their canonical equivalents:
+
+| Authoring field | Canonical field |
+| --- | --- |
+| Static `imageUrl` (HTTPS string) | `image.url` |
+| Static `contentHtml` (string or locale-to-HTML object) | `html` |
+| Video `videoUrl` (HTTPS string) | `video.url` |
+| Video `autoPlayMuted: true` | `muted: true` (autoplay defaults to true) |
+| Poll option `text` (localized object) | `label` |
+
+Do not supply an alias and its canonical field together; such ambiguous input is
+rejected rather than silently choosing one. Unknown fields are still rejected,
+and all media aliases pass through the same HTTPS/credential validation.
+
+Optional manifest `title` is localized and appears in the saved list and room
+header. Optional `theme` supports `primaryColor`, `backgroundColor`, `textColor`,
+`accentColor` as hexadecimal colors (`#RGB`, `#RRGGBB`, `#RRGGBBAA`) and
+`fontFamily` as `sans`, `serif`, or `monospace`. These values style the presentation
+and its sandboxed HTML content. Title and theme are public room-level metadata:
+do not embed future answers or confidential content in them.
+
+All slides accept localized `subtitle`. Gallery photos may include a localized
+`caption`, displayed below the image; `alt` remains a separate accessibility
+description and falls back to the caption when absent. Static and tab HTML accept
+localized objects, using the same language fallback as titles. Videos accept
+`loop` (default false) while always starting muted and inline.
+
+Entry animations include `fade`, `rise`, `none`, `fade-up`, `slide-left`, and
+`zoom-in`, with reduced-motion support. Poll settings explicitly support
+`allowMultiple: false` and `showResultsLive: true`, matching the current single
+response / live-results behavior. Other values are rejected, not ignored;
+multiple-choice voting and deferred result reveal are not implemented.
+
 ## Protocol and invariants
 
 `GET /api/presentations/rooms/{id}` and the initial WS frame return the same
@@ -86,7 +122,9 @@ personalized snapshot:
   "current_slide_index": 0,
   "max_unlocked_slide_index": 0,
   "slide_count": 6,
-  "slides": {"0": {"id": "intro", "type": "static", "title": {"en": "Welcome"}, "animations": null, "html": "<h2>Welcome!</h2>", "css": "", "image": null}},
+  "title": null,
+  "theme": null,
+  "slides": {"0": {"id": "intro", "type": "static", "title": {"en": "Welcome"}, "subtitle": null, "animations": null, "html": "<h2>Welcome!</h2>", "css": "", "image": null}},
   "results": {}
 }
 ```
@@ -178,7 +216,7 @@ Buttons provide non-gesture navigation and accessibility fallbacks.
 
 Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe.
 Arbitrary scripts and parent/app navigation are deliberately unsupported;
-animations use CSS or allowlisted entry names (`fade`, `rise`, `none`).
+animations use CSS or the allowlisted entry names documented above.
 Iframe gestures do not bubble into React: swipe on the surrounding stage/gutters
 or use the slide navigation buttons. Typed tab routes dispatch into the app's
 existing tab controller, close presentation mode and restore Telegram gestures.

@@ -1,5 +1,6 @@
 import os
 import unittest
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -14,7 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from presentation import PresentationRoomRecord, create_presentation_router, write_record
-from schemas.presentation import PresentationManifest
+from schemas.presentation import PresentationManifest, public_slide
 
 
 def authenticate(authorization=Header(default=None)):
@@ -39,6 +40,30 @@ MANIFEST = {
         {"id": "words", "type": "word_cloud", "prompt": {"en": "Describe it"}},
         {"id": "secret", "type": "video", "title": {"en": "Secret reveal"},
          "video": {"url": "https://example.test/private-future.mp4"}},
+    ],
+}
+
+AUTHORED_MANIFEST = {
+    "id": "authored_demo",
+    "title": {"ru": "Презентация", "en": "Presentation"},
+    "theme": {
+        "primaryColor": "#D4AF37", "backgroundColor": "#121212", "textColor": "#FFFFFF",
+        "accentColor": "#8B0000", "fontFamily": "sans",
+    },
+    "slides": [
+        {"id": "intro", "type": "static", "imageUrl": "https://example.test/intro.jpg",
+         "animations": {"entry": "fade-up"}},
+        {"id": "photos", "type": "gallery", "subtitle": {"ru": "Свайпайте вверх", "en": "Swipe up"},
+         "photos": [{"url": "https://example.test/gallery.jpg", "caption": {"ru": "Подпись", "en": "Caption"}}],
+         "animations": {"entry": "slide-left"}},
+        {"id": "vote", "type": "poll", "question": {"en": "Pick one"},
+         "options": [{"id": "a", "text": {"en": "A"}}, {"id": "b", "text": {"en": "B"}}],
+         "allowMultiple": False, "showResultsLive": True, "answers": ["b"],
+         "animations": {"entry": "zoom-in"}},
+        {"id": "film", "type": "video", "videoUrl": "https://example.test/future.mp4",
+         "loop": True, "autoPlayMuted": True, "animations": {"entry": "fade-up"}},
+        {"id": "html", "type": "static", "contentHtml": {"ru": "<h1>Привет</h1>", "en": "<h1>Hello</h1>"},
+         "animations": {"entry": "zoom-in"}},
     ],
 }
 
@@ -139,6 +164,70 @@ class PresentationTest(unittest.TestCase):
         response = self.client.post(path, json={"id": "bad", "slides": []}, headers=headers)
         self.assertEqual(response.status_code, 422)
         self.assertEqual(self.client.get(path, headers=headers).json()["total"], 1)
+
+    def test_authoring_aliases_are_normalized_without_losing_content(self):
+        manifest = PresentationManifest.model_validate(AUTHORED_MANIFEST)
+        data = manifest.model_dump()
+        self.assertEqual(data["title"], AUTHORED_MANIFEST["title"])
+        self.assertEqual(data["theme"], AUTHORED_MANIFEST["theme"])
+        self.assertEqual(data["slides"][0]["image"]["url"], AUTHORED_MANIFEST["slides"][0]["imageUrl"])
+        self.assertEqual(data["slides"][1]["photos"][0]["caption"]["ru"], "Подпись")
+        self.assertEqual(data["slides"][1]["subtitle"]["en"], "Swipe up")
+        self.assertEqual(data["slides"][2]["options"][0]["label"]["en"], "A")
+        self.assertTrue(data["slides"][3]["loop"])
+        self.assertTrue(data["slides"][3]["muted"])
+        self.assertTrue(data["slides"][3]["autoplay"])
+        self.assertEqual(data["slides"][4]["html"]["en"], "<h1>Hello</h1>")
+        self.assertEqual([slide["animations"]["entry"] for slide in data["slides"]],
+                         ["fade-up", "slide-left", "zoom-in", "fade-up", "zoom-in"])
+        self.assertNotIn("answers", public_slide(manifest.slides[2]))
+        self.assertEqual(PresentationManifest.model_validate(data).model_dump(), data)
+
+    def test_authored_upload_sync_and_saved_title_preserve_redaction(self):
+        response = self.client.post("/api/presentations/rooms", json=AUTHORED_MANIFEST,
+                                    headers={"Authorization": "tma presenter"})
+        self.assertEqual(response.status_code, 201, response.text)
+        path = "/api/presentations/rooms/" + response.json()["room_id"]
+        listed = self.client.get("/api/presentations/rooms", headers={"Authorization": "tma presenter"}).json()
+        summary = next(item for item in listed["items"] if item["room_id"] == response.json()["room_id"])
+        self.assertEqual(summary["title"], AUTHORED_MANIFEST["title"])
+        with self.client.websocket_connect(path + "/ws") as presenter, self.client.websocket_connect(path + "/ws") as viewer:
+            self.auth_socket(presenter, "presenter")
+            state = self.auth_socket(viewer, "viewer")
+            self.assertEqual(state["theme"], AUTHORED_MANIFEST["theme"])
+            self.assertEqual(state["title"], AUTHORED_MANIFEST["title"])
+            self.assertEqual(list(state["slides"]), ["0"])
+            self.assertNotIn("future.mp4", str(state))
+            for index in range(1, 5):
+                presenter.send_json({"type": "advance", "index": index})
+                presenter.receive_json()
+                state = viewer.receive_json()
+                self.assertEqual(list(state["slides"]), [str(i) for i in range(index + 1)])
+                self.assertNotIn("answers", str(state))
+                if index < 3:
+                    self.assertNotIn("future.mp4", str(state))
+            self.assertEqual(state["slides"]["4"]["html"]["ru"], "<h1>Привет</h1>")
+            self.assertTrue(state["slides"]["3"]["loop"])
+        self.assertEqual(self.client.get(path, headers={"Authorization": "tma viewer"}).json(), state)
+
+    def test_authoring_aliases_do_not_bypass_url_css_or_behavior_validation(self):
+        cases = [
+            ("image_url", lambda data: data["slides"][0].update(imageUrl="javascript:alert(1)")),
+            ("video_url", lambda data: data["slides"][3].update(videoUrl="http://example.test/film.mp4")),
+            ("unmuted", lambda data: data["slides"][3].update(autoPlayMuted=False)),
+            ("theme_css", lambda data: data["theme"].update(primaryColor="red; background:url(https://example.test)")),
+            ("theme_font", lambda data: data["theme"].update(fontFamily="sans; color:red")),
+            ("animation", lambda data: data["slides"][0]["animations"].update(entry="unsupported")),
+            ("multiple", lambda data: data["slides"][2].update(allowMultiple=True)),
+            ("hidden_results", lambda data: data["slides"][2].update(showResultsLive=False)),
+            ("conflicting_alias", lambda data: data["slides"][0].update(image={"url": "https://example.test/other.jpg"})),
+        ]
+        for name, mutate in cases:
+            with self.subTest(name=name):
+                manifest = deepcopy(AUTHORED_MANIFEST)
+                mutate(manifest)
+                with self.assertRaises(ValidationError):
+                    PresentationManifest.model_validate(manifest)
 
     def test_progression_is_sequential_and_unlock_is_monotonic(self):
         with self.connect("presenter") as presenter, self.connect("viewer") as viewer:

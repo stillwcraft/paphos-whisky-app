@@ -9,22 +9,29 @@
   gap: 12px;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #0d0d0e;
-  color: #f4f4f5;
+  background: var(--presentation-background, #0d0d0e);
+  color: var(--presentation-text, #f4f4f5);
+  font-family: var(--presentation-font, system-ui);
   padding-top: calc(12px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)));
   padding-bottom: calc(12px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)));
   padding-left: max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
   padding-right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px));
 }
 .presentation-screen button, .presentation-screen input {
-  border: 1px solid #c5a059;
+  border: 1px solid var(--presentation-primary, #c5a059);
   border-radius: 8px;
   padding: 8px 12px;
   color: inherit;
-  background: #161617;
+  background: var(--presentation-control-background, #161617);
   touch-action: manipulation;
 }
 .presentation-screen button:disabled { opacity: .45; }
+.presentation-screen[data-themed] button[aria-pressed="true"], .presentation-screen[data-themed] button[aria-selected="true"] {
+  background: var(--presentation-accent, #c5a059);
+}
+.presentation-heading { margin-top: 12px; color: var(--presentation-primary, #c5a059); font-weight: 600; }
+.presentation-subtitle { margin-bottom: 12px; }
+.presentation-caption { text-align: center; margin: 8px 0 12px; }
 .presentation-screen input { display: block; max-width: 100%; }
 .presentation-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .presentation-swipe { touch-action: pan-y; overscroll-behavior-x: none; }
@@ -43,9 +50,14 @@
 .presentation-word-cloud small { font-size: .75rem; }
 .presentation-entry--fade { animation: presentation-fade .3s ease-out both; }
 .presentation-entry--rise { animation: presentation-rise .3s ease-out both; }
+.presentation-entry--fade-up { animation: presentation-rise .3s ease-out both; }
+.presentation-entry--slide-left { animation: presentation-slide-left .3s ease-out both; }
+.presentation-entry--zoom-in { animation: presentation-zoom-in .3s ease-out both; }
 .presentation-slide [role="tab"] { animation: presentation-fade .3s ease-out both; }
 @keyframes presentation-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes presentation-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes presentation-slide-left { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes presentation-zoom-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
   .presentation-slide, .presentation-slide [role="tab"] { animation: none; }
 }

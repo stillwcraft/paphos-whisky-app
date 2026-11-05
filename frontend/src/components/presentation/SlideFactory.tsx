@@ -2,16 +2,29 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   localize, type GallerySlideConfig, type InteractiveTabsSlideConfig, type PresentationCommand,
-  type PresentationRoute, type SlideConfig, type SlideResult, type VideoSlideConfig, type WordCloudSlideConfig,
+  type PhotoConfig, type PresentationRoute, type PresentationTheme, type SlideConfig, type SlideResult,
+  type VideoSlideConfig, type WordCloudSlideConfig,
 } from '@/types/presentation';
 import { SwipeController } from './SwipeController';
+import { presentationThemeStyle } from './presentationTheme';
 
-function HtmlContent({ html, css = '', title }: { html: string; css?: string; title: string }) {
+function HtmlContent({ html, css = '', title, theme }: {
+  html: string; css?: string; title: string; theme?: PresentationTheme | null;
+}) {
   const { t } = useTranslation();
   // No scripts, same-origin access, top navigation, forms, or SDK access inside author HTML.
   const policy = "default-src 'none'; img-src https:; style-src 'unsafe-inline'; font-src https:; base-uri 'none'; form-action 'none'";
+  const variables = Object.entries(presentationThemeStyle(theme)).map(([key, value]) => `${key}:${value}`).join(';');
   return <iframe title={title || t('presentation.content')} sandbox="" referrerPolicy="no-referrer"
-    className="presentation-html" srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>body{margin:0;padding:16px;background:#0D0D0E;color:#F4F4F5;font-family:system-ui}img{max-width:100%}${css}</style></head><body>${html}</body></html>`} />;
+    className="presentation-html" srcDoc={`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>:root{${variables}}body{margin:0;padding:16px;background:var(--presentation-background);color:var(--presentation-text);font-family:var(--presentation-font)}a{color:var(--presentation-primary)}img{max-width:100%}${css}</style></head><body>${html}</body></html>`} />;
+}
+
+function PhotoContent({ photo, language }: { photo: PhotoConfig; language: string }) {
+  const caption = localize(photo.caption, language);
+  return <figure>
+    <img className="presentation-photo" src={photo.url} alt={localize(photo.alt, language) || caption} draggable={false} />
+    {caption && <figcaption className="presentation-caption">{caption}</figcaption>}
+  </figure>;
 }
 
 function VideoSlide({ slide }: { slide: VideoSlideConfig }) {
@@ -42,7 +55,7 @@ function VideoSlide({ slide }: { slide: VideoSlideConfig }) {
   };
   return (
     <div className="presentation-video">
-      <video ref={ref} src={slide.video.url} playsInline autoPlay muted={muted} controls
+      <video ref={ref} src={slide.video.url} playsInline autoPlay muted={muted} loop={slide.loop} controls
         preload="metadata" onError={() => setError(t('presentation.video_error'))} />
       <button className="presentation-unmute" onClick={() => {
         if (ref.current) ref.current.muted = !muted;
@@ -61,7 +74,7 @@ function GallerySlide({ slide, language }: { slide: GallerySlideConfig; language
   const move = (direction: -1 | 1) => setPhotoIndex(i => Math.max(0, Math.min(slide.photos.length - 1, i + direction)));
   return (
     <SwipeController onVertical={move}>
-      <img className="presentation-photo" src={photo.url} alt={localize(photo.alt, language)} draggable={false} />
+      <PhotoContent photo={photo} language={language} />
       <div className="presentation-controls">
         <button disabled={photoIndex === 0} onClick={() => move(-1)}>{t('presentation.previous_photo')}</button>
         <span>{photoIndex + 1} / {slide.photos.length}</span>
@@ -71,8 +84,9 @@ function GallerySlide({ slide, language }: { slide: GallerySlideConfig; language
   );
 }
 
-function TabsSlide({ slide, language, onRoute }: {
+function TabsSlide({ slide, language, onRoute, theme }: {
   slide: InteractiveTabsSlideConfig; language: string; onRoute: (route: PresentationRoute) => void;
+  theme?: PresentationTheme | null;
 }) {
   const { t } = useTranslation();
   const [tabIndex, setTabIndex] = useState(0);
@@ -88,7 +102,8 @@ function TabsSlide({ slide, language, onRoute }: {
         ))}
       </div>
       <div role="tabpanel" id={`${slide.id}-panel`} aria-labelledby={`${slide.id}-${tab.id}`}>
-        <HtmlContent html={tab.html} title={localize(tab.label, language)} />
+        <HtmlContent html={typeof tab.html === 'string' ? tab.html : localize(tab.html, language)}
+          title={localize(tab.label, language)} theme={theme} />
         {tab.route && <button onClick={() => { if (tab.route) onRoute(tab.route); }}>{t('presentation.open_tab', { label: localize(tab.label, language) })}</button>}
       </div>
     </>
@@ -151,15 +166,18 @@ interface Props {
   canRespond: boolean;
   send: (command: PresentationCommand) => void;
   onRoute: (route: PresentationRoute) => void;
+  theme?: PresentationTheme | null;
 }
 
-export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute }: Props) {
+export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute, theme }: Props) {
   const title = localize(slide.title, language);
+  const subtitle = localize(slide.subtitle, language);
   let content;
   switch (slide.type) {
     case 'static':
-      content = <>{slide.image && <img className="presentation-photo" src={slide.image.url} alt={localize(slide.image.alt, language)} />}
-        {slide.html && <HtmlContent html={slide.html} css={slide.css} title={title} />}</>;
+      content = <>{slide.image && <PhotoContent photo={slide.image} language={language} />}
+        {slide.html && <HtmlContent html={typeof slide.html === 'string' ? slide.html : localize(slide.html, language)}
+          css={slide.css} title={title} theme={theme} />}</>;
       break;
     case 'video':
       content = active ? <VideoSlide slide={slide} /> : null;
@@ -168,7 +186,7 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
       content = <GallerySlide slide={slide} language={language} />;
       break;
     case 'interactive_tabs':
-      content = <TabsSlide slide={slide} language={language} onRoute={onRoute} />;
+      content = <TabsSlide slide={slide} language={language} onRoute={onRoute} theme={theme} />;
       break;
     case 'poll':
       content = <>
@@ -186,6 +204,6 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
       break;
   }
   return <article className={`presentation-slide presentation-entry--${slide.animations?.entry ?? 'none'}`}>
-    {title && <h1>{title}</h1>}{content}
+    {title && <h1>{title}</h1>}{subtitle && <p className="presentation-subtitle">{subtitle}</p>}{content}
   </article>;
 }

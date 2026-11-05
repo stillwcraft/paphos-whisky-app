@@ -45,7 +45,7 @@ def read_room_summaries(presenter_id, limit, offset):
             items.append({
                 "room_id": record.id,
                 "manifest_id": manifest["id"],
-                "title": manifest["slides"][0].get("title"),
+                "title": manifest.get("title") or manifest["slides"][0].get("title"),
                 "slide_count": len(manifest["slides"]),
                 "current_slide_index": payload["current_slide_index"],
             })
@@ -108,6 +108,8 @@ class Room:
             "current_slide_index": current,
             "max_unlocked_slide_index": maximum,
             "slide_count": len(self.manifest.slides),
+            "title": self.manifest.title,
+            "theme": self.manifest.theme.model_dump() if self.manifest.theme else None,
             # No future title, URL, answer key, or manifest is sent, even to the presenter.
             "slides": {str(i): public_slide(slide) for i, slide in enumerate(self.manifest.slides[:maximum + 1])},
             "results": results,
