@@ -225,6 +225,24 @@ Videos start inline and muted, provide an explicit Unmute button and a Play
 fallback when autoplay is denied. Cloud layout updates are capped at one per two
 seconds. Off-screen DOM neighbors are hidden and their controls are inaccessible.
 
+Viewer slides occupy the entire viewport; controls are overlays rather than
+layout rows. Viewers navigate unlocked slides with horizontal swipes, with
+non-clickable progress dots at the bottom (locked slides stay dimmed). Square
+icon-only Close and Follow buttons sit at the bottom right, above video controls.
+The presentation heading and connected label are hidden for viewers; errors and
+reconnection notices remain visible. Presenter navigation and broadcast controls
+are unchanged.
+
+Viewer galleries use vertical swipes and a left-center photo-dot indicator,
+without the gallery subtitle or previous/next photo buttons. Captions remain
+visible as overlays. Viewer videos have no native controls intercepting swipes:
+tapping the video toggles an overlay with play/pause, seek and explicit audio
+controls. The seek control waits for a finite media duration; keyboard users can
+toggle the overlay with Enter/Space. Drag-generated clicks are suppressed so a
+swipe does not also open the video panel. Sandboxed HTML keeps its native
+scrolling and uses transparent swipe gutters inside the protected viewport edges;
+scripts and parent access remain disabled.
+
 On minimize the client closes its socket. On visibility restore or network
 recovery it reconnects, authenticates and fetches an HTTP snapshot in parallel.
 Revisions prevent a slow HTTP response from overwriting newer WS state. There is

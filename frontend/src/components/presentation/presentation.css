@@ -55,6 +55,135 @@
 .presentation-entry--slide-left { animation: presentation-slide-left .3s ease-out both; }
 .presentation-entry--zoom-in { animation: presentation-zoom-in .3s ease-out both; }
 .presentation-slide [role="tab"] { animation: presentation-fade .3s ease-out both; }
+.presentation-screen--viewer { padding: 0; gap: 0; }
+.presentation-screen--viewer .presentation-stage { width: 100%; height: 100%; overflow: hidden; }
+.presentation-screen--viewer .presentation-slot { height: 100%; }
+.presentation-screen--viewer .presentation-slide {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: calc(24px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)))
+    max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px))
+    calc(88px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)))
+    max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+}
+.presentation-screen--viewer .presentation-slide-content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.presentation-screen--viewer :is(.presentation-slide--static, .presentation-slide--gallery, .presentation-slide--video) {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+}
+.presentation-screen--viewer :is(.presentation-slide--static, .presentation-slide--gallery, .presentation-slide--video) .presentation-slide-heading {
+  position: absolute;
+  z-index: 2;
+  top: calc(16px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)));
+  left: max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+  right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px));
+  text-shadow: 0 1px 6px #000;
+  pointer-events: none;
+}
+.presentation-screen--viewer figure { position: relative; margin: 0; min-height: 0; }
+.presentation-screen--viewer .presentation-slide--static figure { flex: 1; }
+.presentation-screen--viewer .presentation-photo { display: block; height: 100%; max-height: none; object-fit: contain; }
+.presentation-screen--viewer .presentation-caption {
+  position: absolute;
+  left: 56px;
+  right: 56px;
+  bottom: calc(64px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)));
+  margin: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #000b;
+  color: #fff;
+  pointer-events: none;
+}
+.presentation-screen--viewer .presentation-gallery { position: relative; height: 100%; }
+.presentation-screen--viewer .presentation-gallery figure { height: 100%; }
+.presentation-screen--viewer .presentation-html-frame { position: relative; flex: 1; min-height: 0; }
+.presentation-screen--viewer .presentation-html { height: 100%; }
+.presentation-screen--viewer [role="tabpanel"] { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.presentation-html-swipe-rail { position: absolute; top: 0; bottom: 0; width: 40px; }
+.presentation-html-swipe-rail--left { left: max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px)); }
+.presentation-html-swipe-rail--right { right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px)); }
+.presentation-slide-dots {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(12px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)));
+  left: 32px;
+  right: 32px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 5px;
+  pointer-events: none;
+}
+.presentation-dot { flex: 0 0 6px; width: 6px; height: 6px; border-radius: 50%; background: #ffffff80; box-shadow: 0 0 2px #000; }
+.presentation-dot[data-locked="true"] { background: #ffffff30; }
+.presentation-dot[data-active="true"] { background: var(--presentation-primary, #c5a059); box-shadow: 0 0 0 2px #0008; }
+.presentation-photo-dots {
+  position: absolute;
+  z-index: 3;
+  left: max(32px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 0.8dvh, 8px);
+  pointer-events: none;
+}
+.presentation-viewer-actions {
+  position: absolute;
+  z-index: 5;
+  right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px));
+  bottom: calc(136px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.presentation-screen button.presentation-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 8px;
+  background: #000b;
+  color: #fff;
+}
+.presentation-screen--viewer .presentation-video { flex: 1; min-height: 0; height: 100%; }
+.presentation-screen--viewer .presentation-video video { display: block; height: 100%; max-height: none; object-fit: contain; }
+.presentation-video-controls {
+  position: absolute;
+  z-index: 4;
+  left: max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+  right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px));
+  bottom: calc(72px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  border-radius: 12px;
+  background: #000b;
+}
+.presentation-video-controls input[type="range"] { flex: 1; min-width: 0; padding: 0; accent-color: var(--presentation-primary, #c5a059); touch-action: none; }
+.presentation-screen--viewer .presentation-video-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.presentation-screen--viewer .presentation-video [role="alert"],
+.presentation-screen--viewer .presentation-notice {
+  position: absolute;
+  z-index: 6;
+  top: calc(16px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)));
+  left: 24px;
+  right: 24px;
+  border-radius: 8px;
+  padding: 12px;
+  background: #000d;
+  color: #fff;
+}
+.presentation-screen--viewer .presentation-loading { margin: auto; padding: 24px; }
 @keyframes presentation-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes presentation-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes presentation-slide-left { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
