@@ -129,6 +129,8 @@ export function DistilleriesTab({
   onSelectedDistilleryHandled,
   onOpenOnMap,
   onNavigateToMap,
+  onBottleClosed,
+  onDistilleryClosed,
 }: {
   selectedBottleId?: number | null;
   onSelectedBottleHandled?: () => void;
@@ -136,6 +138,8 @@ export function DistilleriesTab({
   onSelectedDistilleryHandled?: () => void;
   onOpenOnMap?: (distilleryId: number) => void;
   onNavigateToMap: () => void;
+  onBottleClosed?: () => void;
+  onDistilleryClosed?: () => void;
 }) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
@@ -416,6 +420,7 @@ export function DistilleriesTab({
     setIsPhotoExpanded(false);
     setSelectedBottle(null);
     setIsReviewOpen(false);
+    onBottleClosed?.();
   };
 
   return (
@@ -582,7 +587,7 @@ export function DistilleriesTab({
               <button
                 aria-label={t('bottle.close_distillery_details')}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
-                onClick={() => setSelectedDistillery(null)}
+                onClick={() => { setSelectedDistillery(null); onDistilleryClosed?.(); }}
                 type="button"
               >
                 ✕

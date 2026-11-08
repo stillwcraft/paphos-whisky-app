@@ -9,6 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import { localizedApiUrl } from '@/localization.ts';
+import { MINI_APP_URL } from '@/miniAppDeepLinks';
 import { eventEndTime, isEventCurrentOrUpcoming } from '@/helpers/eventTime.ts';
 import { SocialEventCard, type Drink, type SocialEvent, type SocialProfile } from './social/SocialEventCard.tsx';
 import { SocialEventForm, type SocialEventDraft, type SocialEventUpdateDraft } from './social/SocialEventForms.tsx';
@@ -414,6 +415,7 @@ export function CyprusEventsMap({
   onSelectEvent,
   openReports,
   onReportsHandled,
+  onDetailClosed,
 }: {
   isAdmin: boolean;
   initialSocialEventId: number | null;
@@ -421,6 +423,7 @@ export function CyprusEventsMap({
   onSelectEvent: (eventId: number) => void;
   openReports: boolean;
   onReportsHandled: () => void;
+  onDetailClosed?: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const initDataRaw = useSignal(initData.raw);
@@ -799,7 +802,7 @@ export function CyprusEventsMap({
   }, [panel, api, selectedSocialId, t]);
 
   const share = (event: SocialEvent) => {
-    const url = `https://t.me/CyprusWhiskyClubBot/NoMoreDram?startapp=social_event_${event.id}`;
+    const url = `${MINI_APP_URL}?startapp=social_event_${event.id}`;
     const telegramShare = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(event.location)}`;
     if (window.Telegram?.WebApp?.openTelegramLink) {
       window.Telegram.WebApp.openTelegramLink(telegramShare);
@@ -960,7 +963,7 @@ export function CyprusEventsMap({
           <SocialEventCard
             event={selectedSocial}
             busy={busy}
-            onClose={() => { ++detailRequestId.current; setSelectedSocialId(null); setSocialDetail(null); }}
+            onClose={() => { ++detailRequestId.current; setSelectedSocialId(null); setSocialDetail(null); onDetailClosed?.(); }}
             onCheer={() => { if (api) void run(async () => { await api.cheer(selectedSocial.id); await reloadSocial(); }); }}
             onJoin={() => { if (api) void run(async () => {
               const result = await api.join(selectedSocial.id);

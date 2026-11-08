@@ -18,18 +18,24 @@ type Status = 'connecting' | 'connected' | 'reconnecting' | 'offline' | 'error';
 export function usePresentationSession(roomId: string, initDataRaw: string | undefined, broadcastOnly = false) {
   const [state, setState] = useState<PresentationState | null>(null);
   const [index, setIndex] = useState(0);
+  const [viewerPhotoIndices, setViewerPhotoIndices] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<Status>('connecting');
   const [error, setError] = useState<string | null>(null);
+  const [lockedNotice, setLockedNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [broadcastEnded, setBroadcastEnded] = useState(false);
   const socket = useRef<WebSocket | null>(null);
   const latest = useRef<PresentationState | null>(null);
+  const lockedNoticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     setState(null);
     latest.current = null;
     setIndex(0);
+    setViewerPhotoIndices({});
     setError(null);
+    setLockedNotice(null);
+    clearTimeout(lockedNoticeTimer.current);
     setPending(false);
     setBroadcastEnded(false);
     if (!initDataRaw) {
@@ -51,10 +57,22 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     const apply = (next: PresentationState, forceJump: boolean) => {
       if (next.room_id !== roomId) throw new Error('Presentation room mismatch');
       if (latest.current && next.revision < latest.current.revision) return;
-      const jump = forceJump || !latest.current || next.current_slide_index !== latest.current.current_slide_index;
+      const relocked = latest.current && next.max_unlocked_slide_index < latest.current.max_unlocked_slide_index;
+      const jump = forceJump || relocked || !latest.current || next.current_slide_index !== latest.current.current_slide_index;
+      if (relocked) {
+        setViewerPhotoIndices({});
+        setLockedNotice(null);
+        clearTimeout(lockedNoticeTimer.current);
+      }
       latest.current = next;
       setState(next);
-      if (jump) setIndex(next.current_slide_index);
+      if (jump) {
+        setIndex(next.current_slide_index);
+        const slide = next.slides[String(next.current_slide_index)];
+        if (slide.type === 'gallery') {
+          setViewerPhotoIndices(indices => ({ ...indices, [slide.id]: next.gallery_photo_indices[slide.id] ?? 0 }));
+        }
+      }
     };
     const stopTransport = () => {
       generation += 1;
@@ -192,6 +210,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     else setStatus('offline');
     return () => {
       disposed = true;
+      clearTimeout(lockedNoticeTimer.current);
       stopTransport();
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('online', online);
@@ -215,12 +234,40 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     } else if (target <= current.max_unlocked_slide_index) {
       setIndex(target);
     } else {
-      setError(i18n.t('presentation.locked'));
+      setLockedNotice(i18n.t('presentation.locked'));
+      clearTimeout(lockedNoticeTimer.current);
+      lockedNoticeTimer.current = setTimeout(() => setLockedNotice(null), 2000);
+    }
+  }, [send]);
+  const changePhoto = useCallback((slideId: string, photoIndex: number) => {
+    const current = latest.current;
+    const slide = current && Object.values(current.slides).find(item => item.id === slideId);
+    if (!current || slide?.type !== 'gallery' || !Number.isInteger(photoIndex) || photoIndex < 0 || photoIndex >= slide.photos.length) {
+      setError(i18n.t('presentation.invalid_message'));
+      return;
+    }
+    if (current.role === 'presenter') {
+      send({ type: 'gallery_photo', slide_id: slideId, photo_index: photoIndex });
+    } else {
+      setViewerPhotoIndices(indices => ({ ...indices, [slideId]: photoIndex }));
     }
   }, [send]);
   const followPresenter = useCallback(() => {
-    if (latest.current) setIndex(latest.current.current_slide_index);
+    const current = latest.current;
+    if (!current) return;
+    setIndex(current.current_slide_index);
+    const slide = current.slides[String(current.current_slide_index)];
+    if (slide.type === 'gallery') {
+      setViewerPhotoIndices(indices => ({ ...indices, [slide.id]: current.gallery_photo_indices[slide.id] ?? 0 }));
+    }
+    setLockedNotice(null);
+    clearTimeout(lockedNoticeTimer.current);
   }, []);
 
-  return { state, index, status, error, pending, broadcastEnded, send, navigate, followPresenter };
+  const photoIndices = state?.role === 'presenter' ? state.gallery_photo_indices : viewerPhotoIndices;
+  const currentSlide = state?.slides[String(state.current_slide_index)];
+  const isFollowingPresenter = index === state?.current_slide_index && (currentSlide?.type !== 'gallery'
+    || (photoIndices[currentSlide.id] ?? 0) === (state?.gallery_photo_indices[currentSlide.id] ?? 0));
+  return { state, index, photoIndices, isFollowingPresenter, status, error: error ?? lockedNotice, pending,
+    broadcastEnded, send, navigate, changePhoto, followPresenter };
 }

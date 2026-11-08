@@ -32,6 +32,10 @@ export const presentationRouteSchema = z.enum([
 ]);
 export type PresentationRoute = z.infer<typeof presentationRouteSchema>;
 
+export function canViewPresentationTab(userId: number | undefined, isAdmin: boolean): boolean {
+  return isAdmin || userId === 741623645;
+}
+
 export const slideSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('static'), html: htmlContent.default(''),
@@ -100,6 +104,7 @@ export const sessionStateSchema = z.object({
   revision: z.number().int().nonnegative(),
   current_slide_index: z.number().int().nonnegative(),
   max_unlocked_slide_index: z.number().int().nonnegative(),
+  gallery_photo_indices: z.record(identifier, z.number().int().nonnegative()).default({}),
   slide_count: z.number().int().min(1).max(100),
   title: localized.nullable().optional(),
   theme: presentationThemeSchema.nullable().optional(),
@@ -116,11 +121,18 @@ export const sessionStateSchema = z.object({
     || Array.from({ length: state.max_unlocked_slide_index + 1 }, (_, i) => state.slides[String(i)]).some(slide => !slide)) {
     ctx.addIssue({ code: 'custom', message: 'Invalid presentation unlock state' });
   }
+  for (const [slideId, photoIndex] of Object.entries(state.gallery_photo_indices)) {
+    const slide = Object.values(state.slides).find(item => item.id === slideId);
+    if (slide?.type !== 'gallery' || photoIndex >= slide.photos.length) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid presentation gallery photo state' });
+    }
+  }
 });
 export type PresentationState = z.infer<typeof sessionStateSchema>;
 export type SlideResult = PresentationState['results'][string];
 export type PresentationCommand =
   | { type: 'advance'; index: number }
+  | { type: 'gallery_photo'; slide_id: string; photo_index: number }
   | { type: 'vote'; slide_id: string; option_id: string }
   | { type: 'words'; slide_id: string; words: string[] };
 

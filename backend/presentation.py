@@ -37,8 +37,13 @@ def read_broadcast():
         return record.room_id if record else None
 
 
-def write_broadcast(room_id):
+def write_broadcast(room_id, payload=None):
     with SessionLocal() as db:
+        if payload is not None:
+            room_record = db.get(PresentationRoomRecord, room_id)
+            if room_record is None:
+                raise HTTPException(404, "Presentation room not found")
+            room_record.payload = payload
         record = db.get(PresentationBroadcastRecord, "active")
         if record is None:
             db.add(PresentationBroadcastRecord(id="active", room_id=room_id))
@@ -134,6 +139,10 @@ class Room:
             "revision": self.payload["revision"],
             "current_slide_index": current,
             "max_unlocked_slide_index": maximum,
+            "gallery_photo_indices": {
+                slide.id: self.payload.get("gallery_photo_indices", {}).get(slide.id, 0)
+                for slide in self.manifest.slides[:maximum + 1] if slide.type == "gallery"
+            },
             "slide_count": len(self.manifest.slides),
             "title": self.manifest.title,
             "theme": self.manifest.theme.model_dump() if self.manifest.theme else None,
@@ -210,6 +219,15 @@ class WebSocketManager:
                 raise HTTPException(409, "Activate slides sequentially")
             payload["current_slide_index"] = target
             payload["max_unlocked_slide_index"] = max(target, payload["max_unlocked_slide_index"])
+        elif command.type == "gallery_photo":
+            if client.user_id != payload["presenter_id"]:
+                raise HTTPException(403, "Only the presenter can select the shared photo")
+            slide = room.manifest.slides[payload["current_slide_index"]]
+            if command.slide_id != slide.id:
+                raise HTTPException(409, "Only the currently active gallery can change its shared photo")
+            if slide.type != "gallery" or command.photo_index is None or command.photo_index >= len(slide.photos):
+                raise HTTPException(422, "Invalid gallery photo index")
+            payload.setdefault("gallery_photo_indices", {})[slide.id] = command.photo_index
         else:
             slide = room.manifest.slides[payload["current_slide_index"]]
             if command.slide_id != slide.id:
@@ -263,7 +281,7 @@ def create_presentation_router(authenticate, require_admin):
         payload = {
             "manifest": manifest.model_dump(), "presenter_id": user.telegram_id,
             "current_slide_index": 0, "max_unlocked_slide_index": 0,
-            "revision": 0, "responses": {},
+            "revision": 0, "responses": {}, "gallery_photo_indices": {},
         }
         room_id = uuid4().hex
         await run_in_threadpool(write_record, room_id, payload)
@@ -278,9 +296,16 @@ def create_presentation_router(authenticate, require_admin):
                 if user.telegram_id != room.payload["presenter_id"]:
                     raise HTTPException(403, "Only the room presenter can broadcast it")
                 previous = await run_in_threadpool(read_broadcast)
-                await run_in_threadpool(write_broadcast, room_id)
-                if previous and previous != room_id:
-                    await manager.end_broadcast(previous)
+                if previous != room_id:
+                    payload = json.loads(json.dumps(room.payload))
+                    payload["current_slide_index"] = 0
+                    payload["max_unlocked_slide_index"] = 0
+                    payload["revision"] += 1
+                    await run_in_threadpool(write_broadcast, room_id, payload)
+                    room.payload = payload
+                    if previous:
+                        await manager.end_broadcast(previous)
+                    await manager.broadcast(room)
                 return {"room_id": room_id}
             finally:
                 manager.evict_idle(room)

@@ -6,6 +6,7 @@ import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { clearEventsCache } from '@/eventsCache.ts';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 import { AdminArticles } from '@/components/AdminArticles.tsx';
+import { MINI_APP_URL } from '@/miniAppDeepLinks';
 
 const API_URL = 'https://paphos-whisky-api.onrender.com';
 const AdminPresentationsPanel = lazy(() => import('@/components/presentation/AdminPresentationsPanel').then(
@@ -14,7 +15,7 @@ const AdminPresentationsPanel = lazy(() => import('@/components/presentation/Adm
 const EventLocationPicker = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ EventLocationPicker: Picker }) => ({ default: Picker }),
 ));
-const DEEP_LINK_BASE_URL = 'https://t.me/CyprusWhiskyClubBot/NoMoreDram';
+const DEEP_LINK_BASE_URL = MINI_APP_URL;
 type Label = 'bottle' | 'samples' | 'event';
 type Locale = 'en' | 'ru' | 'uk';
 type I18nString = Record<Locale, string>;

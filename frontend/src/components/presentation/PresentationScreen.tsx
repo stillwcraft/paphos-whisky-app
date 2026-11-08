@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { usePresentationSession } from '@/hooks/usePresentationSession';
 import { localize, type PresentationRoute } from '@/types/presentation';
+import { parseMiniAppLink, type MiniAppDestination } from '@/miniAppDeepLinks';
 import { SlideFactory } from './SlideFactory';
 import { SwipeController } from './SwipeController';
 import { usePresentationGestures } from './usePresentationGestures';
 import { presentationThemeStyle } from './presentationTheme';
 import { PresentationIcon } from './PresentationIcon';
+import { PresentationLinkScreen } from './PresentationLinkScreen';
 import './presentation.css';
 
 export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = false,
@@ -18,6 +20,10 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
 }) {
   const raw = useSignal(initData.raw);
   const { t, i18n } = useTranslation();
+  const [linkDestination, setLinkDestination] = useState<MiniAppDestination | null>(null);
+  const screenRef = useRef<HTMLElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const closeLink = useCallback(() => setLinkDestination(null), []);
   const session = usePresentationSession(roomId, raw, broadcastOnly);
   const { gestureError, safeAreaStyle } = usePresentationGestures();
   const { state, index, status, pending } = session;
@@ -25,17 +31,38 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
   const maximum = state?.role === 'presenter'
     ? Math.min(state.slide_count - 1, state.max_unlocked_slide_index + 1)
     : state?.max_unlocked_slide_index ?? 0;
-  const controlsDisabled = pending || stoppingBroadcast || (state?.role === 'presenter' && status !== 'connected');
+  const controlsDisabled = Boolean(linkDestination) || pending || stoppingBroadcast || (state?.role === 'presenter' && status !== 'connected');
   const neighbors = [index - 1, index, index + 1].filter(i => i >= 0 && state?.slides[String(i)]);
 
   useEffect(() => {
     if (session.broadcastEnded) onBroadcastEnded?.();
   }, [session.broadcastEnded, onBroadcastEnded]);
 
+  useEffect(() => {
+    screenRef.current?.toggleAttribute('inert', Boolean(linkDestination));
+    if (!linkDestination) {
+      returnFocusRef.current?.focus();
+      returnFocusRef.current = null;
+    }
+  }, [linkDestination]);
+
+  const openLink = useCallback((url: string) => {
+    if (linkDestination) return true;
+    const link = parseMiniAppLink(url);
+    if (!link.internal) return false;
+    if (!link.destination) throw new Error(t('presentation.invalid_deep_link'));
+    if (link.destination.kind === 'presentation' && link.destination.roomId === roomId) return true;
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setLinkDestination(link.destination);
+    return true;
+  }, [linkDestination, roomId, t]);
+
   return (
-    <section className={`presentation-screen${viewer ? ' presentation-screen--viewer' : ''}`}
+    <>
+    <section ref={screenRef} className={`presentation-screen${viewer ? ' presentation-screen--viewer' : ''}`}
       style={{ ...safeAreaStyle, ...presentationThemeStyle(state?.theme) }}
       data-themed={state?.theme ? true : undefined}
+      aria-hidden={linkDestination ? true : undefined}
       aria-label={localize(state?.title, i18n.language) || t('presentation.title')}>
       {!viewer && <header>
         <div className="presentation-controls">
@@ -60,7 +87,9 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
                 <SlideFactory slide={slide} active={i === index} language={i18n.language}
                   result={state.results[slide.id]}
                   canRespond={i === state.current_slide_index && i === index && status === 'connected' && !pending}
-                  send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer}
+                  send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer} onTelegramLink={openLink}
+                  galleryPhotoIndex={session.photoIndices[slide.id] ?? 0} onPhotoChange={session.changePhoto}
+                  canChangePhoto={viewer || (!controlsDisabled && i === state.current_slide_index)}
                   onSwipe={direction => { if (!controlsDisabled) session.navigate(index + direction); }} />
               </div>;
             })}
@@ -81,11 +110,14 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
       ) : !gestureError && <p className="presentation-loading">{t('presentation.synchronizing')}</p>}
       {viewer && <div className="presentation-viewer-actions">
         {state && <button className="presentation-icon-button" aria-label={t('presentation.follow')}
-          title={t('presentation.follow')} disabled={index === state.current_slide_index}
+          title={t('presentation.follow')} disabled={session.isFollowingPresenter}
           onClick={session.followPresenter}><PresentationIcon name="follow" /></button>}
         <button className="presentation-icon-button" aria-label={t('presentation.close')} title={t('presentation.close')}
           onClick={onClose}><PresentationIcon name="close" /></button>
       </div>}
     </section>
+    {linkDestination && <PresentationLinkScreen key={JSON.stringify(linkDestination)}
+      destination={linkDestination} onClose={closeLink} onNavigate={setLinkDestination} style={safeAreaStyle} />}
+    </>
   );
 }

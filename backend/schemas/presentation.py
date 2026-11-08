@@ -156,8 +156,9 @@ def public_slide(slide: SlideConfig) -> dict:
 
 
 class Command(StrictModel):
-    type: Literal["sync", "ping", "advance", "vote", "words"]
+    type: Literal["sync", "ping", "advance", "gallery_photo", "vote", "words"]
     index: Optional[int] = Field(default=None, ge=0, strict=True)
+    photo_index: Optional[int] = Field(default=None, ge=0, le=29, strict=True)
     slide_id: Optional[Identifier] = None
     option_id: Optional[Identifier] = None
     words: list[Annotated[str, StringConstraints(min_length=1, max_length=32)]] = Field(default_factory=list, max_length=3)

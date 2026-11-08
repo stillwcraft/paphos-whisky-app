@@ -75,6 +75,19 @@ AUTHORED_MANIFEST = {
     ],
 }
 
+GALLERY_MANIFEST = {
+    "id": "gallery_demo",
+    "slides": [
+        {"id": "intro", "type": "static", "html": "<h1>Welcome</h1>"},
+        {"id": "photos", "type": "gallery", "photos": [
+            {"url": f"https://example.test/photo-{i}.jpg"} for i in range(3)
+        ]},
+        {"id": "future_photos", "type": "gallery", "photos": [
+            {"url": "https://example.test/future-photo.jpg"}
+        ]},
+    ],
+}
+
 
 class PresentationTest(unittest.TestCase):
     def setUp(self):
@@ -125,7 +138,7 @@ class PresentationTest(unittest.TestCase):
             self.assertNotIn("AS INTEGER", str(compiled))
             self.assertIsInstance(compiled.binds["presenter_id"].type, BigInteger)
 
-    def test_broadcast_lifecycle_is_private_admin_only_and_preserves_progress(self):
+    def test_broadcast_lifecycle_is_private_admin_only_and_relocks_on_restart(self):
         active_path = "/api/presentations/broadcast"
         broadcast_path = self.path + "/broadcast"
         presenter_headers = {"Authorization": "tma presenter"}
@@ -174,8 +187,65 @@ class PresentationTest(unittest.TestCase):
         self.assertEqual(saved["current_slide_index"], 1)
         self.assertEqual(saved["max_unlocked_slide_index"], 1)
         self.assertEqual(self.client.post(broadcast_path, headers=presenter_headers).status_code, 200)
-        self.assertEqual(self.client.get(self.path, params={"broadcast_only": True},
-                                         headers=viewer_headers).json(), saved)
+        restarted = self.client.get(self.path, params={"broadcast_only": True}, headers=viewer_headers).json()
+        self.assertEqual(restarted["current_slide_index"], 0)
+        self.assertEqual(restarted["max_unlocked_slide_index"], 0)
+        self.assertEqual(list(restarted["slides"]), ["0"])
+        self.assertEqual(restarted["revision"], saved["revision"] + 1)
+
+    def test_broadcast_restart_relocks_connected_and_returning_viewers(self):
+        headers = {"Authorization": "tma presenter"}
+        viewer_headers = {"Authorization": "tma viewer"}
+        broadcast_path = self.path + "/broadcast"
+        self.assertEqual(self.client.post(broadcast_path, headers=headers).status_code, 200)
+        with self.connect("presenter") as presenter, self.connect("viewer") as viewer:
+            self.auth_socket(presenter, "presenter")
+            self.auth_socket(viewer, "viewer")
+            for index in (1, 2, 0):
+                presenter.send_json({"type": "advance", "index": index})
+                presenter.receive_json()
+                saved = viewer.receive_json()
+            self.assertEqual(saved["current_slide_index"], 0)
+            self.assertEqual(saved["max_unlocked_slide_index"], 2)
+            self.assertEqual(self.client.post(broadcast_path, headers=headers).status_code, 200)
+            viewer.send_json({"type": "sync"})
+            self.assertEqual(viewer.receive_json(), saved)
+            self.assertEqual(self.client.delete(broadcast_path, headers=headers).status_code, 204)
+            self.assertEqual(self.client.post(broadcast_path, headers=headers).status_code, 200)
+            presenter.receive_json()
+            reset = viewer.receive_json()
+            self.assertEqual(reset["current_slide_index"], 0)
+            self.assertEqual(reset["max_unlocked_slide_index"], 0)
+            self.assertEqual(reset["revision"], saved["revision"] + 1)
+            self.assertEqual(list(reset["slides"]), ["0"])
+            self.assertEqual(reset["results"], {})
+            presenter.send_json({"type": "advance", "index": 2})
+            self.assertEqual(presenter.receive_json()["type"], "error")
+            viewer.send_json({"type": "advance", "index": 1})
+            self.assertEqual(viewer.receive_json()["type"], "error")
+            self.assertEqual(self.client.get(self.path, headers=viewer_headers).json(), reset)
+        with TestClient(self.make_app()) as restarted:
+            self.assertEqual(restarted.get(self.path, headers=viewer_headers).json(), reset)
+            with restarted.websocket_connect(self.path + "/ws") as viewer:
+                self.assertEqual(self.auth_socket(viewer, "viewer", True), reset)
+
+    def test_failed_broadcast_reset_does_not_publish_or_save_partial_state(self):
+        headers = {"Authorization": "tma presenter"}
+        viewer_headers = {"Authorization": "tma viewer"}
+        with self.connect("presenter") as presenter:
+            self.auth_socket(presenter, "presenter")
+            presenter.send_json({"type": "advance", "index": 1})
+            saved = presenter.receive_json()
+            with patch("sqlalchemy.orm.Session.commit", side_effect=RuntimeError("Commit failed")):
+                client = TestClient(self.app, raise_server_exceptions=False)
+                response = client.post(self.path + "/broadcast", headers=headers)
+            self.assertEqual(response.status_code, 500)
+            self.assertEqual(self.client.get("/api/presentations/broadcast", headers=viewer_headers).json(),
+                             {"room_id": None})
+            state = self.client.get(self.path, headers=headers).json()
+            self.assertEqual(state, saved)
+        with TestClient(self.make_app()) as restarted:
+            self.assertEqual(restarted.get(self.path, headers=headers).json(), saved)
 
     def test_broadcast_switch_restart_ownership_and_deletion(self):
         active_path = "/api/presentations/broadcast"
@@ -434,6 +504,76 @@ class PresentationTest(unittest.TestCase):
                 self.assertEqual(ws.receive_json()["type"], "error")
             ws.send_json({"type": "sync"})
             self.assertEqual(ws.receive_json()["revision"], 0)
+
+    def test_presenter_gallery_focus_is_broadcast_and_persisted(self):
+        response = self.client.post("/api/presentations/rooms", json=GALLERY_MANIFEST,
+                                    headers={"Authorization": "tma presenter"})
+        self.assertEqual(response.status_code, 201, response.text)
+        path = "/api/presentations/rooms/" + response.json()["room_id"]
+        with self.client.websocket_connect(path + "/ws") as presenter, self.client.websocket_connect(path + "/ws") as viewer:
+            self.assertEqual(self.auth_socket(presenter, "presenter")["gallery_photo_indices"], {})
+            self.assertEqual(self.auth_socket(viewer, "viewer")["gallery_photo_indices"], {})
+            presenter.send_json({"type": "advance", "index": 1})
+            presenter.receive_json()
+            state = viewer.receive_json()
+            self.assertEqual(state["gallery_photo_indices"], {"photos": 0})
+            self.assertNotIn("future_photos", str(state))
+            viewer.send_json({"type": "gallery_photo", "slide_id": "photos", "photo_index": 1})
+            self.assertEqual(viewer.receive_json()["type"], "error")
+            for photo_index in (1, 2):
+                presenter.send_json({"type": "gallery_photo", "slide_id": "photos", "photo_index": photo_index})
+                self.assertEqual(presenter.receive_json()["gallery_photo_indices"], {"photos": photo_index})
+                state = viewer.receive_json()
+                self.assertEqual(state["gallery_photo_indices"], {"photos": photo_index})
+                self.assertEqual(state["current_slide_index"], 1)
+                self.assertEqual(state["max_unlocked_slide_index"], 1)
+                self.assertEqual(state["results"], {})
+            self.assertEqual(state["revision"], 3)
+            for index in (2, 1):
+                presenter.send_json({"type": "advance", "index": index})
+                presenter.receive_json()
+                state = viewer.receive_json()
+                self.assertEqual(state["gallery_photo_indices"], {"photos": 2, "future_photos": 0})
+        with TestClient(self.make_app()) as restarted:
+            restored = restarted.get(path, headers={"Authorization": "tma viewer"}).json()
+            self.assertEqual(restored, state)
+            with restarted.websocket_connect(path + "/ws") as viewer:
+                self.assertEqual(self.auth_socket(viewer, "viewer"), state)
+
+    def test_gallery_focus_validates_active_slide_and_photo_bounds(self):
+        response = self.client.post("/api/presentations/rooms", json=GALLERY_MANIFEST,
+                                    headers={"Authorization": "tma presenter"})
+        self.assertEqual(response.status_code, 201, response.text)
+        path = "/api/presentations/rooms/" + response.json()["room_id"]
+        with self.client.websocket_connect(path + "/ws") as presenter:
+            self.auth_socket(presenter, "presenter")
+            presenter.send_json({"type": "gallery_photo", "slide_id": "intro", "photo_index": 0})
+            self.assertEqual(presenter.receive_json()["type"], "error")
+            presenter.send_json({"type": "advance", "index": 1})
+            presenter.receive_json()
+            commands = [
+                {"slide_id": "photos", "photo_index": value} for value in (-1, 3, 30, True, "1", 1.5, None)
+            ] + [{"slide_id": "photos"}, {"slide_id": "intro", "photo_index": 0},
+                 {"slide_id": "future_photos", "photo_index": 0}]
+            for command in commands:
+                presenter.send_json({"type": "gallery_photo", **command})
+                self.assertEqual(presenter.receive_json()["type"], "error")
+            presenter.send_json({"type": "sync"})
+            state = presenter.receive_json()
+            self.assertEqual(state["revision"], 1)
+            self.assertEqual(state["gallery_photo_indices"], {"photos": 0})
+            self.assertEqual(state["results"], {})
+
+    def test_existing_gallery_rooms_default_to_the_first_photo(self):
+        room_id = "f" * 32
+        write_record(room_id, {
+            "manifest": GALLERY_MANIFEST, "presenter_id": PRESENTER_ID, "current_slide_index": 1,
+            "max_unlocked_slide_index": 1, "revision": 0, "responses": {},
+        })
+        state = self.client.get("/api/presentations/rooms/" + room_id,
+                                headers={"Authorization": "tma viewer"}).json()
+        self.assertEqual(state["gallery_photo_indices"], {"photos": 0})
+        self.assertNotIn("future_photos", str(state))
 
     def test_manifest_rejects_duplicate_ids_unsafe_media_and_unknown_fields(self):
         PresentationManifest.model_validate(MANIFEST)

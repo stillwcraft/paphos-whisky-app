@@ -17,6 +17,45 @@
   padding-left: max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
   padding-right: max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px));
 }
+.presentation-link-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  height: var(--tg-viewport-stable-height, 100dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #0d0d0e;
+  color: #f4f4f5;
+}
+.presentation-link-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  flex-shrink: 0;
+  padding: calc(8px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)))
+    max(16px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px)) 8px
+    max(16px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+  background: #0d0d0e;
+}
+.presentation-link-toolbar button {
+  border: 1px solid #c5a059;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #161617;
+}
+.presentation-link-content { padding: 0 24px 24px; }
+.presentation-link-content--full-screen { flex: 1; min-height: 0; padding: 0; }
+.presentation-link-content--full-screen > .presentation-screen {
+  position: relative;
+  inset: auto;
+  z-index: auto;
+  height: 100%;
+}
+.presentation-link-content .fixed.top-10 {
+  top: calc(64px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)));
+}
 .presentation-screen button, .presentation-screen input {
   border: 1px solid var(--presentation-primary, #c5a059);
   border-radius: 8px;

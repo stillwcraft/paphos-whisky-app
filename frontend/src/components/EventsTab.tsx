@@ -715,9 +715,11 @@ function BottomSheet({
 export function EventsTab({
   selectedEventId = null,
   onSelectedEventHandled,
+  onDetailClosed,
 }: {
   selectedEventId?: number | null;
   onSelectedEventHandled?: () => void;
+  onDetailClosed?: () => void;
 }) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
@@ -1100,6 +1102,11 @@ export function EventsTab({
     setSheetEvent(null);
   };
 
+  const closeEventDetails = () => {
+    setExpandedEventId(null);
+    onDetailClosed?.();
+  };
+
   const closeLineupBottle = () => {
     setLineupBottle(null);
     setIsLineupPhotoExpanded(false);
@@ -1218,7 +1225,7 @@ export function EventsTab({
               <button
                 type="button"
                 aria-label="Закрыть карточку события"
-                onClick={() => setExpandedEventId(null)}
+                onClick={closeEventDetails}
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
               >
                 ✕
@@ -1317,7 +1324,7 @@ export function EventsTab({
               <button
                 aria-label="Закрыть карточку события"
                 className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-slate-950/80 text-xl text-white backdrop-blur transition-colors hover:bg-slate-700"
-                onClick={() => setExpandedEventId(null)}
+                onClick={closeEventDetails}
                 type="button"
               >
                 ✕

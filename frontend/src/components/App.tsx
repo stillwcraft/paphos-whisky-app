@@ -12,6 +12,8 @@ import { CyprusMapLoading } from '@/components/CyprusMapLoading.tsx';
 import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
+import { parseMiniAppStartParam } from '@/miniAppDeepLinks';
+import { canViewPresentationTab } from '@/types/presentation';
 
 const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ CyprusEventsMap: Map }) => ({ default: Map }),
@@ -26,7 +28,6 @@ const PresentationBroadcastTab = lazy(() => import('@/components/presentation/Pr
 type TabId = 'events' | 'articles' | 'map' | 'cyprus-map' | 'distilleries' | 'bottles' | 'profile' | 'admin' | 'presentations';
 
 const ADMIN_TELEGRAM_ID = Number(import.meta.env.VITE_ADMIN_TELEGRAM_ID);
-const PRESENTATION_TEST_VIEWER_ID = 741623645;
 
 type Tab = {
   id: TabId;
@@ -113,7 +114,7 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
-  const showPresentationsTab = isAdmin || initDataState?.user?.id === PRESENTATION_TEST_VIEWER_ID;
+  const showPresentationsTab = canViewPresentationTab(initDataState?.user?.id, isAdmin);
   const activeCyprusMap = activeTab === 'cyprus-map';
   const dockedFooter = activeCyprusMap || activeTab === 'profile';
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title')
@@ -170,46 +171,33 @@ export function App() {
       return;
     }
 
-    const presentationMatch = /^presentation_([a-f0-9]{32})$/.exec(startParam);
-    if (presentationMatch) {
-      setPresentationRoom(presentationMatch[1]);
+    const destination = parseMiniAppStartParam(startParam);
+    if (!destination) return;
+    if (destination.kind === 'presentation') {
+      setPresentationRoom(destination.roomId);
       return;
     }
-
-    const eventMatch = /^event_(\d+)$/.exec(startParam);
-    if (eventMatch) {
-      setActiveTab('events');
-      setSelectedEventId(Number(eventMatch[1]));
+    if (destination.kind === 'tab') {
+      setActiveTab(destination.tab);
       return;
     }
-
-    const bottleMatch = /^bottle_(\d+)$/.exec(startParam);
-    if (bottleMatch) {
-      setActiveTab('distilleries');
-      setSelectedBottleId(Number(bottleMatch[1]));
-      return;
-    }
-
-    const distilleryMatch = /^distillery_(\d+)$/.exec(startParam);
-    if (distilleryMatch) {
-      setActiveTab('distilleries');
-      setSelectedDistilleryId(Number(distilleryMatch[1]));
-      return;
-    }
-
-    const matchingTab = [...tabs, articlesTab, cyprusMapTab, presentationsTab].find((tab) => tab.id === startParam);
-    if (matchingTab) {
-      setActiveTab(matchingTab.id);
-    }
-  }, []);
-
-  useEffect(() => {
-    const startParam = retrieveLaunchParams().tgWebAppStartParam
-      ?? window.Telegram?.WebApp?.initDataUnsafe?.start_param;
-    const match = /^social_event_(\d+)$/.exec(startParam ?? '');
-    if (match) {
-      setSelectedSocialEventId(Number(match[1]));
-      setActiveTab('cyprus-map');
+    switch (destination.entity) {
+      case 'event':
+        setActiveTab('events');
+        setSelectedEventId(destination.id);
+        break;
+      case 'bottle':
+        setActiveTab('distilleries');
+        setSelectedBottleId(destination.id);
+        break;
+      case 'distillery':
+        setActiveTab('distilleries');
+        setSelectedDistilleryId(destination.id);
+        break;
+      case 'social_event':
+        setActiveTab('cyprus-map');
+        setSelectedSocialEventId(destination.id);
+        break;
     }
   }, []);
 

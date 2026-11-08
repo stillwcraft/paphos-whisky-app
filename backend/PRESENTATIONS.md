@@ -64,16 +64,25 @@ It returns only the active room ID, not the private saved catalog or future cont
 `{"room_id": "<active ID or null>"}`. Admin-only
 `POST /api/presentations/rooms/{id}/broadcast` starts/replaces the broadcast;
 `DELETE /api/presentations/rooms/{id}/broadcast` stops it without deleting the
-manifest, progression or responses. Resuming a saved room resumes its saved state.
+manifest, progression or responses. Starting a stopped room or replacing the
+broadcast starts from slide zero and re-locks every later slide for all viewers.
+The unlock reset and active broadcast are committed in one transaction, with a
+higher room revision, before notifying connected clients. Starting the already
+active room is idempotent and does not reset its progress. Reconnecting to a
+running broadcast (including after a server restart) retains that run's progress.
+Stored responses and gallery selections are preserved; future results and
+gallery indices remain hidden until the presenter activates those slides again.
 An attempt to stop a different, no-longer-active room returns 409.
 
 Tab sessions use HTTP `?broadcast_only=true` and include `"broadcast_only": true`
 in their first WS auth frame. These subscriptions are accepted only for the
 currently active room. On stop/replacement/deletion they receive
 `{"type":"broadcast_changed"}` and close with code 4005, clearing slide/media
-content and rediscovering the broadcast. Regular invitation-link sessions retain
-their existing behavior and can still resume a saved room independently of
-broadcast status.
+content and rediscovering the broadcast. Regular invitation-link sessions can
+resume a saved room independently of broadcast status, but also receive the
+re-locking snapshot when its broadcast starts again. Clients clear their old
+unlocked prefix and return to slide zero even if the presenter was already on
+slide zero when the previous broadcast ended.
 
 ### Uploading through the API
 
@@ -147,8 +156,19 @@ Use this only for reviewed author HTML: scripts run inside an opaque-origin
 sandbox without access to the app, parent DOM, Telegram SDK, top navigation,
 forms, fetch/WebSocket connections or external scripts. HTTPS images, stylesheets
 and fonts are allowed; links using `target="_blank"` may open external pages
-outside the sandbox. HTTPS `t.me` links are intercepted and opened by the host's
-Telegram SDK, preserving bot/Mini App deep links. The host accepts only validated
+outside the sandbox. HTTPS `t.me` links are intercepted by the host.
+Links to `CyprusWhiskyClubBot/NoMoreDram` (or the bot's main Mini App link with
+`startapp`) open the existing in-app destination above the presentation, without
+calling the Telegram link-opening SDK or launching another Mini App instance.
+The presentation session and embedded document remain mounted; closing an entity
+card, pressing **Return to presentation**, or using Telegram Back restores the
+presentation. Live presenter updates and broadcast lifecycle still apply while
+the destination is open. Supported start parameters use the same parser as
+initial app launches: bottle, distillery, event, social event, presentation room
+and public tabs. Existing account gates still apply to restricted tabs; invalid
+or unsupported own-app parameters display an error instead of opening a new
+instance. Other Telegram links continue through the host's Telegram SDK.
+The host accepts only validated
 link/swipe messages from that iframe's own window; it grants no direct SDK access.
 If Telegram link opening is unavailable or fails, the slide displays an error.
 The embedded document controls its own language switcher
@@ -176,6 +196,7 @@ personalized snapshot:
   "revision": 0,
   "current_slide_index": 0,
   "max_unlocked_slide_index": 0,
+  "gallery_photo_indices": {},
   "slide_count": 6,
   "title": null,
   "theme": null,
@@ -189,6 +210,7 @@ WS endpoint: `/api/presentations/rooms/{id}/ws`.
 ```json
 {"type":"auth","init_data":"<raw Telegram initData>"}
 {"type":"advance","index":1}
+{"type":"gallery_photo","slide_id":"photos","photo_index":2}
 {"type":"vote","slide_id":"vote","option_id":"a"}
 {"type":"words","slide_id":"aromas","words":["oak","fruit"]}
 {"type":"sync"}
@@ -196,11 +218,30 @@ WS endpoint: `/api/presentations/rooms/{id}/ws`.
 ```
 
 Only the stored presenter can advance. Forward activation is sequential, one
-slide at a time; returning to a previous slide never decreases the unlock bound.
+slide at a time; returning to a previous slide never decreases the unlock bound
+within a run. Starting a new broadcast resets that bound to zero.
 Slide zero is activated when the room is created. Viewer navigation is local
 within the unlocked prefix; every presenter progression and every reconnect
 jumps viewers back to the presenter's current slide. Viewers cannot request
 future slide data, and server mutations do not trust client role or indices.
+The viewer's locked-slide notice disappears after two seconds; another attempt
+restarts that timeout. Transport/authentication errors are not auto-dismissed.
+
+Gallery snapshots include `gallery_photo_indices`, keyed by activated gallery
+slide ID with zero-based photo indices. Only the room presenter may send
+`gallery_photo`, only for the currently active gallery and an in-range photo.
+The selection is saved before broadcasting and survives reconnects, slide
+changes and server restarts. Existing rooms default to photo zero without a
+database migration; future gallery IDs and selections remain private.
+
+Viewers browse gallery photos independently, including while disconnected.
+Presenter photo updates do not interrupt that browsing. **Follow presenter**
+returns to both the presenter's slide and its latest selected photo, even when
+the viewer is already on that slide. The button is enabled whenever either the
+slide or photo differs. Following is a one-time focus action, not a persistent
+photo-follow mode; subsequent viewer swipes remain independent. A presenter slide
+change or reconnect also restores the current photo with the slide.
+Deploy the updated backend and frontend together; no manifest re-upload is needed.
 
 Only the currently active poll/cloud accepts submissions, once per authenticated
 user per slide, including across reconnects and restarts. Results contain
@@ -310,7 +351,7 @@ app's existing tab controller, close presentation mode and restore Telegram gest
 
 ```sh
 cd backend && venv/bin/python -m unittest test_presentation -v
-cd frontend && npx tsc --noEmit
+cd frontend && npx tsc --noEmit && node --test tests/miniAppDeepLinks.test.mjs
 ```
 
 Device acceptance still requires Telegram iOS/Android: vertical-close suppression,

@@ -11,9 +11,10 @@ import { presentationThemeStyle } from './presentationTheme';
 import { PresentationIcon } from './PresentationIcon';
 import { htmlBridgeMessageSchema, htmlBridgeScript } from './htmlBridge';
 
-function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide = false, interactiveHtml = false, onSwipe }: {
+function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide = false, interactiveHtml = false, onSwipe, onTelegramLink }: {
   html: string; css?: string; title: string; theme?: PresentationTheme | null; viewer?: boolean; staticSlide?: boolean;
   interactiveHtml?: boolean; onSwipe?: (direction: -1 | 1) => void;
+  onTelegramLink?: (url: string) => boolean;
 }) {
   const { t } = useTranslation();
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -30,8 +31,10 @@ function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide
         return;
       }
       try {
-        if (!openTelegramLink.isAvailable()) throw new Error(t('presentation.telegram_link_unavailable'));
-        openTelegramLink(message.data.url);
+        if (!onTelegramLink?.(message.data.url)) {
+          if (!openTelegramLink.isAvailable()) throw new Error(t('presentation.telegram_link_unavailable'));
+          openTelegramLink(message.data.url);
+        }
         setLinkError(null);
       } catch (cause: unknown) {
         setLinkError(cause instanceof Error ? cause.message : t('presentation.link_error'));
@@ -39,7 +42,7 @@ function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide
     };
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
-  }, [html, interactiveHtml, onSwipe, t]);
+  }, [html, interactiveHtml, onSwipe, onTelegramLink, t]);
   const srcDoc = useMemo(() => {
     const policy = `default-src 'none'; img-src https:; style-src 'unsafe-inline'${interactiveHtml ? ' https:' : ''}; font-src https:; base-uri 'none'; form-action 'none'${interactiveHtml ? "; script-src 'unsafe-inline'" : ''}`;
     const variables = Object.entries(presentationThemeStyle(theme)).map(([key, value]) => `${key}:${value}`).join(';');
@@ -163,11 +166,17 @@ function VideoSlide({ slide, viewer }: { slide: VideoSlideConfig; viewer: boolea
   );
 }
 
-function GallerySlide({ slide, language, viewer }: { slide: GallerySlideConfig; language: string; viewer: boolean }) {
+function GallerySlide({ slide, language, viewer, photoIndex, canChangePhoto, onPhotoChange }: {
+  slide: GallerySlideConfig; language: string; viewer: boolean; photoIndex: number;
+  canChangePhoto: boolean; onPhotoChange: (index: number) => void;
+}) {
   const { t } = useTranslation();
-  const [photoIndex, setPhotoIndex] = useState(0);
   const photo = slide.photos[photoIndex];
-  const move = (direction: -1 | 1) => setPhotoIndex(i => Math.max(0, Math.min(slide.photos.length - 1, i + direction)));
+  const move = (direction: -1 | 1) => {
+    if (!canChangePhoto) return;
+    const next = Math.max(0, Math.min(slide.photos.length - 1, photoIndex + direction));
+    if (next !== photoIndex) onPhotoChange(next);
+  };
   return (
     <SwipeController onVertical={move} className="presentation-gallery">
       <PhotoContent photo={photo} language={language} />
@@ -176,9 +185,9 @@ function GallerySlide({ slide, language, viewer }: { slide: GallerySlideConfig; 
         {slide.photos.map((item, i) => <span key={`${item.url}-${i}`} className="presentation-dot"
           aria-hidden="true" data-active={i === photoIndex} />)}
       </div> : <div className="presentation-controls">
-        <button disabled={photoIndex === 0} onClick={() => move(-1)}>{t('presentation.previous_photo')}</button>
+        <button disabled={!canChangePhoto || photoIndex === 0} onClick={() => move(-1)}>{t('presentation.previous_photo')}</button>
         <span>{photoIndex + 1} / {slide.photos.length}</span>
-        <button disabled={photoIndex === slide.photos.length - 1} onClick={() => move(1)}>{t('presentation.next_photo')}</button>
+        <button disabled={!canChangePhoto || photoIndex === slide.photos.length - 1} onClick={() => move(1)}>{t('presentation.next_photo')}</button>
       </div>}
     </SwipeController>
   );
@@ -269,9 +278,14 @@ interface Props {
   theme?: PresentationTheme | null;
   viewer?: boolean;
   onSwipe?: (direction: -1 | 1) => void;
+  onTelegramLink?: (url: string) => boolean;
+  galleryPhotoIndex?: number;
+  canChangePhoto?: boolean;
+  onPhotoChange?: (slideId: string, photoIndex: number) => void;
 }
 
-export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute, theme, viewer = false, onSwipe }: Props) {
+export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute, theme, viewer = false, onSwipe,
+  galleryPhotoIndex = 0, canChangePhoto = false, onPhotoChange, onTelegramLink }: Props) {
   const title = localize(slide.title, language);
   const subtitle = localize(slide.subtitle, language);
   let content;
@@ -281,13 +295,15 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
         {slide.html && (!slide.interactiveHtml || active)
           && <HtmlContent html={typeof slide.html === 'string' ? slide.html : localize(slide.html, language)}
             css={slide.css} title={title} theme={theme} viewer={viewer} staticSlide
-            interactiveHtml={slide.interactiveHtml} onSwipe={onSwipe} />}</>;
+            interactiveHtml={slide.interactiveHtml} onSwipe={onSwipe} onTelegramLink={onTelegramLink} />}</>;
       break;
     case 'video':
       content = active ? <VideoSlide slide={slide} viewer={viewer} /> : null;
       break;
     case 'gallery':
-      content = <GallerySlide slide={slide} language={language} viewer={viewer} />;
+      content = <GallerySlide slide={slide} language={language} viewer={viewer} photoIndex={galleryPhotoIndex}
+        canChangePhoto={active && canChangePhoto && Boolean(onPhotoChange)}
+        onPhotoChange={photoIndex => onPhotoChange?.(slide.id, photoIndex)} />;
       break;
     case 'interactive_tabs':
       content = <TabsSlide slide={slide} language={language} onRoute={onRoute} theme={theme} viewer={viewer} />;
