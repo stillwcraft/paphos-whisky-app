@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
+import { createServer as createHttpServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 
 const server = await createServer({
   root: fileURLToPath(new URL('../', import.meta.url)),
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: { server: createHttpServer() } },
   appType: 'custom',
 });
 after(() => server.close());

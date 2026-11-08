@@ -1017,7 +1017,7 @@ export function CyprusEventsMap({
               }
             }
             await reloadSocial();
-            setActiveLayer(draft.event_type === 'global' ? socialEventMapLayer(draft) : DEFAULT_CYPRUS_MAP_LAYER);
+            setActiveLayer(socialEventMapLayer(draft));
             setPanel(null);
           })}
           onUpdate={(draft: SocialEventUpdateDraft, photo?: File) => void run(async () => {

@@ -97,11 +97,15 @@ shows actual streets. Keep the current provider's attribution visible.
 ### Map marker layers
 
 The Layers button above the location button selects one marker layer at a
-time; it does not change the basemap. The default Global events layer preserves
-the existing catalog and visible social markers (including regular meetups),
-clustering, expiry rules, and global-event date slider. Apartment for sale is
+time; it does not change the basemap. The default Global events layer shows
+catalog events and administrative social events with `event_type="global"` and
+`map_layer="events"`. User meetups is the second layer: it shows only regular
+user-created social events, without catalog markers or the global-event date
+slider. Both layers retain clustering, expiry rules, age checks, and server-side
+visibility restrictions. Social-event links, creation, and editing select the
+corresponding layer automatically. Apartment for sale is
 a separate layer: it shows only apartment listings, without catalog events or
-the event date slider. Both layers use the same marker clustering and cards;
+the event date slider. All layers use the same marker clustering and cards;
 apartment cards reuse the swipeable, expandable gallery of 1-5 images.
 Apartment descriptions also support Markdown tables (GitHub-flavored Markdown);
 ordinary event descriptions keep their existing plain-text/link rendering.
@@ -111,6 +115,9 @@ The Apartment for sale layer is currently disabled for all users by
 `APARTMENT_LAYER_ENABLED` in `src/components/cyprusMapLayers.ts`; its listings
 remain stored, but the layer selector, map markers, shared listing links, and
 creation-form option stay hidden until the flag is re-enabled.
+
+Run layer regression checks from `frontend` with
+`node --test tests/cyprusMapLayers.test.mjs`.
 
 Before deploying, manually run
 `backend/migrations/029_social_event_map_layers.sql` against PostgreSQL, then
