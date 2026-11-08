@@ -70,6 +70,7 @@ AUTHORED_MANIFEST = {
         {"id": "film", "type": "video", "videoUrl": "https://example.test/future.mp4",
          "loop": True, "autoPlayMuted": True, "animations": {"entry": "fade-up"}},
         {"id": "html", "type": "static", "contentHtml": {"ru": "<h1>Привет</h1>", "en": "<h1>Hello</h1>"},
+         "interactiveHtml": True,
          "animations": {"entry": "zoom-in"}},
     ],
 }
@@ -285,6 +286,8 @@ class PresentationTest(unittest.TestCase):
         self.assertTrue(data["slides"][3]["muted"])
         self.assertTrue(data["slides"][3]["autoplay"])
         self.assertEqual(data["slides"][4]["html"]["en"], "<h1>Hello</h1>")
+        self.assertFalse(data["slides"][0]["interactiveHtml"])
+        self.assertTrue(public_slide(manifest.slides[4])["interactiveHtml"])
         self.assertEqual([slide["animations"]["entry"] for slide in data["slides"]],
                          ["fade-up", "slide-left", "zoom-in", "fade-up", "zoom-in"])
         self.assertNotIn("answers", public_slide(manifest.slides[2]))
@@ -314,8 +317,17 @@ class PresentationTest(unittest.TestCase):
                 if index < 3:
                     self.assertNotIn("future.mp4", str(state))
             self.assertEqual(state["slides"]["4"]["html"]["ru"], "<h1>Привет</h1>")
+            self.assertTrue(state["slides"]["4"]["interactiveHtml"])
             self.assertTrue(state["slides"]["3"]["loop"])
         self.assertEqual(self.client.get(path, headers={"Authorization": "tma viewer"}).json(), state)
+
+    def test_interactive_html_requires_an_explicit_boolean(self):
+        for value in ("true", 1, None):
+            with self.subTest(value=value):
+                data = deepcopy(AUTHORED_MANIFEST)
+                data["slides"][4]["interactiveHtml"] = value
+                with self.assertRaises(ValidationError):
+                    PresentationManifest.model_validate(data)
 
     def test_authoring_aliases_do_not_bypass_url_css_or_behavior_validation(self):
         cases = [

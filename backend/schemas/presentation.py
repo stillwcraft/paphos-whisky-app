@@ -57,6 +57,7 @@ class PresentationTheme(StrictModel):
 class StaticSlideConfig(BaseSlideConfig):
     type: Literal["static"]
     html: HtmlContent = Field(default="", validation_alias=AliasChoices("html", "contentHtml"))
+    interactiveHtml: bool = Field(default=False, strict=True)
     css: str = Field(default="", max_length=10000)
     image: Optional[Photo] = Field(default=None, validation_alias=AliasChoices("image", "imageUrl"))
     normalize_image = field_validator("image", mode="before")(media_reference)
@@ -141,7 +142,7 @@ class PresentationManifest(StrictModel):
 
 
 PUBLIC_FIELDS = {
-    "static": {"html", "css", "image"},
+    "static": {"html", "css", "image", "interactiveHtml"},
     "video": {"video", "autoplay", "muted", "loop"},
     "gallery": {"photos"},
     "interactive_tabs": {"tabs"},

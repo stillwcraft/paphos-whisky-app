@@ -141,6 +141,18 @@ description and falls back to the caption when absent. Static and tab HTML accep
 localized objects, using the same language fallback as titles. Videos accept
 `loop` (default false) while always starting muted and inline.
 
+Static slides may explicitly set `"interactiveHtml": true` (default false) to
+embed a complete HTML document, including its head, styles and inline scripts.
+Use this only for reviewed author HTML: scripts run inside an opaque-origin
+sandbox without access to the app, parent DOM, Telegram SDK, top navigation,
+forms, fetch/WebSocket connections or external scripts. HTTPS images, stylesheets
+and fonts are allowed; links using `target="_blank"` may open external pages
+outside the sandbox. The embedded document controls its own language switcher
+and scroll animations. Interactive HTML mounts only while its slide is active,
+so entering the slide starts its scripts and leaving it releases the document.
+Deploy the updated backend and frontend before uploading manifests with this
+field; uploading again creates a new room rather than changing an existing one.
+
 Entry animations include `fade`, `rise`, `none`, `fade-up`, `slide-left`, and
 `zoom-in`, with reduced-motion support. Poll settings explicitly support
 `allowMultiple: false` and `showResultsLive: true`, matching the current single
@@ -249,7 +261,10 @@ swipe does not also open the video panel. Viewer static HTML slides are
 display-only, with a transparent full-area swipe surface over the iframe instead
 of narrow edge rails; touches do not interact with or scroll the embedded HTML.
 HTML in interactive tabs retains native scrolling and transparent swipe gutters.
-Scripts and parent access remain disabled in both cases.
+Static slides with `interactiveHtml: true` also retain native interaction and
+scrolling, reserving side gutters outside the document for swipes instead of
+covering its links and controls with the full-area overlay. Scripts remain
+disabled unless this static-slide flag is enabled; parent access is always disabled.
 
 On minimize the client closes its socket. On visibility restore or network
 recovery it reconnects, authenticates and fetches an HTTP snapshot in parallel.
@@ -273,12 +288,13 @@ and 24px edge gutters reduce gesture conflicts. Native iOS system edge gestures
 cannot be guaranteed cancellable; gestures intentionally do not begin there.
 Presenter buttons provide non-gesture navigation and accessibility fallbacks.
 
-Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe.
-Arbitrary scripts and parent/app navigation are deliberately unsupported;
-animations use CSS or the allowlisted entry names documented above.
+Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe
+by default. Reviewed static HTML can opt into inline scripts with
+`interactiveHtml: true`, as documented above. Parent/app navigation remains
+unsupported; default slides use CSS or the allowlisted entry animations.
 Iframe gestures do not bubble into React: viewer static slides use a full-area
-overlay to route touches to the stage, while interactive tab HTML uses surrounding
-swipe gutters. Presentation controls remain above the static overlay; presenter
+overlay to route touches to the stage, while interactive static and tab HTML use
+surrounding swipe gutters. Presentation controls remain above the static overlay; presenter
 slide navigation buttons remain available. Typed tab routes dispatch into the
 app's existing tab controller, close presentation mode and restore Telegram gestures.
 

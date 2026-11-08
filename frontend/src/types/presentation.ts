@@ -35,6 +35,7 @@ export type PresentationRoute = z.infer<typeof presentationRouteSchema>;
 export const slideSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('static'), html: htmlContent.default(''),
+    interactiveHtml: z.boolean().default(false),
     css: z.string().default(''), image: photo.nullable().default(null),
   }),
   z.object({
