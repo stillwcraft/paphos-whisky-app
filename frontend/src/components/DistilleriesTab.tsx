@@ -89,10 +89,12 @@ function CatalogImage({
   alt,
   className,
   source,
+  loading = 'eager',
 }: {
   alt: string;
   className: string;
   source: string | null;
+  loading?: 'eager' | 'lazy';
 }) {
   if (!source) {
     return (
@@ -106,7 +108,7 @@ function CatalogImage({
     );
   }
 
-  return <img alt={alt} className={className} src={source} />;
+  return <img alt={alt} className={className} decoding="async" loading={loading} src={source} />;
 }
 
 async function errorMessage(response: Response) {
@@ -460,7 +462,7 @@ export function DistilleriesTab({
           onClick={onNavigateToMap}
           type="button"
         >
-          <img alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover" src="/assets/nav/Globe.webp" />
+          <img alt="" aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full scale-125 object-cover" decoding="async" src="/assets/nav/Globe.webp" />
         </button>
       </div>
       {(feedback || catalogError) && (
@@ -478,7 +480,7 @@ export function DistilleriesTab({
           {filteredDistilleries.length === 0 && !hasMore && !isLoadingMore && !catalogError && (
             <p className="text-center text-sm text-slate-400">{t('distillery_search.no_results')}</p>
           )}
-          {filteredDistilleries.map((distillery) => {
+          {filteredDistilleries.map((distillery, index) => {
             const isOpen = openDistilleryId === distillery.id;
             const panelId = `distillery-${distillery.id}-bottles`;
 
@@ -488,6 +490,7 @@ export function DistilleriesTab({
                   <CatalogImage
                     alt={distillery.name}
                     className="h-full w-full object-cover"
+                    loading={index === 0 ? 'eager' : 'lazy'}
                     source={distillery.image_url}
                   />
                   <button
@@ -548,11 +551,12 @@ export function DistilleriesTab({
                               }}
                               type="button"
                             >
-                              {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-2 z-0 h-[90%] w-auto object-contain opacity-35" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
+                              {bottle.background_url && <img alt="" className="pointer-events-none absolute bottom-1 right-2 z-0 h-[90%] w-auto object-contain opacity-35" decoding="async" loading="lazy" src={bottle.background_url} style={{ maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)', WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)' }} />}
                               <span className="relative z-10 flex items-center gap-3 px-1 py-3">
                                 <CatalogImage
                                   alt=""
                                   className="h-14 w-12 shrink-0 rounded-lg object-cover"
+                                  loading="lazy"
                                   source={bottle.image_url}
                                 />
                                 <span className="min-w-0 flex-1">
@@ -626,7 +630,7 @@ export function DistilleriesTab({
             >
               {selectedBottle.image_url ? (
                 <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6">
-                  <img alt={selectedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" src={selectedBottle.image_url} />
+                  <img alt={selectedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" decoding="async" loading="eager" src={selectedBottle.image_url} />
                 </div>
               ) : (
                 <div className="flex h-full items-center justify-center rounded-full bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#C5A059]/20 via-[#16161A]/50 to-transparent py-6"><CatalogImage alt={selectedBottle.name} className="h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.8)]" source={null} /></div>

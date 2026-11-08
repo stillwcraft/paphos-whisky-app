@@ -42,6 +42,14 @@ npm run {script}
 # Example: npm run build
 ```
 
+## Catalog image loading
+
+The distillery catalog loads its first result and detail-card hero images eagerly.
+Other catalog photos, bottle thumbnails, and decorative bottle images use native
+`loading="lazy"`; the browser may fetch them shortly before they enter the viewport.
+Catalog images use asynchronous decoding, and existing fixed-size containers
+reserve their layout space while images load.
+
 ## Create Bot and Mini App
 
 Before you start, make sure you have already created a Telegram Bot. Here is
