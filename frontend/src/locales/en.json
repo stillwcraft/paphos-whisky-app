@@ -45,6 +45,8 @@
     "photo_progress": "Photo {{current}} of {{total}}",
     "video_error": "Unable to load this video.",
     "play_error": "Video playback failed.",
+    "link_error": "Unable to open this link.",
+    "telegram_link_unavailable": "Open the presentation inside Telegram to follow this link.",
     "open_tab": "Open {{label}}",
     "word_cloud": "Live word cloud",
     "words_label": "Words (comma separated)",

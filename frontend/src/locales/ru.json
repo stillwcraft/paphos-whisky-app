@@ -45,6 +45,8 @@
     "photo_progress": "Фото {{current}} из {{total}}",
     "video_error": "Не удалось загрузить видео.",
     "play_error": "Не удалось воспроизвести видео.",
+    "link_error": "Не удалось открыть ссылку.",
+    "telegram_link_unavailable": "Откройте презентацию внутри Telegram, чтобы перейти по этой ссылке.",
     "open_tab": "Открыть: {{label}}",
     "word_cloud": "Облако слов",
     "words_label": "Слова (через запятую)",

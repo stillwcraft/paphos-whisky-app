@@ -147,7 +147,11 @@ Use this only for reviewed author HTML: scripts run inside an opaque-origin
 sandbox without access to the app, parent DOM, Telegram SDK, top navigation,
 forms, fetch/WebSocket connections or external scripts. HTTPS images, stylesheets
 and fonts are allowed; links using `target="_blank"` may open external pages
-outside the sandbox. The embedded document controls its own language switcher
+outside the sandbox. HTTPS `t.me` links are intercepted and opened by the host's
+Telegram SDK, preserving bot/Mini App deep links. The host accepts only validated
+link/swipe messages from that iframe's own window; it grants no direct SDK access.
+If Telegram link opening is unavailable or fails, the slide displays an error.
+The embedded document controls its own language switcher
 and scroll animations. Interactive HTML mounts only while its slide is active,
 so entering the slide starts its scripts and leaving it releases the document.
 Deploy the updated backend and frontend before uploading manifests with this
@@ -262,8 +266,10 @@ display-only, with a transparent full-area swipe surface over the iframe instead
 of narrow edge rails; touches do not interact with or scroll the embedded HTML.
 HTML in interactive tabs retains native scrolling and transparent swipe gutters.
 Static slides with `interactiveHtml: true` also retain native interaction and
-scrolling, reserving side gutters outside the document for swipes instead of
-covering its links and controls with the full-area overlay. Scripts remain
+scrolling, extending to both screen edges without side padding or swipe overlays.
+A sandboxed bridge forwards horizontal swipes to the stage; vertical scrolling,
+language buttons and links remain native. Swiping across a link suppresses the
+drag-generated click instead of also opening it. Scripts remain
 disabled unless this static-slide flag is enabled; parent access is always disabled.
 
 On minimize the client closes its socket. On visibility restore or network
@@ -293,8 +299,10 @@ by default. Reviewed static HTML can opt into inline scripts with
 `interactiveHtml: true`, as documented above. Parent/app navigation remains
 unsupported; default slides use CSS or the allowlisted entry animations.
 Iframe gestures do not bubble into React: viewer static slides use a full-area
-overlay to route touches to the stage, while interactive static and tab HTML use
-surrounding swipe gutters. Presentation controls remain above the static overlay; presenter
+overlay to route touches to the stage, while tab HTML uses surrounding swipe
+gutters. Interactive static HTML uses source-checked bridge messages instead,
+with the same swipe thresholds, multi-touch cancellation and locked-slide bounds.
+Presentation controls remain above the static overlay; presenter
 slide navigation buttons remain available. Typed tab routes dispatch into the
 app's existing tab controller, close presentation mode and restore Telegram gestures.
 

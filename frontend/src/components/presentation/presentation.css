@@ -102,10 +102,17 @@
 .presentation-screen--viewer .presentation-gallery { position: relative; height: 100%; }
 .presentation-screen--viewer .presentation-gallery figure { height: 100%; }
 .presentation-screen--viewer .presentation-html-frame { position: relative; flex: 1; min-height: 0; }
-.presentation-screen--viewer .presentation-html-frame--interactive {
-  box-sizing: border-box;
-  padding-left: calc(40px + max(24px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px)));
-  padding-right: calc(40px + max(24px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px)));
+.presentation-html-frame { position: relative; }
+.presentation-html-error {
+  position: absolute;
+  z-index: 6;
+  top: 16px;
+  left: 24px;
+  right: 24px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #000d;
+  color: #fff;
 }
 .presentation-screen--viewer .presentation-html { height: 100%; }
 .presentation-screen--viewer [role="tabpanel"] { display: flex; flex: 1; flex-direction: column; min-height: 0; }

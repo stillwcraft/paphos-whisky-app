@@ -45,6 +45,8 @@
     "photo_progress": "Фото {{current}} із {{total}}",
     "video_error": "Не вдалося завантажити відео.",
     "play_error": "Не вдалося відтворити відео.",
+    "link_error": "Не вдалося відкрити посилання.",
+    "telegram_link_unavailable": "Відкрийте презентацію всередині Telegram, щоб перейти за цим посиланням.",
     "open_tab": "Відкрити: {{label}}",
     "word_cloud": "Хмара слів",
     "words_label": "Слова (через кому)",

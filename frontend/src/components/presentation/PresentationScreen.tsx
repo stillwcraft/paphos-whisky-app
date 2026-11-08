@@ -60,7 +60,8 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
                 <SlideFactory slide={slide} active={i === index} language={i18n.language}
                   result={state.results[slide.id]}
                   canRespond={i === state.current_slide_index && i === index && status === 'connected' && !pending}
-                  send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer} />
+                  send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer}
+                  onSwipe={direction => { if (!controlsDisabled) session.navigate(index + direction); }} />
               </div>;
             })}
           </SwipeController>

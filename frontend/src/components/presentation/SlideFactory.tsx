@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { openTelegramLink } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import {
   localize, type GallerySlideConfig, type InteractiveTabsSlideConfig, type PresentationCommand,
@@ -8,16 +9,41 @@ import {
 import { SwipeController } from './SwipeController';
 import { presentationThemeStyle } from './presentationTheme';
 import { PresentationIcon } from './PresentationIcon';
+import { htmlBridgeMessageSchema, htmlBridgeScript } from './htmlBridge';
 
-function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide = false, interactiveHtml = false }: {
+function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide = false, interactiveHtml = false, onSwipe }: {
   html: string; css?: string; title: string; theme?: PresentationTheme | null; viewer?: boolean; staticSlide?: boolean;
-  interactiveHtml?: boolean;
+  interactiveHtml?: boolean; onSwipe?: (direction: -1 | 1) => void;
 }) {
   const { t } = useTranslation();
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  useEffect(() => {
+    setLinkError(null);
+    if (!interactiveHtml) return;
+    const receive = (event: MessageEvent<unknown>) => {
+      if (!frameRef.current?.contentWindow || event.source !== frameRef.current.contentWindow) return;
+      const message = htmlBridgeMessageSchema.safeParse(event.data);
+      if (!message.success) return;
+      if (message.data.action === 'swipe') {
+        onSwipe?.(message.data.direction);
+        return;
+      }
+      try {
+        if (!openTelegramLink.isAvailable()) throw new Error(t('presentation.telegram_link_unavailable'));
+        openTelegramLink(message.data.url);
+        setLinkError(null);
+      } catch (cause: unknown) {
+        setLinkError(cause instanceof Error ? cause.message : t('presentation.link_error'));
+      }
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, [html, interactiveHtml, onSwipe, t]);
   const srcDoc = useMemo(() => {
     const policy = `default-src 'none'; img-src https:; style-src 'unsafe-inline'${interactiveHtml ? ' https:' : ''}; font-src https:; base-uri 'none'; form-action 'none'${interactiveHtml ? "; script-src 'unsafe-inline'" : ''}`;
     const variables = Object.entries(presentationThemeStyle(theme)).map(([key, value]) => `${key}:${value}`).join(';');
-    const styles = `:root{${variables}}body{margin:0;padding:16px;background:var(--presentation-background);color:var(--presentation-text);font-family:var(--presentation-font)}a{color:var(--presentation-primary)}img{max-width:100%}${css}`;
+    const styles = `:root{${variables}}${interactiveHtml ? 'html{touch-action:pan-y;overscroll-behavior-x:none}' : ''}body{margin:0;padding:${interactiveHtml ? 0 : 16}px;background:var(--presentation-background);color:var(--presentation-text);font-family:var(--presentation-font)}a{color:var(--presentation-primary)}img{max-width:100%}${css}`;
     if (!interactiveHtml) {
       return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="${policy}"><style>${styles}</style></head><body>${html}</body></html>`;
     }
@@ -29,17 +55,23 @@ function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide
     const style = document.createElement('style');
     style.textContent = styles;
     document.head.prepend(csp, style);
+    const bridge = document.createElement('script');
+    bridge.textContent = htmlBridgeScript(window.location.origin);
+    document.body.prepend(bridge);
     return `<!doctype html>${document.documentElement.outerHTML}`;
   }, [html, css, theme, interactiveHtml]);
   // Never allow same-origin, parent navigation, forms, or access to the app/SDK.
-  const frame = <iframe title={title || t('presentation.content')}
+  const frame = <iframe ref={frameRef} title={title || t('presentation.content')}
     sandbox={interactiveHtml ? 'allow-scripts allow-popups allow-popups-to-escape-sandbox' : ''}
     referrerPolicy="no-referrer" className="presentation-html" srcDoc={srcDoc} />;
-  return viewer ? <div className={`presentation-html-frame${interactiveHtml ? ' presentation-html-frame--interactive' : ''}`}>{frame}
-    {staticSlide && !interactiveHtml ? <div className="presentation-html-swipe-surface" aria-hidden="true" /> : <>
-      <div className="presentation-html-swipe-rail presentation-html-swipe-rail--left" aria-hidden="true" />
-      <div className="presentation-html-swipe-rail presentation-html-swipe-rail--right" aria-hidden="true" />
-    </>}
+  return viewer || interactiveHtml ? <div className="presentation-html-frame">{frame}
+    {linkError && <p className="presentation-html-error" role="alert">{linkError}</p>}
+    {viewer && !interactiveHtml && (staticSlide
+      ? <div className="presentation-html-swipe-surface" aria-hidden="true" />
+      : <>
+        <div className="presentation-html-swipe-rail presentation-html-swipe-rail--left" aria-hidden="true" />
+        <div className="presentation-html-swipe-rail presentation-html-swipe-rail--right" aria-hidden="true" />
+      </>)}
   </div> : frame;
 }
 
@@ -236,9 +268,10 @@ interface Props {
   onRoute: (route: PresentationRoute) => void;
   theme?: PresentationTheme | null;
   viewer?: boolean;
+  onSwipe?: (direction: -1 | 1) => void;
 }
 
-export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute, theme, viewer = false }: Props) {
+export function SlideFactory({ slide, active, language, result, canRespond, send, onRoute, theme, viewer = false, onSwipe }: Props) {
   const title = localize(slide.title, language);
   const subtitle = localize(slide.subtitle, language);
   let content;
@@ -247,7 +280,8 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
       content = <>{slide.image && <PhotoContent photo={slide.image} language={language} />}
         {slide.html && (!slide.interactiveHtml || active)
           && <HtmlContent html={typeof slide.html === 'string' ? slide.html : localize(slide.html, language)}
-            css={slide.css} title={title} theme={theme} viewer={viewer} staticSlide interactiveHtml={slide.interactiveHtml} />}</>;
+            css={slide.css} title={title} theme={theme} viewer={viewer} staticSlide
+            interactiveHtml={slide.interactiveHtml} onSwipe={onSwipe} />}</>;
       break;
     case 'video':
       content = active ? <VideoSlide slide={slide} viewer={viewer} /> : null;
