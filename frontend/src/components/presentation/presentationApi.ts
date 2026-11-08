@@ -71,6 +71,10 @@ export class PresentationApi {
     return createdRoomSchema.parse(await this.request('/rooms', signal, manifest));
   }
 
+  async deleteRoom(roomId: string, signal: AbortSignal) {
+    await this.request(`/rooms/${encodeURIComponent(roomId)}`, signal, undefined, 'DELETE');
+  }
+
   async broadcast(signal: AbortSignal) {
     return broadcastSchema.parse(await this.request('/broadcast', signal));
   }

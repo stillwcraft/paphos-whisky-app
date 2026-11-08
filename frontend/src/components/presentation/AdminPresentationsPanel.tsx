@@ -13,13 +13,17 @@ export function AdminPresentationsPanel({ onBroadcastStarted }: { onBroadcastSta
   const api = useMemo(() => raw ? new PresentationApi(raw) : null, [raw]);
   const controller = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
   const [rooms, setRooms] = useState<PresentationRoomSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
-  const busy = saving || starting;
+  const [deleting, setDeleting] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState<PresentationRoomSummary | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const busy = saving || starting || deleting;
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadedRoomId, setUploadedRoomId] = useState<string | null>(null);
@@ -55,6 +59,31 @@ export function AdminPresentationsPanel({ onBroadcastStarted }: { onBroadcastSta
     else setLoading(false);
     return () => abort.abort();
   }, [api, loadRooms]);
+
+  useEffect(() => {
+    if (roomToDelete) deleteDialog.current?.showModal();
+    else deleteDialog.current?.close();
+  }, [roomToDelete]);
+
+  const deleteRoom = async () => {
+    const signal = controller.current?.signal;
+    if (!api || !signal || signal.aborted || !roomToDelete || busy || loading) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteRoom(roomToDelete.room_id, signal);
+      if (signal.aborted) return;
+      setRooms(previous => previous.filter(room => room.room_id !== roomToDelete.room_id));
+      setNextOffset(previous => Math.max(0, previous - 1));
+      if (uploadedRoomId === roomToDelete.room_id) setUploadedRoomId(null);
+      setRoomToDelete(null);
+      setError(null);
+    } catch (cause) {
+      if (!signal.aborted) setDeleteError(cause instanceof Error ? cause.message : t('presentation.delete_error'));
+    } finally {
+      if (!signal.aborted) setDeleting(false);
+    }
+  };
 
   const upload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -135,12 +164,41 @@ export function AdminPresentationsPanel({ onBroadcastStarted }: { onBroadcastSta
               <p className="mb-3 text-sm text-[#A1A1AA]">{t('presentation.room_progress', {
                 current: room.current_slide_index + 1, total: room.slide_count,
               })}</p>
-              <button className={buttonClass} disabled={busy || loading}
-                onClick={() => { void startBroadcast(room.room_id); }}>{t('presentation.start_broadcast')}</button>
+              <div className="flex items-center justify-between gap-3">
+                <button className={buttonClass} disabled={busy || loading}
+                  onClick={() => { void startBroadcast(room.room_id); }}>{t('presentation.start_broadcast')}</button>
+                <button type="button" className="rounded-xl border border-red-400/40 p-3 text-red-300 disabled:opacity-40"
+                  disabled={busy || loading} aria-label={t('presentation.delete')} title={t('presentation.delete')}
+                  onClick={() => { setDeleteError(null); setRoomToDelete(room); }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
+                  </svg>
+                </button>
+              </div>
             </article>)}
           </div>
           {hasMore && <button className={`${buttonClass} mt-4`} disabled={loading || busy}
             onClick={() => { void loadRooms(nextOffset); }}>{t('presentation.load_more')}</button>}
+          <dialog ref={deleteDialog} aria-labelledby="delete-presentation-title" aria-describedby="delete-presentation-description"
+            className="fixed inset-0 m-auto w-[calc(100%-2rem)] max-w-md rounded-2xl border border-[#C5A059]/40 bg-[#1A1A1E] p-5 text-white shadow-2xl backdrop:bg-black/80"
+            onCancel={event => { event.preventDefault(); if (!deleting) setRoomToDelete(null); }}>
+            {roomToDelete && <>
+              <h3 id="delete-presentation-title" className="text-lg font-semibold">{t('presentation.delete')}</h3>
+              <p id="delete-presentation-description" className="mt-3 break-words text-sm text-slate-200">
+                {t('presentation.delete_confirm', { title: localize(roomToDelete.title, i18n.language) || roomToDelete.manifest_id })}
+              </p>
+              {deleteError && <p role="alert" className="mt-3 whitespace-pre-wrap text-sm text-red-300">{deleteError}</p>}
+              <div className="mt-5 flex justify-end gap-3">
+                <button type="button" autoFocus className={buttonClass} disabled={deleting}
+                  onClick={() => setRoomToDelete(null)}>{t('common.cancel')}</button>
+                <button type="button" className="rounded-xl border border-red-400/50 px-3 py-2 text-sm text-red-300 disabled:opacity-40"
+                  disabled={busy || loading} onClick={() => { void deleteRoom(); }}>
+                  {t(deleting ? 'presentation.deleting' : 'presentation.delete')}
+                </button>
+              </div>
+            </>}
+          </dialog>
         </>
       )}
     </section>

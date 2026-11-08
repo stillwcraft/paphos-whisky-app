@@ -32,6 +32,12 @@ that would publicly expose future slides and answer keys.
 
 The saved list persists across browser/device reloads and lists only rooms owned
 by the authenticated admin, with paginated `GET /api/presentations/rooms`.
+To remove a saved presentation, click the trash icon on the right of its card,
+opposite **Start broadcast**, then confirm **Delete presentation** in the popup.
+Deletion permanently removes its manifest, progression and responses, stops its
+active broadcast and disconnects attendees. Cancelling leaves the room unchanged.
+The admin-only `DELETE /api/presentations/rooms/{id}` endpoint permits deletion
+only by the owning presenter.
 The list endpoint and room creation both enforce admin authentication on the server.
 Upload, saved-room listing and broadcast mutations enforce admin authentication;
 only the owning presenter can start or stop a room's broadcast.
