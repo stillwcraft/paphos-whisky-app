@@ -1,5 +1,9 @@
 # Social map backend
 
+Application tables are backend-only. Before deploying to an existing Supabase
+database, follow [DATABASE_SECURITY.md](DATABASE_SECURITY.md) to apply migration
+032 without blocking the backend connection. Storage policies are separate.
+
 All `/api/social/*` routes require authenticated Telegram Mini App initData.
 The map tab and social API are available to all authenticated users regardless
 of `SOCIAL_EVENTS_ENABLED` (the former rollout flag is no longer used).
