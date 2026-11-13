@@ -13,7 +13,6 @@ import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 import { parseMiniAppStartParam } from '@/miniAppDeepLinks';
-import { canViewPresentationTab } from '@/types/presentation';
 
 const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ CyprusEventsMap: Map }) => ({ default: Map }),
@@ -51,17 +50,16 @@ type FooterProps = {
   onTabChange: (tab: TabId) => void;
   isAdmin: boolean;
   showArticlesTab: boolean;
-  showPresentationsTab: boolean;
 };
 
-function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab, showPresentationsTab }: FooterProps) {
+function Footer({ activeTab, onTabChange, isAdmin, showArticlesTab }: FooterProps) {
   const { t } = useTranslation();
   const visibleTabs = [
     tabs[0],
     cyprusMapTab,
     ...(showArticlesTab ? [articlesTab] : []),
     ...tabs.slice(1),
-    ...(showPresentationsTab ? [presentationsTab] : []),
+    presentationsTab,
     ...(isAdmin ? [adminTab] : []),
   ];
 
@@ -114,7 +112,6 @@ export function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const initDataState = useSignal(initData.state);
   const showArticlesTab = import.meta.env.DEV || isAdmin;
-  const showPresentationsTab = canViewPresentationTab(initDataState?.user?.id, isAdmin);
   const activeCyprusMap = activeTab === 'cyprus-map';
   const dockedFooter = activeCyprusMap || activeTab === 'profile';
   const activeScreen = activeTab === 'cyprus-map' ? t('cyprus_map.title')
@@ -253,7 +250,7 @@ export function App() {
               onSelectedDistilleryHandled={clearMapDistillery}
               onClose={closeMap}
             />
-          ) : activeTab === 'presentations' && showPresentationsTab ? (
+          ) : activeTab === 'presentations' ? (
             <Suspense fallback={<p>{t('common.loading')}</p>}>
               <PresentationBroadcastTab isAdmin={isAdmin} onClose={() => setActiveTab('events')}
                 onRoute={setActiveTab} onManage={() => setActiveTab('admin')} />
@@ -278,7 +275,6 @@ export function App() {
           onTabChange={setActiveTab}
           isAdmin={isAdmin}
           showArticlesTab={showArticlesTab}
-          showPresentationsTab={showPresentationsTab}
         />
       )}
     </div>

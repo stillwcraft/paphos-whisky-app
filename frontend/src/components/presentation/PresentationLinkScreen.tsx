@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSPrope
 import { backButton, initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import type { MiniAppDestination } from '@/miniAppDeepLinks';
-import { canViewPresentationTab } from '@/types/presentation';
 
 const DistilleriesTab = lazy(() => import('../DistilleriesTab').then(m => ({ default: m.DistilleriesTab })));
 const EventsTab = lazy(() => import('../EventsTab').then(m => ({ default: m.EventsTab })));
@@ -85,7 +84,7 @@ export function PresentationLinkScreen({ destination, onClose, onNavigate, style
   } else if (tab === 'admin' && isAdmin) {
     content = <AdminTab onOpenSocialReports={() => onNavigate({ kind: 'tab', tab: 'cyprus-map', openReports: true })}
       onPresentationBroadcastStarted={() => onNavigate({ kind: 'tab', tab: 'presentations' })} />;
-  } else if (tab === 'presentations' && canViewPresentationTab(user?.id, isAdmin)) {
+  } else if (tab === 'presentations') {
     content = <PresentationBroadcastTab isAdmin={isAdmin} onClose={onClose}
       onRoute={route => onNavigate({ kind: 'tab', tab: route })}
       onManage={() => onNavigate({ kind: 'tab', tab: 'admin' })} />;

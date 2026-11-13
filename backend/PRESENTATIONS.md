@@ -47,9 +47,9 @@ comparison parameter, so IDs exceeding PostgreSQL's 32-bit `INTEGER` range work.
 ### Live broadcast tab
 
 The **Presentations** navigation tab retains `frontend/public/assets/nav/Fav.webp`
-and is visible to the configured admin and the explicitly allowlisted test viewer.
-The test viewer gets no admin/import/catalog controls; roles and slide activation
-remain server-authorized. This navigation allowlist does not grant admin privileges
+and is visible to all app users, including when opened through an in-app link.
+Regular viewers get no admin/import/catalog controls; roles and slide activation
+remain server-authorized. Tab visibility does not grant admin privileges
 or change existing invitation-link access.
 
 There is one active broadcast for the app, persisted in `presentation_broadcast`.

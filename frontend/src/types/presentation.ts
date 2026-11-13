@@ -32,10 +32,6 @@ export const presentationRouteSchema = z.enum([
 ]);
 export type PresentationRoute = z.infer<typeof presentationRouteSchema>;
 
-export function canViewPresentationTab(userId: number | undefined, isAdmin: boolean): boolean {
-  return isAdmin || userId === 741623645;
-}
-
 export const slideSchema = z.discriminatedUnion('type', [
   z.object({
     ...base, type: z.literal('static'), html: htmlContent.default(''),
