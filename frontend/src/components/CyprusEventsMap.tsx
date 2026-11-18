@@ -134,7 +134,7 @@ function MapLayersControl({ layer, onChange }: {
   useEffect(() => {
     if (!open) return;
     optionsRef.current?.querySelector<HTMLInputElement>('input:checked')?.focus();
-    const dismiss = (event: PointerEvent) => {
+    const dismiss = (event: PointerEvent | FocusEvent) => {
       if (event.target instanceof Node && !containerRef.current?.contains(event.target)) setOpen(false);
     };
     const escape = (event: KeyboardEvent) => {
@@ -144,17 +144,17 @@ function MapLayersControl({ layer, onChange }: {
       buttonRef.current?.focus();
     };
     document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('focusin', dismiss);
     document.addEventListener('keydown', escape);
     return () => {
       document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('focusin', dismiss);
       document.removeEventListener('keydown', escape);
     };
   }, [open]);
 
   return (
-    <div ref={containerRef} className="relative" onBlur={(event) => {
-      if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
-    }}>
+    <div ref={containerRef} className="relative">
       <button
         ref={buttonRef}
         type="button"
@@ -163,7 +163,7 @@ function MapLayersControl({ layer, onChange }: {
         aria-expanded={open}
         aria-controls="cyprus-map-layers"
         onClick={() => setOpen((current) => !current)}
-        className={`flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${open ? 'ring-2 ring-[#C5A059]/50' : ''}`}
+        className={`pointer-events-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${open ? 'ring-2 ring-[#C5A059]/50' : ''}`}
       >
         <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinejoin="round" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
           <path d="m12 3-10 6 10 6 10-6-10-6Z" />
@@ -174,12 +174,12 @@ function MapLayersControl({ layer, onChange }: {
         <fieldset
           ref={optionsRef}
           id="cyprus-map-layers"
-          className="absolute bottom-full right-0 mb-3 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-[#C5A059]/50 bg-[#141417]/95 p-3 text-sm text-[#F4F4F5] shadow-xl backdrop-blur-md"
+          className="pointer-events-auto absolute bottom-full right-0 mb-3 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-[#C5A059]/50 bg-[#141417]/95 p-3 text-sm text-[#F4F4F5] shadow-xl backdrop-blur-md"
         >
           <legend className="sr-only">{t('cyprus_map.layers')}</legend>
           <p aria-hidden="true" className="mb-2 font-medium text-[#D9BD82]">{t('cyprus_map.layers')}</p>
           {CYPRUS_MAP_LAYERS.map((option) => (
-            <label key={option.id} className="flex cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[#C5A059]/10">
+            <label key={option.id} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg p-2 hover:bg-[#C5A059]/10">
               <input
                 type="radio"
                 name="cyprus-map-layer"
@@ -189,7 +189,7 @@ function MapLayersControl({ layer, onChange }: {
                 onChange={() => onChange(option)}
                 onClick={() => { setOpen(false); buttonRef.current?.focus(); }}
               />
-              {t(option.labelKey)}
+              <span>{t(option.labelKey)}</span>
             </label>
           ))}
         </fieldset>
@@ -870,7 +870,7 @@ export function CyprusEventsMap({
       </BaseMap>
       {(mapLoading || detailLoading) && <CyprusMapLoading className="absolute inset-0 z-[1300]" />}
       {!mapLoading && !panel && !activeSelected && !selectedSocial && (
-        <div className="absolute inset-x-4 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-[1000] flex items-end gap-3">
+        <div className="pointer-events-none absolute inset-x-4 bottom-[calc(2rem+env(safe-area-inset-bottom))] z-[1000] flex items-end gap-3">
           {activeLayer.showGlobalRange ? <div className="min-w-0 flex-1 rounded-xl border border-[#C5A059]/40 bg-[#141417]/95 px-3 py-1.5 shadow-lg backdrop-blur-md">
             <label htmlFor="global-events-range" className="block truncate text-[11px] font-medium text-[#D9BD82]">
               {t('cyprus_map.global_range')}: {globalRange === GLOBAL_RANGE_MAX
@@ -885,7 +885,7 @@ export function CyprusEventsMap({
               </div>
               <input
                 id="global-events-range"
-                className="cyprus-event-range absolute inset-0 w-full cursor-pointer"
+                className="cyprus-event-range pointer-events-auto absolute inset-0 w-full cursor-pointer"
                 type="range"
                 min={0}
                 max={GLOBAL_RANGE_MAX}
@@ -914,7 +914,7 @@ export function CyprusEventsMap({
               aria-busy={locating}
               disabled={locating}
               onClick={centerOnUser}
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+              className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
             >
               <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" viewBox="0 0 24 24">
                 <circle cx="12" cy="12" r="7" />
@@ -928,7 +928,7 @@ export function CyprusEventsMap({
               title={t(isApartmentLayer ? 'social.create_listing' : 'social.create')}
               disabled={busy}
               onClick={openCreate}
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
+              className="pointer-events-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 disabled:opacity-50"
             >
               <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
                 <path d="M12 5v14M5 12h14" />

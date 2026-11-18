@@ -97,7 +97,9 @@ shows actual streets. Keep the current provider's attribution visible.
 ### Map marker layers
 
 The Layers button above the location button selects one marker layer at a
-time; it does not change the basemap. The default Global events layer shows
+time; it does not change the basemap. Tap anywhere on a layer's row to select
+it. The space above the date slider and between the floating controls remains
+available for map gestures. The default Global events layer shows
 catalog events and administrative social events with `event_type="global"` and
 `map_layer="events"`. User meetups is the second layer: it shows only regular
 user-created social events, without catalog markers or the global-event date
