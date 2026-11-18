@@ -340,6 +340,22 @@ normal size, one-finger swipes still navigate slides or gallery photos. While
 zoomed in, dragging the photo pans it instead. Zoom resets when the photo
 changes or its slide is no longer active. Captions stay outside the zoom area.
 
+The presenter can enable drawing from the pencil button, choose a pen or laser
+and a color, and clear the active slide. Strokes use normalized coordinates
+relative to the stage viewport, so each device draws them at its own size.
+Pen annotations are per slide (including all photos in a gallery slide).
+Laser trails fade within 1.5 seconds of the last batch and are not restored
+when a viewer joins.
+
+The WebSocket accepts presenter-only `draw` and `draw_clear` for the active
+slide. They broadcast deltas rather than state snapshots and use a separate
+30-frame/second budget. Each draw accepts up to 100 points and uses the
+existing 4096-byte frame limit. Pen strokes are included for unlocked slides
+in state snapshots; they live in worker memory only, with up to 8192 points
+and 256 pen strokes per room. The worker retains the 16 most recently used
+idle annotated rooms. Restarting the worker or closing a room removes its
+annotations.
+
 Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe
 by default. Reviewed static HTML can opt into inline scripts with
 `interactiveHtml: true`, as documented above. Parent/app navigation remains

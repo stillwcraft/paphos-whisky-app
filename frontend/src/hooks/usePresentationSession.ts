@@ -3,14 +3,16 @@ import { z } from 'zod';
 import { telegramAuthHeaders } from '@/telegramAuth';
 import i18n from '@/i18n';
 import { PRESENTATION_API_URL } from '@/components/presentation/presentationApi';
+import { PresentationAnnotations } from '@/components/presentation/presentationAnnotations';
 import {
-  sessionStateSchema, type PresentationCommand, type PresentationState,
+  annotationMessageSchema, sessionStateSchema, type PresentationCommand, type PresentationState,
 } from '@/types/presentation';
 
 const wireMessageSchema = z.union([
   sessionStateSchema,
+  annotationMessageSchema,
   z.object({ type: z.literal('pong') }),
-  z.object({ type: z.literal('error'), message: z.string() }),
+  z.object({ type: z.literal('error'), message: z.string(), command: z.enum(['draw', 'draw_clear']).optional() }),
   z.object({ type: z.literal('broadcast_changed') }),
 ]);
 type Status = 'connecting' | 'connected' | 'reconnecting' | 'offline' | 'error';
@@ -24,6 +26,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
   const [lockedNotice, setLockedNotice] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [broadcastEnded, setBroadcastEnded] = useState(false);
+  const [annotations] = useState(() => new PresentationAnnotations());
   const socket = useRef<WebSocket | null>(null);
   const latest = useRef<PresentationState | null>(null);
   const lockedNoticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -38,6 +41,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
     clearTimeout(lockedNoticeTimer.current);
     setPending(false);
     setBroadcastEnded(false);
+    annotations.snapshot({}, true);
     if (!initDataRaw) {
       setStatus('error');
       setError(i18n.t('presentation.auth_required'));
@@ -65,6 +69,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
         clearTimeout(lockedNoticeTimer.current);
       }
       latest.current = next;
+      annotations.snapshot(next.strokes, forceJump || Boolean(relocked));
       setState(next);
       if (jump) {
         setIndex(next.current_slide_index);
@@ -117,7 +122,7 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
             : i18n.t('presentation.sync_error', { status: response.status }));
         }
         const next = sessionStateSchema.parse(await response.json());
-        if (isCurrent()) apply(next, true);
+        if (isCurrent() && !fallback?.signal.aborted) apply(next, true);
       }).catch((cause: unknown) => {
         if (cause instanceof DOMException && cause.name === 'AbortError') return;
         if (!disposed && (isCurrent() || fatal)) {
@@ -146,15 +151,19 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
           if (message.type === 'broadcast_changed') {
             endBroadcast();
           } else if (message.type === 'state') {
+            fallback?.abort();
             apply(message, !synced);
             synced = true;
             attempt = 0;
             setStatus('connected');
             setError(null);
             setPending(false);
+          } else if (message.type === 'draw' || message.type === 'draw_clear') {
+            if (synced) annotations.apply(message);
           } else if (message.type === 'error') {
             setError(message.message);
-            setPending(false);
+            if (message.command) annotations.clearPreview();
+            else setPending(false);
           }
         } catch (cause) {
           setError(cause instanceof Error ? cause.message : i18n.t('presentation.invalid_message'));
@@ -215,15 +224,19 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
       document.removeEventListener('visibilitychange', visibility);
       window.removeEventListener('online', online);
     };
-  }, [roomId, initDataRaw, broadcastOnly]);
+  }, [roomId, initDataRaw, broadcastOnly, annotations]);
 
   const send = useCallback((command: PresentationCommand) => {
-    if (status !== 'connected' || pending || socket.current?.readyState !== WebSocket.OPEN) {
+    const drawing = command.type === 'draw' || command.type === 'draw_clear';
+    const connection = socket.current;
+    if (status !== 'connected' || (!drawing && pending) || connection?.readyState !== WebSocket.OPEN
+      || (drawing && (latest.current?.role !== 'presenter' || connection.bufferedAmount > 65536))) {
       setError(i18n.t('presentation.wait'));
-      return;
+      return false;
     }
-    socket.current.send(JSON.stringify(command));
-    setPending(true);
+    connection.send(JSON.stringify(command));
+    if (!drawing) setPending(true);
+    return true;
   }, [status, pending]);
 
   const navigate = useCallback((target: number) => {
@@ -269,5 +282,5 @@ export function usePresentationSession(roomId: string, initDataRaw: string | und
   const isFollowingPresenter = index === state?.current_slide_index && (currentSlide?.type !== 'gallery'
     || (photoIndices[currentSlide.id] ?? 0) === (state?.gallery_photo_indices[currentSlide.id] ?? 0));
   return { state, index, photoIndices, isFollowingPresenter, status, error: error ?? lockedNotice, pending,
-    broadcastEnded, send, navigate, changePhoto, followPresenter };
+    broadcastEnded, annotations, send, navigate, changePhoto, followPresenter };
 }

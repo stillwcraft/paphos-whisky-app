@@ -155,10 +155,31 @@ def public_slide(slide: SlideConfig) -> dict:
     return slide.model_dump(include={"id", "type", "title", "subtitle", "animations"} | PUBLIC_FIELDS[slide.type])
 
 
+DrawingCoordinate = Annotated[float, Field(ge=0, le=1, strict=True)]
+DrawingPoint = tuple[DrawingCoordinate, DrawingCoordinate]
+
+
+class DrawingStroke(StrictModel):
+    id: Identifier
+    color: Annotated[str, StringConstraints(pattern=r"^#[0-9a-fA-F]{6}$")]
+    width: Annotated[float, Field(gt=0, le=32, strict=True)]
+    mode: Literal["pen", "laser"]
+    points: list[DrawingPoint] = Field(min_length=1, max_length=100)
+
+
 class Command(StrictModel):
-    type: Literal["sync", "ping", "advance", "gallery_photo", "vote", "words"]
+    type: Literal["sync", "ping", "advance", "gallery_photo", "vote", "words", "draw", "draw_clear"]
     index: Optional[int] = Field(default=None, ge=0, strict=True)
     photo_index: Optional[int] = Field(default=None, ge=0, le=29, strict=True)
     slide_id: Optional[Identifier] = None
     option_id: Optional[Identifier] = None
     words: list[Annotated[str, StringConstraints(min_length=1, max_length=32)]] = Field(default_factory=list, max_length=3)
+    stroke: Optional[DrawingStroke] = None
+
+    @model_validator(mode="after")
+    def validate_drawing(self):
+        if self.type in ("draw", "draw_clear") and self.slide_id is None:
+            raise ValueError("Drawing commands require a slide")
+        if (self.type == "draw") != (self.stroke is not None):
+            raise ValueError("Only draw commands require a stroke")
+        return self

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { usePresentationSession } from '@/hooks/usePresentationSession';
-import { localize, type PresentationRoute } from '@/types/presentation';
+import { localize, type DrawingStroke, type PresentationRoute } from '@/types/presentation';
 import { parseMiniAppLink, type MiniAppDestination } from '@/miniAppDeepLinks';
 import { SlideFactory } from './SlideFactory';
 import { SwipeController } from './SwipeController';
@@ -10,7 +10,14 @@ import { usePresentationGestures } from './usePresentationGestures';
 import { presentationThemeStyle } from './presentationTheme';
 import { PresentationIcon } from './PresentationIcon';
 import { PresentationLinkScreen } from './PresentationLinkScreen';
+import { PresentationDrawing } from './PresentationDrawing';
 import './presentation.css';
+
+const ANNOTATION_COLORS = [
+  { value: '#C5A059', label: 'presentation.draw_gold' },
+  { value: '#EF4444', label: 'presentation.draw_red' },
+  { value: '#F4F4F5', label: 'presentation.draw_white' },
+] as const;
 
 export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = false,
   onBroadcastEnded, onStopBroadcast, stoppingBroadcast = false, broadcastError }: {
@@ -21,6 +28,9 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
   const raw = useSignal(initData.raw);
   const { t, i18n } = useTranslation();
   const [linkDestination, setLinkDestination] = useState<MiniAppDestination | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [brushMode, setBrushMode] = useState<DrawingStroke['mode']>('pen');
+  const [brushColor, setBrushColor] = useState<string>(ANNOTATION_COLORS[0].value);
   const screenRef = useRef<HTMLElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const closeLink = useCallback(() => setLinkDestination(null), []);
@@ -33,6 +43,9 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
     : state?.max_unlocked_slide_index ?? 0;
   const controlsDisabled = Boolean(linkDestination) || pending || stoppingBroadcast || (state?.role === 'presenter' && status !== 'connected');
   const neighbors = [index - 1, index, index + 1].filter(i => i >= 0 && state?.slides[String(i)]);
+  const slideId = state?.slides[String(index)]?.id;
+  const canDraw = !viewer && status === 'connected' && !pending && !linkDestination && !stoppingBroadcast
+    && index === state?.current_slide_index && Boolean(slideId);
 
   useEffect(() => {
     if (session.broadcastEnded) onBroadcastEnded?.();
@@ -72,6 +85,30 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
             onClick={onStopBroadcast}>{t('presentation.stop_broadcast')}</button>}
         </div>
         {state?.title && <p className="presentation-heading">{localize(state.title, i18n.language)}</p>}
+        <div className="presentation-controls presentation-drawing-tools" role="group" aria-label={t('presentation.draw_tools')}>
+          <button type="button" className="presentation-draw-toggle" aria-pressed={drawing}
+            aria-label={t('presentation.draw_toggle')} title={t('presentation.draw_toggle')}
+            disabled={!canDraw} onClick={() => setDrawing(value => !value)}>
+            <PresentationIcon name="pencil" />
+          </button>
+          <div className="presentation-drawing-options" role="group" aria-label={t('presentation.draw_tool')}>
+            {(['pen', 'laser'] as const).map(mode => <button key={mode} type="button"
+              aria-pressed={brushMode === mode} disabled={!canDraw || !drawing}
+              onClick={() => setBrushMode(mode)}>{t(`presentation.draw_${mode}`)}</button>)}
+          </div>
+          <div className="presentation-drawing-options" role="group" aria-label={t('presentation.draw_color')}>
+            {ANNOTATION_COLORS.map(color => <button key={color.value} type="button"
+              aria-label={t(color.label)} title={t(color.label)} aria-pressed={brushColor === color.value}
+              disabled={!canDraw || !drawing} onClick={() => setBrushColor(color.value)}>
+              <span className="presentation-draw-swatch" style={{ backgroundColor: color.value }} />
+            </button>)}
+          </div>
+          <button type="button" aria-label={t('presentation.draw_clear_slide')} disabled={!canDraw} onClick={() => {
+            if (slideId && session.send({ type: 'draw_clear', slide_id: slideId })) {
+              session.annotations.clearPreview(slideId);
+            }
+          }}>{t('presentation.draw_clear')}</button>
+        </div>
       </header>}
       {(gestureError || session.error || broadcastError) && <p className="presentation-notice" role="alert">
         {gestureError || session.error || broadcastError}</p>}
@@ -79,21 +116,27 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
         {t(`presentation.status.${status}`)}</p>}
       {state && !gestureError ? (
         <>
-          <SwipeController className="presentation-stage"
-            onHorizontal={direction => { if (!controlsDisabled) session.navigate(index + direction); }}>
-            {neighbors.map(i => {
-              const slide = state.slides[String(i)];
-              return <div key={slide.id} className="presentation-slot" hidden={i !== index} aria-hidden={i !== index}>
-                <SlideFactory slide={slide} active={i === index} language={i18n.language}
-                  result={state.results[slide.id]}
-                  canRespond={i === state.current_slide_index && i === index && status === 'connected' && !pending}
-                  send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer} onTelegramLink={openLink}
-                  galleryPhotoIndex={session.photoIndices[slide.id] ?? 0} onPhotoChange={session.changePhoto}
-                  canChangePhoto={viewer || (!controlsDisabled && i === state.current_slide_index)}
-                  onSwipe={direction => { if (!controlsDisabled) session.navigate(index + direction); }} />
-              </div>;
-            })}
-          </SwipeController>
+          <div className="presentation-stage-frame">
+            <SwipeController className="presentation-stage"
+              onHorizontal={direction => { if (!controlsDisabled) session.navigate(index + direction); }}>
+              {neighbors.map(i => {
+                const slide = state.slides[String(i)];
+                return <div key={slide.id} className="presentation-slot" hidden={i !== index} aria-hidden={i !== index}>
+                  <SlideFactory slide={slide} active={i === index} language={i18n.language}
+                    result={state.results[slide.id]}
+                    canRespond={i === state.current_slide_index && i === index && status === 'connected' && !pending}
+                    send={session.send} onRoute={onRoute} theme={state.theme} viewer={viewer} onTelegramLink={openLink}
+                    galleryPhotoIndex={session.photoIndices[slide.id] ?? 0} onPhotoChange={session.changePhoto}
+                    canChangePhoto={viewer || (!controlsDisabled && i === state.current_slide_index)}
+                    onSwipe={direction => { if (!controlsDisabled) session.navigate(index + direction); }} />
+                </div>;
+              })}
+            </SwipeController>
+            {slideId && <PresentationDrawing key={`${roomId}:${slideId}`} slideId={slideId}
+              annotations={session.annotations} enabled={canDraw && drawing}
+              brush={{ mode: brushMode, color: brushColor, width: brushMode === 'laser' ? 5 : 4 }}
+              send={session.send} />}
+          </div>
           {viewer ? <div className="presentation-slide-dots" role="img"
             aria-label={t('presentation.room_progress', { current: index + 1, total: state.slide_count })}>
             {Array.from({ length: state.slide_count }, (_, i) => <span key={i} aria-hidden="true"

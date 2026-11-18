@@ -93,6 +93,23 @@ export interface PresentationManifest {
 }
 
 const counts = z.record(z.string(), z.number().int().nonnegative());
+const coordinate = z.number().min(0).max(1);
+const strokeShape = {
+  id: identifier,
+  color: z.string().regex(/^#[0-9a-f]{6}$/i),
+  width: z.number().positive().max(32),
+};
+const pointSchema = z.tuple([coordinate, coordinate]);
+const strokeBatchSchema = z.object({
+  ...strokeShape, mode: z.enum(['pen', 'laser']), points: z.array(pointSchema).min(1).max(100),
+});
+export const annotationMessageSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('draw'), slide_id: identifier, stroke: strokeBatchSchema }),
+  z.object({ type: z.literal('draw_clear'), slide_id: identifier }),
+]);
+export type AnnotationMessage = z.infer<typeof annotationMessageSchema>;
+export type DrawingStroke = z.infer<typeof strokeBatchSchema>;
+export type DrawingPoint = z.infer<typeof pointSchema>;
 export const sessionStateSchema = z.object({
   type: z.literal('state'),
   room_id: z.string(),
@@ -110,6 +127,9 @@ export const sessionStateSchema = z.object({
     own_vote: z.string().nullable().optional(),
     own_words: z.array(z.string()).optional(),
   })),
+  strokes: z.record(identifier, z.array(z.object({
+    ...strokeShape, mode: z.literal('pen'), points: z.array(pointSchema).min(1).max(8192),
+  })).max(256)).default({}),
 }).superRefine((state, ctx) => {
   if (state.current_slide_index > state.max_unlocked_slide_index
     || state.max_unlocked_slide_index >= state.slide_count
@@ -122,11 +142,16 @@ export const sessionStateSchema = z.object({
     if (slide?.type !== 'gallery' || photoIndex >= slide.photos.length) {
       ctx.addIssue({ code: 'custom', message: 'Invalid presentation gallery photo state' });
     }
+    const unlocked = new Set(Object.values(state.slides).map(slide => slide.id));
+    if (Object.keys(state.strokes).some(slideId => !unlocked.has(slideId))) {
+      ctx.addIssue({ code: 'custom', message: 'Annotations reference a locked slide' });
+    }
   }
 });
 export type PresentationState = z.infer<typeof sessionStateSchema>;
 export type SlideResult = PresentationState['results'][string];
 export type PresentationCommand =
+  | AnnotationMessage
   | { type: 'advance'; index: number }
   | { type: 'gallery_photo'; slide_id: string; photo_index: number }
   | { type: 'vote'; slide_id: string; option_id: string }

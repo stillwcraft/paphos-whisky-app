@@ -19,7 +19,7 @@ from presentation import (
     PresentationBroadcastRecord, PresentationRoomRecord, create_presentation_router,
     read_room_summaries, write_record,
 )
-from schemas.presentation import PresentationManifest, public_slide
+from schemas.presentation import Command, PresentationManifest, public_slide
 
 
 PRESENTER_ID = 2 ** 33 + 123
@@ -119,6 +119,77 @@ class PresentationTest(unittest.TestCase):
     def auth_socket(self, ws, token, broadcast_only=False):
         ws.send_json({"type": "auth", "init_data": token, "broadcast_only": broadcast_only})
         return ws.receive_json()
+
+    def drawing(self, mode="pen", points=None, slide_id="intro"):
+        return {"type": "draw", "slide_id": slide_id, "stroke": {
+            "id": f"{mode}-1", "color": "#C5A059", "width": 4.0, "mode": mode,
+            "points": points if points is not None else [[0.1, 0.2], [0.2, 0.3]],
+        }}
+
+    def test_only_presenter_can_draw_or_clear(self):
+        with self.connect("presenter") as presenter, self.connect("viewer") as viewer:
+            self.auth_socket(presenter, "presenter")
+            self.auth_socket(viewer, "viewer")
+            draw = self.drawing()
+            presenter.send_json(draw)
+            self.assertEqual(presenter.receive_json(), draw)
+            self.assertEqual(viewer.receive_json(), draw)
+            clear = {"type": "draw_clear", "slide_id": "intro"}
+            for command in (draw, clear):
+                viewer.send_json(command)
+                response = viewer.receive_json()
+                self.assertEqual((response["type"], response["command"], response["status"]),
+                                 ("error", command["type"], 403))
+            presenter.send_json({"type": "sync"})
+            self.assertEqual(presenter.receive_json()["strokes"], {"intro": [draw["stroke"]]})
+
+    def test_drawing_deltas_do_not_write_and_pen_strokes_survive_reconnect(self):
+        draw = self.drawing()
+        append = self.drawing(points=[[0.4, 0.5]])
+        laser = self.drawing(mode="laser")
+        with patch("presentation.write_record") as write:
+            with self.connect("presenter") as presenter, self.connect("viewer") as viewer:
+                self.auth_socket(presenter, "presenter")
+                self.auth_socket(viewer, "viewer")
+                for command in (draw, append, laser):
+                    presenter.send_json(command)
+                    self.assertEqual(presenter.receive_json(), command)
+                    self.assertEqual(viewer.receive_json(), command)
+            expected = {"intro": [{**draw["stroke"], "points": draw["stroke"]["points"] + [[0.4, 0.5]]}]}
+            response = self.client.get(self.path, headers={"Authorization": "tma viewer"})
+            self.assertEqual(response.json()["strokes"], expected)
+            self.assertEqual(response.json()["revision"], 0)
+            with self.connect("viewer") as viewer, self.connect("presenter") as presenter:
+                self.assertEqual(self.auth_socket(viewer, "viewer")["strokes"], expected)
+                self.assertEqual(self.auth_socket(presenter, "presenter")["strokes"], expected)
+                clear = {"type": "draw_clear", "slide_id": "intro"}
+                presenter.send_json(clear)
+                self.assertEqual(presenter.receive_json(), clear)
+                self.assertEqual(viewer.receive_json(), clear)
+                viewer.send_json({"type": "sync"})
+                self.assertEqual(viewer.receive_json()["strokes"], {})
+            write.assert_not_called()
+
+    def test_drawing_uses_separate_rate_limit_and_active_slide(self):
+        with self.connect("presenter") as presenter:
+            self.auth_socket(presenter, "presenter")
+            presenter.send_json(self.drawing(slide_id="vote"))
+            self.assertEqual(presenter.receive_json()["status"], 409)
+            laser = self.drawing(mode="laser")
+            for _ in range(24):
+                presenter.send_json(laser)
+                self.assertEqual(presenter.receive_json(), laser)
+            presenter.send_json({"type": "advance", "index": 1})
+            state = presenter.receive_json()
+            self.assertEqual(state["current_slide_index"], 1)
+            self.assertEqual(state["strokes"], {})
+
+    def test_drawing_validates_point_shape_range_and_batch_size(self):
+        for points in ([], [[0, 0]] * 101, [[-0.1, 0]], [[0, 1.1]], [["0", 1]], [[0, 0, 0]]):
+            with self.subTest(points=points), self.assertRaises(ValidationError):
+                Command.model_validate(self.drawing(points=points))
+        with self.assertRaises(ValidationError):
+            Command.model_validate({"type": "draw_clear"})
 
     def test_room_filter_uses_bigint_for_json_and_parameter_on_postgresql(self):
         db = MagicMock()

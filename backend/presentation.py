@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import time
+from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -17,6 +18,10 @@ from schemas.presentation import Command, PresentationManifest, public_slide
 log = logging.getLogger(__name__)
 MAX_CONNECTIONS = 100
 MAX_CONTRIBUTORS = 1000
+MAX_DRAW_POINTS = 8192
+MAX_DRAW_STROKES = 256
+MAX_IDLE_ANNOTATED_ROOMS = 16
+DRAW_COMMANDS = ("draw", "draw_clear")
 
 
 class PresentationRoomRecord(Base):
@@ -115,6 +120,14 @@ class Room:
     payload: dict
     manifest: PresentationManifest
     clients: dict[int, Client] = field(default_factory=dict)
+    strokes: dict[str, dict[str, dict]] = field(default_factory=dict)
+    stroke_points: int = 0
+    stroke_count: int = 0
+
+    def clear_strokes(self, slide_id):
+        removed = self.strokes.pop(slide_id, {})
+        self.stroke_count -= len(removed)
+        self.stroke_points -= sum(len(stroke["points"]) for stroke in removed.values())
 
     def snapshot(self, user_id):
         current = self.payload["current_slide_index"]
@@ -149,12 +162,17 @@ class Room:
             # No future title, URL, answer key, or manifest is sent, even to the presenter.
             "slides": {str(i): public_slide(slide) for i, slide in enumerate(self.manifest.slides[:maximum + 1])},
             "results": results,
+            "strokes": {
+                slide.id: list(self.strokes[slide.id].values())
+                for slide in self.manifest.slides[:maximum + 1] if slide.id in self.strokes
+            },
         }
 
 
 class WebSocketManager:
     def __init__(self):
         self.rooms: dict[str, Room] = {}
+        self.idle_annotated_rooms = OrderedDict()
         self.connections = 0
         # Serializes reads, commits, sync snapshots and broadcasts, including room deletion.
         self.lock = asyncio.Lock()
@@ -169,9 +187,9 @@ class WebSocketManager:
             self.rooms[room_id] = room
         return room
 
-    async def send(self, room, client, message):
+    async def send(self, room, client, message, timeout=3):
         try:
-            await asyncio.wait_for(client.socket.send_json(message), timeout=3)
+            await asyncio.wait_for(client.socket.send_json(message), timeout=timeout)
         except (asyncio.TimeoutError, RuntimeError, WebSocketDisconnect, OSError):
             log.info("Disconnecting unavailable presentation socket in room %s", room.id)
             room.clients.pop(id(client.socket), None)
@@ -205,6 +223,9 @@ class WebSocketManager:
             return
         if command.type == "sync":
             await self.send(room, client, room.snapshot(client.user_id))
+            return
+        if command.type in DRAW_COMMANDS:
+            await self.draw(room, client, command)
             return
 
         # Copy-on-write: a failed commit must not expose uncommitted state.
@@ -254,9 +275,49 @@ class WebSocketManager:
         room.payload = payload
         await self.broadcast(room)
 
+    async def draw(self, room, client, command):
+        if client.user_id != room.payload["presenter_id"]:
+            raise HTTPException(403, "Only the presenter can annotate slides")
+        slide_id = room.manifest.slides[room.payload["current_slide_index"]].id
+        if command.slide_id != slide_id:
+            raise HTTPException(409, "Only the currently active slide can be annotated")
+        delta = {"type": command.type, "slide_id": slide_id}
+        if command.type == "draw_clear":
+            room.clear_strokes(slide_id)
+        else:
+            stroke = command.stroke.model_dump(mode="json")
+            delta["stroke"] = stroke
+            if stroke["mode"] == "pen":
+                previous = room.strokes.get(slide_id, {}).get(stroke["id"])
+                if previous and (previous["color"], previous["width"]) != (stroke["color"], stroke["width"]):
+                    raise HTTPException(422, "A pen stroke cannot change style")
+                if (room.stroke_points + len(stroke["points"]) > MAX_DRAW_POINTS
+                        or (previous is None and room.stroke_count >= MAX_DRAW_STROKES)):
+                    raise HTTPException(409, "Annotation limit reached; clear a slide to continue")
+                if previous:
+                    room.strokes[slide_id][stroke["id"]] = {
+                        **previous, "points": previous["points"] + stroke["points"],
+                    }
+                else:
+                    room.strokes.setdefault(slide_id, {})[stroke["id"]] = {
+                        **stroke, "points": list(stroke["points"]),
+                    }
+                    room.stroke_count += 1
+                room.stroke_points += len(stroke["points"])
+        await asyncio.gather(*(self.send(room, peer, delta, timeout=0.35)
+                               for peer in list(room.clients.values())))
+
     def evict_idle(self, room):
         if not room.clients and self.rooms.get(room.id) is room:
-            self.rooms.pop(room.id, None)
+            if not room.strokes:
+                self.idle_annotated_rooms.pop(room.id, None)
+                self.rooms.pop(room.id, None)
+                return
+            self.idle_annotated_rooms[room.id] = None
+            self.idle_annotated_rooms.move_to_end(room.id)
+            if len(self.idle_annotated_rooms) > MAX_IDLE_ANNOTATED_ROOMS:
+                oldest, _ = self.idle_annotated_rooms.popitem(last=False)
+                self.rooms.pop(oldest, None)
 
 
 def create_presentation_router(authenticate, require_admin):
@@ -345,6 +406,7 @@ def create_presentation_router(authenticate, require_admin):
                 raise HTTPException(403, "Only the room presenter can close it")
             await run_in_threadpool(delete_record, room_id)
             await manager.end_broadcast(room_id)
+            manager.idle_annotated_rooms.pop(room_id, None)
             manager.rooms.pop(room_id, None)
             await asyncio.gather(*(manager.close(client.socket, 4004) for client in list(room.clients.values())))
         return Response(status_code=204)
@@ -374,26 +436,42 @@ def create_presentation_router(authenticate, require_admin):
                 if broadcast_only and await run_in_threadpool(read_broadcast) != room_id:
                     raise HTTPException(409, "This presentation is not being broadcast")
                 room = await manager.room(room_id)
+                manager.idle_annotated_rooms.pop(room_id, None)
                 client = Client(socket, user.telegram_id, broadcast_only)
                 room.clients[id(socket)] = client
                 await manager.send(room, client, room.snapshot(user.telegram_id))
-            timestamps = []
+            timestamps, drawing_timestamps = deque(), deque()
             while True:
                 raw = await asyncio.wait_for(socket.receive_text(), timeout=60)
-                now = time.monotonic()
-                timestamps = [stamp for stamp in timestamps if stamp > now - 10]
-                if len(raw) > 4096 or len(timestamps) >= 20:
+                if len(raw.encode("utf-8")) > 4096:
                     await socket.close(code=1008)
                     break
-                timestamps.append(now)
+                try:
+                    command = Command.model_validate_json(raw)
+                except ValidationError:
+                    command = None
+                drawing = command is not None and command.type in DRAW_COMMANDS
+                bucket, interval, limit = (
+                    (drawing_timestamps, 1, 30) if drawing and user.telegram_id == room.payload["presenter_id"]
+                    else (timestamps, 10, 20)
+                )
+                now = time.monotonic()
+                while bucket and bucket[0] <= now - interval:
+                    bucket.popleft()
+                if len(bucket) >= limit:
+                    await socket.close(code=1008)
+                    break
+                bucket.append(now)
                 async with manager.lock:
                     try:
-                        command = Command.model_validate_json(raw)
+                        if command is None:
+                            raise HTTPException(422, "Invalid presentation command")
                         await manager.command(room, client, command)
-                    except ValidationError:
-                        await manager.send(room, client, {"type": "error", "message": "Invalid presentation command"})
                     except HTTPException as exc:
-                        await manager.send(room, client, {"type": "error", "message": exc.detail})
+                        error = {"type": "error", "message": exc.detail}
+                        if drawing:
+                            error.update(status=exc.status_code, command=command.type)
+                        await manager.send(room, client, error)
         except HTTPException as exc:
             await socket.send_json({"type": "error", "message": exc.detail})
             code = {401: 4001, 404: 4004, 409: 4005}.get(exc.status_code, 1008)
