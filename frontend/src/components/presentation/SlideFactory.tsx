@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { openTelegramLink } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
+import { TransformComponent, TransformWrapper, type ReactZoomPanPinchContentRef } from 'react-zoom-pan-pinch';
 import {
   localize, type GallerySlideConfig, type InteractiveTabsSlideConfig, type PresentationCommand,
   type PhotoConfig, type PresentationRoute, type PresentationTheme, type SlideConfig, type SlideResult,
@@ -78,12 +79,35 @@ function HtmlContent({ html, css = '', title, theme, viewer = false, staticSlide
   </div> : frame;
 }
 
-function PhotoContent({ photo, language }: { photo: PhotoConfig; language: string }) {
+function PhotoContent({ photo, language, active }: { photo: PhotoConfig; language: string; active: boolean }) {
   const caption = localize(photo.caption, language);
-  return <figure>
-    <img className="presentation-photo" src={photo.url} alt={localize(photo.alt, language) || caption} draggable={false} />
+  return <figure className="presentation-photo-frame">
+    <PhotoZoom key={`${active}:${photo.url}`} url={photo.url} active={active}
+      alt={localize(photo.alt, language) || caption} />
     {caption && <figcaption className="presentation-caption">{caption}</figcaption>}
   </figure>;
+}
+
+function PhotoZoom({ url, alt, active }: { url: string; alt: string; active: boolean }) {
+  const transformRef = useRef<ReactZoomPanPinchContentRef>(null);
+  const [zoomed, setZoomed] = useState(false);
+
+  useLayoutEffect(() => {
+    // Reset the outgoing photo, then discard any in-flight gesture or animation.
+    const controls = transformRef.current;
+    return () => { void controls?.resetTransform(0); };
+  }, []);
+
+  return <div className="presentation-photo-viewport" data-no-swipe={zoomed ? 'true' : undefined}>
+    <TransformWrapper ref={transformRef} disabled={!active} minScale={1} maxScale={4}
+      centerOnInit={true} doubleClick={{ mode: 'toggle', step: 2 }}
+      wheel={{ disabled: true }} panning={{ disabled: !zoomed }}
+      onTransform={(_, { scale }) => setZoomed(scale > 1.01)}>
+      <TransformComponent wrapperClass="presentation-photo-zoom" contentClass="presentation-photo-zoom-content">
+        <img className="presentation-photo" src={url} alt={alt} draggable={false} />
+      </TransformComponent>
+    </TransformWrapper>
+  </div>;
 }
 
 function VideoSlide({ slide, viewer }: { slide: VideoSlideConfig; viewer: boolean }) {
@@ -166,8 +190,8 @@ function VideoSlide({ slide, viewer }: { slide: VideoSlideConfig; viewer: boolea
   );
 }
 
-function GallerySlide({ slide, language, viewer, photoIndex, canChangePhoto, onPhotoChange }: {
-  slide: GallerySlideConfig; language: string; viewer: boolean; photoIndex: number;
+function GallerySlide({ slide, language, viewer, active, photoIndex, canChangePhoto, onPhotoChange }: {
+  slide: GallerySlideConfig; language: string; viewer: boolean; active: boolean; photoIndex: number;
   canChangePhoto: boolean; onPhotoChange: (index: number) => void;
 }) {
   const { t } = useTranslation();
@@ -179,7 +203,7 @@ function GallerySlide({ slide, language, viewer, photoIndex, canChangePhoto, onP
   };
   return (
     <SwipeController onVertical={move} className="presentation-gallery">
-      <PhotoContent photo={photo} language={language} />
+      <PhotoContent photo={photo} language={language} active={active} />
       {viewer ? slide.photos.length > 1 && <div className="presentation-photo-dots" role="img"
         aria-label={t('presentation.photo_progress', { current: photoIndex + 1, total: slide.photos.length })}>
         {slide.photos.map((item, i) => <span key={`${item.url}-${i}`} className="presentation-dot"
@@ -291,7 +315,7 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
   let content;
   switch (slide.type) {
     case 'static':
-      content = <>{slide.image && <PhotoContent photo={slide.image} language={language} />}
+      content = <>{slide.image && <PhotoContent photo={slide.image} language={language} active={active} />}
         {slide.html && (!slide.interactiveHtml || active)
           && <HtmlContent html={typeof slide.html === 'string' ? slide.html : localize(slide.html, language)}
             css={slide.css} title={title} theme={theme} viewer={viewer} staticSlide
@@ -301,7 +325,7 @@ export function SlideFactory({ slide, active, language, result, canRespond, send
       content = active ? <VideoSlide slide={slide} viewer={viewer} /> : null;
       break;
     case 'gallery':
-      content = <GallerySlide slide={slide} language={language} viewer={viewer} photoIndex={galleryPhotoIndex}
+      content = <GallerySlide slide={slide} language={language} viewer={viewer} active={active} photoIndex={galleryPhotoIndex}
         canChangePhoto={active && canChangePhoto && Boolean(onPhotoChange)}
         onPhotoChange={photoIndex => onPhotoChange?.(slide.id, photoIndex)} />;
       break;

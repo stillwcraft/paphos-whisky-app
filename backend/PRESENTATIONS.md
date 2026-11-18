@@ -335,6 +335,11 @@ and 24px edge gutters reduce gesture conflicts. Native iOS system edge gestures
 cannot be guaranteed cancellable; gestures intentionally do not begin there.
 Presenter buttons provide non-gesture navigation and accessibility fallbacks.
 
+Static and gallery photos support pinch and double-tap zoom up to 4x. At
+normal size, one-finger swipes still navigate slides or gallery photos. While
+zoomed in, dragging the photo pans it instead. Zoom resets when the photo
+changes or its slide is no longer active. Captions stay outside the zoom area.
+
 Static and tab HTML/CSS render in a CSP-restricted, scriptless sandboxed iframe
 by default. Reviewed static HTML can opt into inline scripts with
 `interactiveHtml: true`, as documented above. Parent/app navigation remains
