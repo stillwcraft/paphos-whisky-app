@@ -60,7 +60,13 @@ or attendee information. Fetch `/api/social/events/{id}` on marker click for
 full event details. The existing `/api/events` catalog also accepts
 `upcoming=true` to filter to valid event dates whose two-hour window has not
 ended (strictly after the current UTC instant), before applying `limit` and
-`offset`; omitting it preserves the original catalog listing. Public
+`offset`; omitting it preserves the original catalog listing.
+The Events tab uses `timeline=start` to open a chronological page three
+events before the first ongoing or upcoming event. If there are fewer past
+events it starts at the earliest available event; if all events are past it
+starts with the last three. The response `offset` is absolute;
+`timeline=page` uses explicit `offset` and `limit` in the same ordering for
+archive and later pages. Public
 `GET /api/events/map?lang=en` returns an unpaginated array of geolocated
 catalog events still within that same window, containing only
 `{id, title, date, location, latitude, longitude}`. `title` uses the same

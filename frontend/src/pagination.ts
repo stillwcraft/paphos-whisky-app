@@ -30,6 +30,7 @@ export function useInfiniteScroll(
   onLoadMore: () => void,
   enabled: boolean,
   root?: RefObject<Element>,
+  rootMargin = '240px',
 ) {
   const [sentinel, setSentinel] = useState<Element | null>(null);
   const sentinelRef = useCallback((node: Element | null) => setSentinel(node), []);
@@ -44,11 +45,11 @@ export function useInfiniteScroll(
           onLoadMore();
         }
       },
-      { root: root?.current ?? null, rootMargin: '240px' },
+      { root: root?.current ?? null, rootMargin },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [enabled, onLoadMore, root, sentinel]);
+  }, [enabled, onLoadMore, root, rootMargin, sentinel]);
 
   return sentinelRef;
 }

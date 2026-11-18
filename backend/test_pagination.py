@@ -110,6 +110,41 @@ class PaginationTest(unittest.TestCase):
         self.assert_page(get_events(limit=1, offset=4, upcoming=True, db=self.db),
                          total=4, limit=1, offset=4, size=0, has_more=False)
 
+    def test_timeline_opens_three_events_before_current_and_pages_in_both_directions(self):
+        self.db.query(models.Event).delete()
+        now = datetime.now(timezone.utc)
+        dates = [(now - timedelta(days=day)).isoformat() for day in range(7, 0, -1)]
+        dates += [
+            (now - timedelta(hours=1)).astimezone(timezone(timedelta(hours=10))).isoformat(),
+            (now + timedelta(hours=1)).astimezone(timezone(-timedelta(hours=10))).isoformat(),
+        ]
+        events = [models.Event(title=f"Timeline {i}", date=date, description="", price=1)
+                  for i, date in enumerate(dates)]
+        self.db.add_all(events)
+        self.db.commit()
+
+        start = get_events(limit=4, offset=0, timeline="start", db=self.db)
+        self.assert_page(start, total=9, limit=4, offset=4, size=4, has_more=True)
+        self.assertEqual([item.id for item in start["items"]], [event.id for event in events[4:8]])
+
+        older = get_events(limit=4, offset=0, timeline="page", db=self.db)
+        self.assertEqual([item.id for item in older["items"]], [event.id for event in events[:4]])
+        newer = get_events(limit=4, offset=8, timeline="page", db=self.db)
+        self.assert_page(newer, total=9, limit=4, offset=8, size=1, has_more=False)
+        self.assertEqual(newer["items"][0].id, events[8].id)
+
+        for event in events[7:]:
+            self.db.delete(event)
+        self.db.commit()
+        past_only = get_events(limit=4, offset=0, timeline="start", db=self.db)
+        self.assert_page(past_only, total=7, limit=4, offset=4, size=3, has_more=False)
+        self.assertEqual([item.id for item in past_only["items"]], [event.id for event in events[4:7]])
+
+        self.db.query(models.Event).filter(models.Event.id < events[5].id).delete()
+        self.db.commit()
+        short = get_events(limit=4, offset=0, timeline="start", db=self.db)
+        self.assert_page(short, total=2, limit=4, offset=0, size=2, has_more=False)
+
     def test_public_event_map_is_small_localized_and_current(self):
         current = datetime.now(timezone.utc)
         rows = [

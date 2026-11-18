@@ -1835,11 +1835,34 @@ def get_events(
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     upcoming: bool = False,
+    timeline: Optional[Literal["start", "page"]] = None,
     db: Session = Depends(get_db),
 ):
     event_counts = get_event_counts_subquery(db)
     bottle_counts = get_event_bottle_counts_subquery(db)
-    if upcoming:
+    page_ids = None
+    if timeline is not None:
+        # Sort by the actual instant rather than by the stored timezone suffix.
+        undated_ids = []
+        dated_ids = []
+        for event_id, date in db.query(models.Event.id, models.Event.date):
+            parsed = parse_event_date_to_utc(date)
+            if parsed is None:
+                undated_ids.append(event_id)
+            else:
+                dated_ids.append((parsed, event_id))
+        dated_ids.sort()
+        ordered_ids = sorted(undated_ids) + [event_id for _, event_id in dated_ids]
+        total = len(ordered_ids)
+        if timeline == "start" and dated_ids:
+            current_cutoff = datetime.now(timezone.utc) - timedelta(hours=2)
+            current_index = next(
+                (index for index, (date, _) in enumerate(dated_ids) if date > current_cutoff),
+                len(dated_ids),
+            )
+            offset = len(undated_ids) + max(0, current_index - 3)
+        page_ids = ordered_ids[offset:offset + limit]
+    elif upcoming:
         current_time = datetime.now(timezone.utc)
         candidate_dates = db.query(models.Event.id, models.Event.date).filter(
             recent_event_date_filter(current_time)
@@ -1850,10 +1873,10 @@ def get_events(
         )
         total = len(dated_ids)
         page_ids = [event_id for _, event_id in dated_ids[offset:offset + limit]]
-        if not page_ids:
-            return build_paginated_response([], total, limit, offset)
     else:
         total = db.query(func.count(models.Event.id)).scalar() or 0
+    if page_ids == []:
+        return build_paginated_response([], total, limit, offset)
     events = (
         db.query(
             models.Event,
@@ -1865,7 +1888,7 @@ def get_events(
         .outerjoin(event_counts, models.Event.id == event_counts.c.event_id)
         .outerjoin(bottle_counts, models.Event.id == bottle_counts.c.event_id)
     )
-    if upcoming:
+    if page_ids is not None:
         events = events.filter(models.Event.id.in_(page_ids)).all()
         event_order = {event_id: index for index, event_id in enumerate(page_ids)}
         events.sort(key=lambda row: event_order[row[0].id])

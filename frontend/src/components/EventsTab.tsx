@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { initData, useSignal } from '@tma.js/sdk-react';
 import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
@@ -14,6 +14,7 @@ import { EVENT_DURATION_MS } from '@/helpers/eventTime.ts';
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 const EVENTS_PAGE_SIZE = 8;
 const EVENTS_CACHE_STALE_TIME = 5 * 60 * 1000;
+const EVENT_CARD_HEIGHT = 'h-[calc(100dvh-7rem)] min-h-[24rem]';
 type I18nString = Partial<Record<'en' | 'ru' | 'uk', string>>;
 
 type EventLineupBottle = {
@@ -76,6 +77,7 @@ type EventDetail = EventSummary & {
 
 type EventListPage = {
   items: EventSummary[];
+  offset: number;
   hasMore: boolean;
 };
 
@@ -109,6 +111,8 @@ function readEventsCache(languageCode: string): EventListCache | null {
       || cached === null
       || !('items' in cached)
       || !Array.isArray(cached.items)
+      || !('offset' in cached)
+      || typeof cached.offset !== 'number'
       || !('hasMore' in cached)
       || typeof cached.hasMore !== 'boolean'
       || !('updatedAt' in cached)
@@ -135,11 +139,13 @@ function writeEventsCache(languageCode: string, page: EventListPage, updatedAt: 
 
 async function fetchEventsPage(
   languageCode: string,
-  offset: number,
   signal?: AbortSignal,
+  offset?: number,
+  limit = EVENTS_PAGE_SIZE,
 ): Promise<EventListPage> {
+  const mode = offset === undefined ? 'start' : 'page';
   const response = await fetch(localizedApiUrl(
-    paginatedUrl(`${API_BASE_URL}/api/events`, EVENTS_PAGE_SIZE, offset),
+    paginatedUrl(`${API_BASE_URL}/api/events?timeline=${mode}`, limit, offset ?? 0),
     languageCode,
   ), { signal });
   if (!response.ok) {
@@ -148,7 +154,21 @@ async function fetchEventsPage(
   const page = normalizePaginatedResponse(
     await response.json() as PaginatedResponse<EventSummary> | EventSummary[],
   );
-  return { items: page.items, hasMore: page.has_more };
+  return { items: page.items, offset: page.offset, hasMore: page.has_more };
+}
+
+function closestTimelineIndex(timeline: HTMLElement): number | undefined {
+  const center = timeline.scrollTop + timeline.clientHeight / 2;
+  let closestIndex: number | undefined;
+  let closestDistance = Infinity;
+  for (const card of timeline.querySelectorAll<HTMLElement>('[data-event-index]')) {
+    const distance = Math.abs(card.offsetTop + card.clientHeight / 2 - center);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestIndex = Number(card.dataset.eventIndex);
+    }
+  }
+  return closestIndex;
 }
 
 function formatDate(date: string) {
@@ -409,7 +429,7 @@ function EventGalleryCard({
   const galleryRef = useRef<HTMLDivElement>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(1);
   const [isCardVisible, setIsCardVisible] = useState(false);
-  const [isCenterImageReady, setIsCenterImageReady] = useState(false);
+  const [loadedCenterImageUrl, setLoadedCenterImageUrl] = useState<string | null>(null);
   const [loadedImageIndexes, setLoadedImageIndexes] = useState<number[]>(
     isInitialEvent ? [1] : [],
   );
@@ -419,6 +439,7 @@ function EventGalleryCard({
     event.image_url_right ?? event.image_url,
   ];
   const bannerDate = formatEventBannerDate(event.date, i18n.language);
+  const isCenterImageReady = !event.image_url || loadedCenterImageUrl === event.image_url;
 
   useEffect(() => {
     const gallery = galleryRef.current;
@@ -426,7 +447,6 @@ function EventGalleryCard({
       return;
     }
 
-    setIsCenterImageReady(false);
     const scrollToCenter = () => gallery.scrollTo({
       left: gallery.clientWidth,
       behavior: 'auto',
@@ -469,12 +489,6 @@ function EventGalleryCard({
     }
   }, [isCardVisible, isInitialEvent]);
 
-  useEffect(() => {
-    if (!event.image_url) {
-      setIsCenterImageReady(true);
-    }
-  }, [event.image_url]);
-
   const updateActiveImage = () => {
     const gallery = galleryRef.current;
     if (!gallery || gallery.clientWidth === 0) {
@@ -502,7 +516,7 @@ function EventGalleryCard({
   };
 
   return (
-    <article ref={cardRef} className="relative h-[calc(100dvh-7rem)] min-h-[24rem] w-full snap-center overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20">
+    <article ref={cardRef} className={`${EVENT_CARD_HEIGHT} relative w-full overflow-hidden rounded-2xl bg-slate-800 shadow-xl shadow-black/20`}>
       <style>{`
         .event-gallery::-webkit-scrollbar { display: none; }
         @keyframes event-banner-logo { from { opacity: 0; transform: translateX(-0.75rem); } to { opacity: 1; transform: translateX(0); } }
@@ -534,8 +548,8 @@ function EventGalleryCard({
                   decoding="async"
                   fetchPriority={isInitialImage ? 'high' : 'auto'}
                   loading={isInitialImage ? 'eager' : 'lazy'}
-                  onError={index === 1 ? () => setIsCenterImageReady(true) : undefined}
-                  onLoad={index === 1 ? () => setIsCenterImageReady(true) : undefined}
+                  onError={index === 1 ? () => setLoadedCenterImageUrl(imageUrl) : undefined}
+                  onLoad={index === 1 ? () => setLoadedCenterImageUrl(imageUrl) : undefined}
                   src={imageUrl}
                 />
               ) : (
@@ -712,29 +726,33 @@ function BottomSheet({
   );
 }
 
-export function EventsTab({
-  selectedEventId = null,
-  onSelectedEventHandled,
-  onDetailClosed,
-}: {
+type EventsTabProps = {
   selectedEventId?: number | null;
   onSelectedEventHandled?: () => void;
   onDetailClosed?: () => void;
-}) {
+};
+
+export function EventsTab(props: EventsTabProps) {
+  const { i18n } = useTranslation();
+  return <LocalizedEventsTab key={i18n.language} {...props} />;
+}
+
+function LocalizedEventsTab({
+  selectedEventId = null,
+  onSelectedEventHandled,
+  onDetailClosed,
+}: EventsTabProps) {
   const { i18n, t } = useTranslation();
   const initDataState = useSignal(initData.state);
   const initDataRaw = useSignal(initData.raw);
   const languageCode = i18n.language;
   const telegramId = initDataState?.user?.id;
-  const [events, setEvents] = useState<EventSummary[]>(
-    () => readEventsCache(languageCode)?.items ?? [],
-  );
+  const [timelinePage, setTimelinePage] = useState<EventListPage | null>(null);
   const [eventDetails, setEventDetails] = useState<Record<number, EventDetail>>({});
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(
-    () => readEventsCache(languageCode)?.hasMore ?? false,
-  );
+  const [loadingDirection, setLoadingDirection] = useState<'older' | 'newer' | null>(null);
+  const [failedDirection, setFailedDirection] = useState<'older' | 'newer' | null>(null);
+  const pageRequestRef = useRef<AbortController | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<number | null>(null);
   const [sheetEvent, setSheetEvent] = useState<EventSummary | null>(null);
   const [sheetMode, setSheetMode] = useState<SheetMode>('registration');
@@ -744,7 +762,8 @@ export function EventsTab({
   const timelineScrollTimerRef = useRef<number | null>(null);
   const virtualWindowFrameRef = useRef<number | null>(null);
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
-  const [virtualCenterIndex, setVirtualCenterIndex] = useState(0);
+  const [virtualCenterIndex, setVirtualCenterIndex] = useState<number | null>(null);
+  const restoreIndexRef = useRef<number | undefined>(undefined);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
   const [lineupInspectorEvent, setLineupInspectorEvent] = useState<EventDetail | null>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
@@ -755,65 +774,67 @@ export function EventsTab({
   const [isUpdatingLineupBottle, setIsUpdatingLineupBottle] = useState<number | null>(null);
 
   const eventsQuery = useQuery({
-    queryKey: ['events', languageCode, EVENTS_PAGE_SIZE],
-    queryFn: ({ signal }) => fetchEventsPage(languageCode, 0, signal),
+    queryKey: ['events', 'timeline', languageCode, EVENTS_PAGE_SIZE],
+    queryFn: ({ signal }) => fetchEventsPage(languageCode, signal),
     staleTime: EVENTS_CACHE_STALE_TIME,
     refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     initialData: () => readEventsCache(languageCode) ?? undefined,
     initialDataUpdatedAt: () => readEventsCache(languageCode)?.updatedAt,
   });
-  const isLoading = eventsQuery.isPending && events.length === 0;
+  const isLoading = timelinePage === null && !eventsQuery.isError;
+  const events = timelinePage?.items ?? [];
+  const firstIndex = timelinePage?.offset ?? 0;
+  const hasOlder = firstIndex > 0;
+  const hasMore = timelinePage?.hasMore ?? false;
+  const initialEventId = eventsQuery.data?.items[0]?.id;
 
-  const loadEvents = useCallback(async (offset: number) => {
-    setIsLoadingMore(true);
+  const loadEvents = useCallback(async (direction: 'older' | 'newer') => {
+    if (!timelinePage || pageRequestRef.current) return;
+    const { items, offset, hasMore } = timelinePage;
+    const older = direction === 'older';
+    const limit = older ? Math.min(offset, EVENTS_PAGE_SIZE) : EVENTS_PAGE_SIZE;
+    if (limit === 0 || (!older && !hasMore)) return;
+
+    const controller = new AbortController();
+    pageRequestRef.current = controller;
+    setLoadingDirection(direction);
+    setFailedDirection(null);
+    setFeedback(null);
     try {
-      const page = await fetchEventsPage(languageCode, offset);
-      setEvents((current) => {
-        const nextEvents = [...current, ...page.items];
-        writeEventsCache(
-          languageCode,
-          { items: nextEvents, hasMore: page.hasMore },
-          readEventsCache(languageCode)?.updatedAt ?? eventsQuery.dataUpdatedAt,
-        );
-        return nextEvents;
-      });
-      setHasMore(page.hasMore);
+      const page = await fetchEventsPage(
+        languageCode, controller.signal, older ? offset - limit : offset + items.length, limit,
+      );
+      if (controller.signal.aborted) return;
+      const timeline = timelineRef.current;
+      if (older && timeline) restoreIndexRef.current = closestTimelineIndex(timeline);
+      setTimelinePage((current) => current && ({
+        items: older ? [...page.items, ...current.items] : [...current.items, ...page.items],
+        offset: older ? page.offset : current.offset,
+        hasMore: older ? current.hasMore : page.hasMore,
+      }));
     } catch (error) {
+      if (controller.signal.aborted) return;
+      setFailedDirection(direction);
       setFeedback({
         kind: 'error',
         message: error instanceof Error ? error.message : 'Не удалось загрузить события.',
       });
     } finally {
-      setIsLoadingMore(false);
+      if (!controller.signal.aborted) {
+        pageRequestRef.current = null;
+        setLoadingDirection(null);
+      }
     }
-  }, [eventsQuery.dataUpdatedAt, languageCode]);
-
-  useEffect(() => {
-    const cachedEvents = readEventsCache(languageCode);
-    setEvents(cachedEvents?.items ?? []);
-    setHasMore(cachedEvents?.hasMore ?? false);
-    setEventDetails({});
-    setExpandedEventId(null);
-  }, [languageCode]);
+  }, [languageCode, timelinePage]);
 
   useEffect(() => {
     const page = eventsQuery.data;
-    if (!page) {
-      return;
-    }
-    setEvents(page.items);
-    writeEventsCache(languageCode, page, eventsQuery.dataUpdatedAt);
-    setHasMore(page.hasMore);
-    setEventDetails((current) => {
-      const next = { ...current };
-      for (const event of page.items) {
-        if (next[event.id]) {
-          next[event.id] = { ...next[event.id], ...event };
-        }
-      }
-      return next;
-    });
-  }, [eventsQuery.data, eventsQuery.dataUpdatedAt, languageCode]);
+    if (!page || (!eventsQuery.isFetchedAfterMount && !eventsQuery.isError)) return;
+    setTimelinePage((current) => current ?? page);
+    if (!eventsQuery.isError) writeEventsCache(languageCode, page, eventsQuery.dataUpdatedAt);
+  }, [eventsQuery.data, eventsQuery.dataUpdatedAt, eventsQuery.isError, eventsQuery.isFetchedAfterMount, languageCode]);
 
   useEffect(() => {
     if (!eventsQuery.error) {
@@ -827,41 +848,30 @@ export function EventsTab({
     });
   }, [eventsQuery.error]);
 
-  const orderedEvents = useMemo(
-    () => [...events].sort(
-      (first, second) => new Date(first.date).valueOf() - new Date(second.date).valueOf(),
-    ),
-    [events],
-  );
-  const centeredEventIndex = useMemo(() => {
-    const nextEventIndex = orderedEvents.findIndex(
-      (event) => isEventTodayOrFuture(event.date),
-    );
+  const centerIndex = virtualCenterIndex ?? firstIndex;
 
-    return nextEventIndex === -1 ? orderedEvents.length - 1 : nextEventIndex;
-  }, [orderedEvents]);
-  const initialEventId = orderedEvents[centeredEventIndex]?.id;
-  const virtualWindowStart = Math.max(0, virtualCenterIndex - 2);
-  const virtualWindowEnd = Math.min(orderedEvents.length - 1, virtualCenterIndex + 2);
-
-  useEffect(() => {
-    setVirtualCenterIndex(centeredEventIndex);
+  useLayoutEffect(() => {
+    const index = restoreIndexRef.current ?? firstIndex;
+    restoreIndexRef.current = undefined;
     const timeline = timelineRef.current;
     const centeredCard = timeline?.querySelector<HTMLElement>(
-      `[data-event-index="${centeredEventIndex}"]`,
+      `[data-event-index="${index}"]`,
     );
 
     if (!timeline || !centeredCard) {
       return;
     }
 
+    setVirtualCenterIndex(index);
     timeline.scrollTo({
       top: centeredCard.offsetTop - (timeline.clientHeight - centeredCard.clientHeight) / 2,
-      behavior: 'auto',
+      behavior: 'instant',
     });
-  }, [centeredEventIndex, orderedEvents.length]);
+  }, [firstIndex]);
 
   useEffect(() => () => {
+    pageRequestRef.current?.abort();
+    pageRequestRef.current = null;
     if (timelineScrollTimerRef.current !== null) {
       window.clearTimeout(timelineScrollTimerRef.current);
     }
@@ -876,27 +886,15 @@ export function EventsTab({
       return;
     }
 
-    const focusedCard = Array.from(
-      timeline.querySelectorAll<HTMLElement>('[data-event-index]'),
-    ).reduce<HTMLElement | null>((closestCard, card) => {
-      if (!closestCard) {
-        return card;
-      }
-
-      const viewportCenter = timeline.scrollTop + timeline.clientHeight / 2;
-      const cardCenter = card.offsetTop + card.clientHeight / 2;
-      const closestCardCenter = closestCard.offsetTop + closestCard.clientHeight / 2;
-      return Math.abs(cardCenter - viewportCenter) < Math.abs(closestCardCenter - viewportCenter)
-        ? card
-        : closestCard;
-    }, null);
-    const focusedIndex = Number(focusedCard?.dataset.eventIndex);
-    const focusedEvent = orderedEvents[focusedIndex];
-    if (!focusedEvent) {
+    const focusedIndex = closestTimelineIndex(timeline);
+    const focusedEventId = timeline.querySelector<HTMLElement>(
+      `[data-event-index="${focusedIndex}"]`,
+    )?.dataset.eventId;
+    if (focusedEventId === undefined) {
       return;
     }
 
-    setFocusedEventId(focusedEvent.id);
+    setFocusedEventId(Number(focusedEventId));
     setGalleryResetRevision((current) => current + 1);
   };
 
@@ -909,23 +907,8 @@ export function EventsTab({
           return;
         }
 
-        const viewportCenter = timeline.scrollTop + timeline.clientHeight / 2;
-        const focusedCard = Array.from(
-          timeline.querySelectorAll<HTMLElement>('[data-event-index]'),
-        ).reduce<HTMLElement | null>((closestCard, card) => {
-          if (!closestCard) {
-            return card;
-          }
-          const cardCenter = card.offsetTop + card.clientHeight / 2;
-          const closestCardCenter = closestCard.offsetTop + closestCard.clientHeight / 2;
-          return Math.abs(cardCenter - viewportCenter) < Math.abs(closestCardCenter - viewportCenter)
-            ? card
-            : closestCard;
-        }, null);
-        const index = Number(focusedCard?.dataset.eventIndex);
-        if (Number.isInteger(index)) {
-          setVirtualCenterIndex((current) => current === index ? current : index);
-        }
+        const index = closestTimelineIndex(timeline);
+        if (index !== undefined) setVirtualCenterIndex(index);
       });
     }
     if (timelineScrollTimerRef.current !== null) {
@@ -995,13 +978,16 @@ export function EventsTab({
   const refreshEventCounts = useCallback(async (eventId: number) => {
     try {
       const detail = await fetchEventDetail(eventId);
-      setEvents((current) => current.map((event) => event.id === eventId
-        ? {
-          ...event,
-          registered_count: detail.registered_count,
-          samples_count: detail.samples_count,
-        }
-        : event));
+      setTimelinePage((current) => current && ({
+        ...current,
+        items: current.items.map((event) => event.id === eventId
+          ? {
+            ...event,
+            registered_count: detail.registered_count,
+            samples_count: detail.samples_count,
+          }
+          : event),
+      }));
     } catch {
       // Counts remain unchanged until the next list refresh if the background request fails.
     }
@@ -1086,12 +1072,17 @@ export function EventsTab({
     }
   };
 
-  const loadMoreEvents = useCallback(() => {
-    if (hasMore && !isLoadingMore) void loadEvents(events.length);
-  }, [events.length, hasMore, isLoadingMore, loadEvents]);
-  const eventSentinelRef = useInfiniteScroll(
-    loadMoreEvents,
-    hasMore && !isLoading && !isLoadingMore,
+  const loadOlderEvents = useCallback(() => void loadEvents('older'), [loadEvents]);
+  const loadNewerEvents = useCallback(() => void loadEvents('newer'), [loadEvents]);
+  const olderSentinelRef = useInfiniteScroll(
+    loadOlderEvents,
+    hasOlder && loadingDirection === null && failedDirection !== 'older',
+    timelineRef,
+    '0px',
+  );
+  const newerSentinelRef = useInfiniteScroll(
+    loadNewerEvents,
+    hasMore && loadingDirection === null && failedDirection !== 'newer',
     timelineRef,
   );
 
@@ -1188,13 +1179,25 @@ export function EventsTab({
       ) : (
         <div
           ref={timelineRef}
-          className="h-[calc(100dvh-6rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth"
+          className="relative h-[calc(100dvh-6rem)] min-h-[24rem] snap-y snap-mandatory overflow-y-auto overscroll-contain [overflow-anchor:none]"
           onScroll={handleTimelineScroll}
         >
           <ol className="h-full space-y-4">
-            {orderedEvents.map((event, index) => (
-              <li key={event.id} data-event-index={index} className="snap-center" style={{ scrollSnapStop: 'always' }}>
-                {index >= virtualWindowStart && index <= virtualWindowEnd ? (
+            {hasOlder && (
+              <li
+                data-event-index={firstIndex - 1}
+                className={`${EVENT_CARD_HEIGHT} grid snap-center snap-always place-items-center text-sm text-slate-400`}
+              >
+                {failedDirection === 'older' ? (
+                  <button type="button" onClick={loadOlderEvents}>{t('common.retry')}</button>
+                ) : (
+                  <span ref={olderSentinelRef} role="status">{t('common.loading')}</span>
+                )}
+              </li>
+            )}
+            {events.map((event, index) => (
+              <li key={event.id} data-event-id={event.id} data-event-index={firstIndex + index} className="snap-center snap-always">
+                {Math.abs(firstIndex + index - centerIndex) <= 2 ? (
                   <EventGalleryCard
                     event={{ ...event, bottles: eventDetails[event.id]?.bottles }}
                     isFocused={focusedEventId === event.id}
@@ -1205,12 +1208,17 @@ export function EventsTab({
                     timelineRootRef={timelineRef}
                   />
                 ) : (
-                  <div aria-hidden="true" className="h-[calc(100dvh-7rem)] min-h-[24rem] w-full" />
+                  <div aria-hidden="true" className={`${EVENT_CARD_HEIGHT} w-full`} />
                 )}
               </li>
             ))}
-            {hasMore && <li ref={eventSentinelRef} className="h-px" aria-hidden="true" />}
-            {isLoadingMore && <li className="py-3 text-center text-sm text-slate-400">Loading…</li>}
+            {hasMore && <li ref={newerSentinelRef} className="h-px" aria-hidden="true" />}
+            {loadingDirection === 'newer' && <li className="py-3 text-center text-sm text-slate-400">{t('common.loading')}</li>}
+            {failedDirection === 'newer' && (
+              <li className="snap-end py-3 text-center text-sm text-slate-400">
+                <button type="button" onClick={loadNewerEvents}>{t('common.retry')}</button>
+              </li>
+            )}
           </ol>
         </div>
       )}
