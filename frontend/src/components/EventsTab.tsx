@@ -9,7 +9,7 @@ import { BottleTagChart } from '@/components/BottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 import { eventsCacheKey } from '@/eventsCache.ts';
-import { EVENT_DURATION_MS } from '@/helpers/eventTime.ts';
+import { EVENT_DURATION_MS, getTimelineTargetIndex } from '@/helpers/eventTime.ts';
 
 const API_BASE_URL = 'https://paphos-whisky-api.onrender.com';
 const EVENTS_PAGE_SIZE = 8;
@@ -169,6 +169,15 @@ function closestTimelineIndex(timeline: HTMLElement): number | undefined {
     }
   }
   return closestIndex;
+}
+
+function centerTimelineCard(timeline: HTMLElement, index: number, behavior: ScrollBehavior) {
+  const card = timeline.querySelector<HTMLElement>(`[data-event-index="${index}"]`);
+  if (!card) return;
+  timeline.scrollTo({
+    top: card.offsetTop - (timeline.clientHeight - card.clientHeight) / 2,
+    behavior,
+  });
 }
 
 function formatDate(date: string) {
@@ -764,6 +773,8 @@ function LocalizedEventsTab({
   const [focusedEventId, setFocusedEventId] = useState<number | null>(null);
   const [virtualCenterIndex, setVirtualCenterIndex] = useState<number | null>(null);
   const restoreIndexRef = useRef<number | undefined>(undefined);
+  const introStartedRef = useRef(false);
+  const openedFromLinkRef = useRef(selectedEventId !== null);
   const [galleryResetRevision, setGalleryResetRevision] = useState(0);
   const [lineupInspectorEvent, setLineupInspectorEvent] = useState<EventDetail | null>(null);
   const [lineupBottle, setLineupBottle] = useState<EventLineupBottle | null>(null);
@@ -788,7 +799,9 @@ function LocalizedEventsTab({
   const firstIndex = timelinePage?.offset ?? 0;
   const hasOlder = firstIndex > 0;
   const hasMore = timelinePage?.hasMore ?? false;
-  const initialEventId = eventsQuery.data?.items[0]?.id;
+  const openingPage = eventsQuery.data;
+  const initialEventId = openingPage?.items[0]?.id;
+  const hasEvents = events.length > 0;
 
   const loadEvents = useCallback(async (direction: 'older' | 'newer') => {
     if (!timelinePage || pageRequestRef.current) return;
@@ -851,23 +864,36 @@ function LocalizedEventsTab({
   const centerIndex = virtualCenterIndex ?? firstIndex;
 
   useLayoutEffect(() => {
-    const index = restoreIndexRef.current ?? firstIndex;
-    restoreIndexRef.current = undefined;
     const timeline = timelineRef.current;
-    const centeredCard = timeline?.querySelector<HTMLElement>(
-      `[data-event-index="${index}"]`,
-    );
-
-    if (!timeline || !centeredCard) {
+    if (!timeline || !hasEvents) return;
+    const restoreIndex = restoreIndexRef.current;
+    if (restoreIndex !== undefined) {
+      restoreIndexRef.current = undefined;
+      setVirtualCenterIndex(restoreIndex);
+      centerTimelineCard(timeline, restoreIndex, 'instant');
       return;
     }
 
-    setVirtualCenterIndex(index);
-    timeline.scrollTo({
-      top: centeredCard.offsetTop - (timeline.clientHeight - centeredCard.clientHeight) / 2,
-      behavior: 'instant',
+    if (introStartedRef.current || !openingPage?.items.length) return;
+    const targetIndex = openingPage.offset + getTimelineTargetIndex(openingPage.items, Date.now());
+    if (targetIndex === firstIndex || openedFromLinkRef.current
+      || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      introStartedRef.current = true;
+      setVirtualCenterIndex(targetIndex);
+      centerTimelineCard(timeline, targetIndex, 'instant');
+      return;
+    }
+
+    centerTimelineCard(timeline, firstIndex, 'instant');
+    // Paint the starting card before asking the browser to scroll to the destination.
+    let frame = window.requestAnimationFrame(() => {
+      frame = window.requestAnimationFrame(() => {
+        introStartedRef.current = true;
+        centerTimelineCard(timeline, targetIndex, 'smooth');
+      });
     });
-  }, [firstIndex]);
+    return () => window.cancelAnimationFrame(frame);
+  }, [firstIndex, hasEvents, openingPage]);
 
   useEffect(() => () => {
     pageRequestRef.current?.abort();

@@ -66,7 +66,11 @@ events before the first ongoing or upcoming event. If there are fewer past
 events it starts at the earliest available event; if all events are past it
 starts with the last three. The response `offset` is absolute;
 `timeline=page` uses explicit `offset` and `limit` in the same ordering for
-archive and later pages. Public
+archive and later pages. On opening the tab, the client scrolls from the
+first card in the starting page to the first ongoing or upcoming event (or
+the latest past event if none remain).
+
+Public
 `GET /api/events/map?lang=en` returns an unpaginated array of geolocated
 catalog events still within that same window, containing only
 `{id, title, date, location, latitude, longitude}`. `title` uses the same
