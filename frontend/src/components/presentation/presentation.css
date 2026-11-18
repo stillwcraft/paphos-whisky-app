@@ -68,12 +68,10 @@
 .presentation-screen[data-themed] button[aria-pressed="true"], .presentation-screen[data-themed] button[aria-selected="true"] {
   background: var(--presentation-accent, #c5a059);
 }
-.presentation-heading { margin-top: 12px; color: var(--presentation-primary, #c5a059); font-weight: 600; }
 .presentation-subtitle { margin-bottom: 12px; }
 .presentation-caption { text-align: center; margin: 8px 0 12px; }
 .presentation-screen input { display: block; max-width: 100%; }
 .presentation-controls { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.presentation-screen header .presentation-controls { flex-wrap: wrap; }
 .presentation-swipe { touch-action: pan-y; overscroll-behavior-x: none; }
 /* Both axes are implemented here; pan-y would let the UA cancel gallery touches. */
 .presentation-swipe--gallery { touch-action: none; }
@@ -81,12 +79,92 @@
 .presentation-stage { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .presentation-annotation-canvas { position: absolute; inset: 0; z-index: 8; width: 100%; height: 100%; pointer-events: none; }
 .presentation-annotation-canvas[data-no-swipe] { pointer-events: auto; touch-action: none; cursor: crosshair; }
-.presentation-drawing-tools { margin-top: 8px; justify-content: flex-start; }
-.presentation-drawing-tools button { min-height: 36px; padding: 4px 8px; }
-.presentation-drawing-tools button[aria-pressed="true"] { outline: 2px solid var(--presentation-primary, #c5a059); outline-offset: -2px; }
-.presentation-drawing-options { display: flex; gap: 4px; }
-.presentation-draw-toggle { display: grid; place-items: center; }
-.presentation-draw-swatch { display: block; width: 14px; height: 14px; border-radius: 50%; }
+.presentation-screen--presenter {
+  gap: 6px;
+  padding: calc(6px + max(env(safe-area-inset-top, 0px), var(--presentation-safe-top, 0px)))
+    max(8px, env(safe-area-inset-right, 0px), var(--presentation-safe-right, 0px))
+    calc(6px + max(env(safe-area-inset-bottom, 0px), var(--presentation-safe-bottom, 0px)))
+    max(8px, env(safe-area-inset-left, 0px), var(--presentation-safe-left, 0px));
+}
+.presentation-presenter-header { flex: none; display: grid; gap: 4px; }
+.presentation-top-bar, .presentation-drawing-tools, .presentation-drawing-options {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.presentation-presenter-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--presentation-primary, #c5a059);
+  font-weight: 600;
+  text-align: center;
+}
+.presentation-connection-dot { flex: 0 0 8px; height: 8px; border-radius: 50%; background: #fbbf24; }
+.presentation-connection-dot[data-status="connected"] { background: #4ade80; }
+.presentation-connection-dot[data-status="reconnecting"] { animation: presentation-status-pulse 1.4s ease-in-out infinite; }
+.presentation-connection-dot[data-status="error"] { background: #f87171; }
+@keyframes presentation-status-pulse { 50% { opacity: .4; } }
+.presentation-screen button.presentation-compact-button {
+  --presentation-button-size: 36px;
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--presentation-button-size);
+  height: var(--presentation-button-size);
+  padding: 0;
+}
+.presentation-compact-button svg { width: 20px; height: 20px; }
+.presentation-screen button.presentation-stop-button { border-color: #ef444466; color: #f87171; }
+.presentation-drawing-tools { overflow-x: auto; }
+.presentation-drawing-tools button.presentation-compact-button { --presentation-button-size: 34px; }
+.presentation-drawing-tools button[aria-pressed="true"] {
+  outline: 2px solid var(--presentation-primary, #c5a059);
+  outline-offset: -2px;
+}
+.presentation-drawing-tools button.presentation-draw-swatch {
+  --presentation-button-size: 26px;
+  border-color: transparent;
+  border-radius: 50%;
+}
+.presentation-drawing-tools button.presentation-draw-swatch[aria-pressed="true"] { outline-color: #141417; }
+.presentation-presenter-nav {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: center;
+  height: 40px;
+  flex: none;
+}
+.presentation-presenter-nav-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.presentation-unlock-badge {
+  position: absolute;
+  inset: 1px 2px auto auto;
+  color: var(--presentation-primary, #c5a059);
+  font-size: 12px;
+  line-height: 1;
+}
+.presentation-screen--presenter .presentation-notice {
+  flex: none;
+  max-height: 12dvh;
+  margin: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  font-size: .75rem;
+}
 .presentation-slot[hidden] { display: none !important; }
 .presentation-slide { min-height: 100%; }
 .presentation-slide h1 { font-size: 1.5rem; margin-bottom: 12px; }
@@ -253,5 +331,6 @@
 @keyframes presentation-slide-left { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes presentation-zoom-in { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .presentation-slide, .presentation-slide [role="tab"] { animation: none; }
+  .presentation-slide, .presentation-slide [role="tab"],
+  .presentation-connection-dot[data-status="reconnecting"] { animation: none; }
 }

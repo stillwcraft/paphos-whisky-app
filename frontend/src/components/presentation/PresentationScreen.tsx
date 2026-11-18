@@ -46,6 +46,11 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
   const slideId = state?.slides[String(index)]?.id;
   const canDraw = !viewer && status === 'connected' && !pending && !linkDestination && !stoppingBroadcast
     && index === state?.current_slide_index && Boolean(slideId);
+  const title = localize(state?.title, i18n.language) || t('presentation.title');
+  const connectionLabel = t(`presentation.status.${status}`);
+  const notice = gestureError || session.error || broadcastError;
+  const unlocksNext = index === state?.max_unlocked_slide_index && index < maximum;
+  const nextLabel = t(unlocksNext ? 'presentation.activate_next' : 'presentation.next_slide');
 
   useEffect(() => {
     if (session.broadcastEnded) onBroadcastEnded?.();
@@ -72,48 +77,54 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
 
   return (
     <>
-    <section ref={screenRef} className={`presentation-screen${viewer ? ' presentation-screen--viewer' : ''}`}
+    <section ref={screenRef} className={`presentation-screen ${viewer ? 'presentation-screen--viewer' : 'presentation-screen--presenter'}`}
       style={{ ...safeAreaStyle, ...presentationThemeStyle(state?.theme) }}
       data-themed={state?.theme ? true : undefined}
       aria-hidden={linkDestination ? true : undefined}
-      aria-label={localize(state?.title, i18n.language) || t('presentation.title')}>
-      {!viewer && <header>
-        <div className="presentation-controls">
-          <button onClick={onClose}>{t('presentation.close')}</button>
-          <span role="status">{t(`presentation.status.${status}`)}{state?.role === 'presenter' ? ` · ${t('presentation.presenter')}` : ''}</span>
-          {state?.role === 'presenter' && onStopBroadcast && <button disabled={stoppingBroadcast}
-            onClick={onStopBroadcast}>{t('presentation.stop_broadcast')}</button>}
+      aria-label={title}>
+      {!viewer && <header className="presentation-presenter-header">
+        <div className="presentation-top-bar">
+          <button type="button" className="presentation-compact-button" onClick={onClose}
+            aria-label={t('presentation.close')} title={t('presentation.close')}>
+            <PresentationIcon name="close" />
+          </button>
+          <span className="presentation-connection-dot" data-status={status}
+            role="img" aria-label={connectionLabel} title={connectionLabel} />
+          <p className="presentation-presenter-title" title={title}>{title}</p>
+          {onStopBroadcast && <button type="button" className="presentation-compact-button presentation-stop-button"
+            aria-label={t('presentation.stop_broadcast')} title={t('presentation.stop_broadcast')}
+            disabled={stoppingBroadcast} onClick={onStopBroadcast}>
+            <PresentationIcon name="stop" />
+          </button>}
         </div>
-        {state?.title && <p className="presentation-heading">{localize(state.title, i18n.language)}</p>}
-        <div className="presentation-controls presentation-drawing-tools" role="group" aria-label={t('presentation.draw_tools')}>
-          <button type="button" className="presentation-draw-toggle" aria-pressed={drawing}
+        <div className="presentation-drawing-tools" role="group" aria-label={t('presentation.draw_tools')}>
+          <button type="button" className="presentation-compact-button" aria-pressed={drawing}
             aria-label={t('presentation.draw_toggle')} title={t('presentation.draw_toggle')}
             disabled={!canDraw} onClick={() => setDrawing(value => !value)}>
             <PresentationIcon name="pencil" />
           </button>
           <div className="presentation-drawing-options" role="group" aria-label={t('presentation.draw_tool')}>
-            {(['pen', 'laser'] as const).map(mode => <button key={mode} type="button"
+            {(['pen', 'laser'] as const).map(mode => <button key={mode} type="button" className="presentation-compact-button"
+              aria-label={t(`presentation.draw_${mode}`)} title={t(`presentation.draw_${mode}`)}
               aria-pressed={brushMode === mode} disabled={!canDraw || !drawing}
-              onClick={() => setBrushMode(mode)}>{t(`presentation.draw_${mode}`)}</button>)}
+              onClick={() => setBrushMode(mode)}><PresentationIcon name={mode} /></button>)}
           </div>
           <div className="presentation-drawing-options" role="group" aria-label={t('presentation.draw_color')}>
-            {ANNOTATION_COLORS.map(color => <button key={color.value} type="button"
+            {ANNOTATION_COLORS.map(color => <button key={color.value} type="button" className="presentation-compact-button presentation-draw-swatch"
               aria-label={t(color.label)} title={t(color.label)} aria-pressed={brushColor === color.value}
-              disabled={!canDraw || !drawing} onClick={() => setBrushColor(color.value)}>
-              <span className="presentation-draw-swatch" style={{ backgroundColor: color.value }} />
-            </button>)}
+              disabled={!canDraw || !drawing} onClick={() => setBrushColor(color.value)}
+              style={{ backgroundColor: color.value }} />)}
           </div>
-          <button type="button" aria-label={t('presentation.draw_clear_slide')} disabled={!canDraw} onClick={() => {
+          <button type="button" className="presentation-compact-button" aria-label={t('presentation.draw_clear_slide')}
+            title={t('presentation.draw_clear_slide')} disabled={!canDraw} onClick={() => {
             if (slideId && session.send({ type: 'draw_clear', slide_id: slideId })) {
               session.annotations.clearPreview(slideId);
             }
-          }}>{t('presentation.draw_clear')}</button>
+          }}><PresentationIcon name="trash" /></button>
         </div>
       </header>}
-      {(gestureError || session.error || broadcastError) && <p className="presentation-notice" role="alert">
-        {gestureError || session.error || broadcastError}</p>}
-      {viewer && state && status !== 'connected' && !session.error && <p className="presentation-notice" role="status">
-        {t(`presentation.status.${status}`)}</p>}
+      {notice ? <p className="presentation-notice" role="alert">{notice}</p>
+        : state && status !== 'connected' && <p className="presentation-notice" role="status">{connectionLabel}</p>}
       {state && !gestureError ? (
         <>
           <div className="presentation-stage-frame">
@@ -141,14 +152,27 @@ export function PresentationScreen({ roomId, onClose, onRoute, broadcastOnly = f
             aria-label={t('presentation.room_progress', { current: index + 1, total: state.slide_count })}>
             {Array.from({ length: state.slide_count }, (_, i) => <span key={i} aria-hidden="true"
               className="presentation-dot" data-active={i === index} data-locked={i > state.max_unlocked_slide_index} />)}
-          </div> : <footer className="presentation-controls">
-            <button disabled={controlsDisabled || index === 0} onClick={() => session.navigate(index - 1)}>{t('presentation.previous_slide')}</button>
-            <span>{index + 1} / {state.slide_count}</span>
-            <button disabled={controlsDisabled || index >= maximum} onClick={() => session.navigate(index + 1)}>
-              {t(state.role === 'presenter' ? 'presentation.activate_next' : 'presentation.next_slide')}
+          </div> : <footer className="presentation-presenter-nav">
+            <button type="button" className="presentation-compact-button"
+              aria-label={t('presentation.previous_slide')} title={t('presentation.previous_slide')}
+              disabled={controlsDisabled || index === 0} onClick={() => session.navigate(index - 1)}>
+              <PresentationIcon name="arrow-left" />
+            </button>
+            <div className="presentation-presenter-nav-center">
+              <span aria-label={t('presentation.room_progress', { current: index + 1, total: state.slide_count })}>
+                {index + 1} / {state.slide_count}
+              </span>
+              {index !== state.current_slide_index && <button type="button" className="presentation-compact-button"
+                aria-label={t('presentation.follow')} title={t('presentation.follow')} onClick={session.followPresenter}>
+                <PresentationIcon name="follow" />
+              </button>}
+            </div>
+            <button type="button" className="presentation-compact-button" aria-label={nextLabel} title={nextLabel}
+              disabled={controlsDisabled || index >= maximum} onClick={() => session.navigate(index + 1)}>
+              <PresentationIcon name="arrow-right" />
+              {unlocksNext && <span className="presentation-unlock-badge" aria-hidden="true">+</span>}
             </button>
           </footer>}
-          {!viewer && index !== state.current_slide_index && <button onClick={session.followPresenter}>{t('presentation.follow')}</button>}
         </>
       ) : !gestureError && <p className="presentation-loading">{t('presentation.synchronizing')}</p>}
       {viewer && <div className="presentation-viewer-actions">

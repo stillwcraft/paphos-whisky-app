@@ -333,7 +333,10 @@ Horizontal slides use `touch-action: pan-y`. Gallery gesture surfaces use
 distance thresholds, multi-touch cancellation, interactive-element exclusion,
 and 24px edge gutters reduce gesture conflicts. Native iOS system edge gestures
 cannot be guaranteed cancellable; gestures intentionally do not begin there.
-Presenter buttons provide non-gesture navigation and accessibility fallbacks.
+The presenter has a compact header with the room title and connection indicator,
+a single-row drawing toolbar, and a bottom navigation bar. The next arrow shows
+a `+` when it unlocks a slide. Icon buttons have localized accessible labels
+and provide a non-gesture navigation fallback.
 
 Static and gallery photos support pinch and double-tap zoom up to 4x. At
 normal size, one-finger swipes still navigate slides or gallery photos. While
