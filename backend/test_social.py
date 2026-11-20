@@ -21,6 +21,7 @@ from routers import social
 
 class SocialTest(unittest.TestCase):
     def setUp(self):
+        social._SIGNED_CACHE.clear()
         self.signed_mock = patch.object(social, "signed", return_value="https://example.test/signed-image")
         self.signed_client = self.signed_mock.start()
         self.notify_mock = patch.object(social, "notify", return_value="not_configured")
@@ -588,6 +589,93 @@ class SocialTest(unittest.TestCase):
             (_ for _ in ()).throw(main.HTTPException(401, "Unauthenticated"))
         )
         self.assertEqual(self.request("GET", "/events/map").status_code, 401)
+
+    def seed_crowd(self, event_id, first, count):
+        """Accepted attendees, each with a profile avatar and a chat message."""
+        with self.Session() as db:
+            for person in range(first, first + count):
+                db.add(models.SocialProfile(
+                    telegram_id=person, display_name=f"Guest{person}", age=30,
+                    avatar_key=f"avatar/{person:032x}.jpg"))
+                db.add(models.SocialJoinRequest(event_id=event_id, telegram_id=person, status="accepted"))
+                db.add(models.SocialChatMessage(event_id=event_id, sender_id=person, body=f"hi {person}"))
+            db.commit()
+
+    def count_selects(self, call):
+        queries = []
+        def record(connection, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                queries.append(statement)
+        sqlalchemy_event.listen(self.engine, "before_cursor_execute", record)
+        try:
+            result = call()
+        finally:
+            sqlalchemy_event.remove(self.engine, "before_cursor_execute", record)
+        return result, len(queries)
+
+    def test_event_detail_and_chat_queries_do_not_grow_with_attendees(self):
+        social._SIGNED_CACHE.clear()
+        event = self.create(capacity=None)
+        with self.Session() as db:
+            db.get(models.SocialProfile, 1).avatar_key = f"avatar/{1:032x}.jpg"
+            db.commit()
+        counts = {}
+        seeded = 0
+        for size in (2, 12):
+            self.seed_crowd(event, 100 + seeded, size - seeded)
+            seeded = size
+            self.signed_client.reset_mock()
+            detail, detail_queries = self.count_selects(lambda: self.request("GET", f"/events/{event}"))
+            self.assertEqual(detail.status_code, 200, detail.text)
+            body = detail.json()
+            self.assertEqual(len(body["attendees"]), size + 1)
+            self.assertEqual(body["attendee_count"], size + 1)
+            # Every distinct avatar plus the event photo is signed exactly once.
+            self.assertEqual(self.signed_client.call_count, size + 1 + 1)
+            self.signed_client.reset_mock()
+            chat, chat_queries = self.count_selects(lambda: self.request("GET", f"/events/{event}/chat"))
+            self.assertEqual(len(chat.json()), size)
+            self.assertEqual(self.signed_client.call_count, size)
+            counts[size] = (detail_queries, chat_queries)
+        self.assertEqual(counts[2], counts[12], counts)
+        self.assertLessEqual(counts[12][0], 12, counts)
+        self.assertLessEqual(counts[12][1], 8, counts)
+
+    def test_signed_urls_are_cached_briefly_and_signed_concurrently(self):
+        self.signed_mock.stop()
+        social._SIGNED_CACHE.clear()
+        env = {"SUPABASE_URL": "https://example.supabase.co",
+               "SUPABASE_SERVICE_ROLE_KEY": "fake-test-key", "SUPABASE_SOCIAL_BUCKET": "social"}
+        calls = []
+        class StorageResponse:
+            ok = True
+            def __init__(self, url):
+                self.url = url
+            def raise_for_status(self):
+                pass
+            def json(self):
+                return {"signedURL": "/object/sign/" + self.url.split("/object/sign/", 1)[1] + "?token=t"}
+        def post(url, **kwargs):
+            calls.append(url)
+            return StorageResponse(url)
+        keys = [f"avatar/{n:032x}.jpg" for n in range(6)]
+        try:
+            with patch.dict(os.environ, env), patch.object(social.requests, "post", side_effect=post):
+                first = social.sign_all([(key, 300) for key in keys + keys])
+                self.assertEqual(len(calls), 6)
+                again = social.sign_all([(key, 300) for key in keys])
+                self.assertEqual(len(calls), 6, "a second poll must reuse the cached signatures")
+                self.assertEqual(first, again)
+                social._SIGNED_CACHE.clear()
+                social.signed(keys[0], 300)
+                self.assertEqual(len(calls), 7)
+                # A cached URL is reused for at most half of its own lifetime.
+                with patch.object(social, "monotonic", return_value=social.monotonic() + 200):
+                    social.signed(keys[0], 300)
+                self.assertEqual(len(calls), 8)
+        finally:
+            self.signed_mock.start()
+            social._SIGNED_CACHE.clear()
 
     def test_auth_age_friendship_visibility_and_block(self):
         event = self.create("friends")

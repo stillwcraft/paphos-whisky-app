@@ -6,6 +6,7 @@ import math
 import socket
 import time
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import lru_cache
 from io import BytesIO
@@ -37,6 +38,8 @@ MAX_IMAGE_PIXELS = 6_000_000
 CACHE_BYTES = 12 * 1024 * 1024
 CACHE_TTL = 300
 _render_slot = BoundedSemaphore(1)
+# Rendering is serialized by _render_slot, so the logo and the bottle are the only downloads in flight.
+_download_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="card-image")
 
 
 class CardGenerationError(RuntimeError):
@@ -113,7 +116,9 @@ def _load_image(url: str, bounds: tuple[int, int]) -> Image.Image:
         raise CardGenerationError("Too many card image redirects")
 
 
+@lru_cache(maxsize=64)
 def _font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont:
+    # Fonts are only used inside the render slot, so sharing one FreeTypeFont per style is safe.
     font = ImageFont.truetype(str(SERIF_FONT_PATH if serif else FONT_PATH), size)
     font.set_variation_by_axes([700 if bold else 400, 100])
     return font
@@ -181,8 +186,10 @@ def _fitted_chip_value(
     return truncated + "...", font
 
 
-def _background() -> Image.Image:
-    # Compute the soft spotlight on a small image, not a million Python objects.
+@lru_cache(maxsize=1)
+def _background_template() -> Image.Image:
+    # The spotlight never changes, so it is computed once per process.
+    # Compute it on a small image, not a million Python objects.
     with Image.new("RGB", (135, 135)) as small:
         pixels = []
         for y in range(135):
@@ -191,6 +198,10 @@ def _background() -> Image.Image:
                 pixels.append(tuple(round(base + (gold - base) * glow) for base, gold in zip((13, 13, 14), (197, 160, 89))))
         small.putdata(pixels)
         return small.resize((SIZE, SIZE), Image.Resampling.BICUBIC)
+
+
+def _background() -> Image.Image:
+    return _background_template().copy()
 
 
 @lru_cache(maxsize=len(CHIP_ICON_PATHS))
@@ -213,15 +224,42 @@ def _load_card_image(url: Optional[str], bounds: tuple[int, int], label: str) ->
         return None
 
 
+def _load_card_images(data: ReviewCardData) -> tuple[Optional[Image.Image], Optional[Image.Image]]:
+    """Download the logo and the bottle concurrently instead of one after the other."""
+    logo_job = _download_pool.submit(_load_card_image, data.distillery_logo_url, (380, 120), "distillery logo")
+    bottle_job = _download_pool.submit(_load_card_image, data.bottle_image_url, (540, 490), "bottle")
+    logo = bottle = None
+    try:
+        logo = logo_job.result()
+        bottle = bottle_job.result()
+        return logo, bottle
+    except BaseException:
+        # Do not leak the other decoded image when one download fails unexpectedly.
+        for job in (logo_job, bottle_job):
+            try:
+                image = job.result()
+            except BaseException:
+                continue
+            if image:
+                image.close()
+        raise
+
+
 def _draw_card(data: ReviewCardData) -> bytes:
+    logo, bottle = _load_card_images(data)
+    try:
+        return _compose_card(data, logo, bottle)
+    finally:
+        for image in (logo, bottle):
+            if image:
+                image.close()
+
+
+def _compose_card(data: ReviewCardData, logo: Optional[Image.Image], bottle: Optional[Image.Image]) -> bytes:
     with _background().convert("RGBA") as card:
         draw = ImageDraw.Draw(card)
-        logo = _load_card_image(data.distillery_logo_url, (380, 120), "distillery logo")
         if logo:
-            try:
-                card.paste(logo, ((SIZE - logo.width) // 2, 65 + (120 - logo.height) // 2), logo)
-            finally:
-                logo.close()
+            card.paste(logo, ((SIZE - logo.width) // 2, 65 + (120 - logo.height) // 2), logo)
         else:
             _text(draw, data.distillery_name, (72, 80, 1008, 185), 36, GOLD, True, "center", True)
         _text(draw, data.bottle_name, (72, 207, 1008, 313), 44, "#EAD7AE", True, "center", True)
@@ -230,12 +268,8 @@ def _draw_card(data: ReviewCardData) -> bytes:
             ImageDraw.Draw(shadow).ellipse((65, 40, 545, 61), fill=(0, 0, 0, 185))
             with shadow.filter(ImageFilter.GaussianBlur(18)) as blurred:
                 card.paste(blurred, (235, 730), blurred)
-        bottle = _load_card_image(data.bottle_image_url, (540, 490), "bottle")
         if bottle:
-            try:
-                card.paste(bottle, ((SIZE - bottle.width) // 2, 315 + (490 - bottle.height) // 2), bottle)
-            finally:
-                bottle.close()
+            card.paste(bottle, ((SIZE - bottle.width) // 2, 315 + (490 - bottle.height) // 2), bottle)
         else:
             _text(draw, "No bottle image", (260, 525, 740, 585), 24, MUTED, align="center")
 

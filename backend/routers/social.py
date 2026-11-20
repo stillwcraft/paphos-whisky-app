@@ -4,7 +4,9 @@ import io
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta, timezone
+from time import monotonic
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -14,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
-from sqlalchemy import and_, exists, or_
+from sqlalchemy import and_, case, exists, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import Literal, Optional
@@ -148,11 +150,32 @@ def block_pair(db, blocker_id, blocked_id):
     commit(db)
 
 
+# Signed URLs stay valid for `lifetime` seconds. Reusing one for at most half of that (max 60 s)
+# keeps the handed-out URL within its original expiry while avoiding a storage round trip for
+# every poll of the same event or chat.
+_SIGNED_CACHE: dict = {}
+SIGNED_CACHE_MAX_ENTRIES = 1024
+sign_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="social-sign")
+
+
+def _remember_signed(cache_key, url, lifetime):
+    if len(_SIGNED_CACHE) >= SIGNED_CACHE_MAX_ENTRIES:
+        current = monotonic()
+        for stale in [k for k, (_, until) in _SIGNED_CACHE.items() if until <= current]:
+            _SIGNED_CACHE.pop(stale, None)
+        if len(_SIGNED_CACHE) >= SIGNED_CACHE_MAX_ENTRIES:
+            _SIGNED_CACHE.clear()
+    _SIGNED_CACHE[cache_key] = (url, monotonic() + min(60, lifetime / 2))
+
+
 def signed(key, lifetime=300):
     if not key:
         return None
     if not OPAQUE_MEDIA_KEY.fullmatch(key):
         return None
+    cached = _SIGNED_CACHE.get((key, lifetime))
+    if cached and cached[1] > monotonic():
+        return cached[0]
     url, secret, bucket = storage_config()
     try:
         r = requests.post(
@@ -166,19 +189,77 @@ def signed(key, lifetime=300):
         path = r.json()["signedURL"]
         if not isinstance(path, str) or not path.startswith(("/object/sign/", "/storage/v1/object/sign/")):
             raise ValueError("Invalid signed path")
-        return f"{url}/storage/v1{path}" if path.startswith("/object/") else f"{url}{path}"
+        result = f"{url}/storage/v1{path}" if path.startswith("/object/") else f"{url}{path}"
+        _remember_signed((key, lifetime), result, lifetime)
+        return result
     except (requests.RequestException, KeyError, ValueError) as exc:
         log.warning("Social media signing failed: %s", type(exc).__name__)
         fail(503, "Media temporarily unavailable")
 
 
-def mini(db, person_id):
-    p = db.get(m.SocialProfile, person_id)
+def sign_all(items):
+    """Sign several (key, lifetime) pairs concurrently; duplicates are signed once."""
+    unique = list(dict.fromkeys(items))
+    if len(unique) <= 1:
+        return {item: signed(*item) for item in unique}
+    return dict(zip(unique, sign_executor.map(lambda item: signed(*item), unique)))
+
+
+def load_profiles(db, person_ids):
+    ids = list(dict.fromkeys(person_ids))
+    if not ids:
+        return {}
+    return {p.telegram_id: p for p in
+            db.query(m.SocialProfile).filter(m.SocialProfile.telegram_id.in_(ids))}
+
+
+def avatar_sign_items(profiles):
+    return [(p.avatar_key, 300) for p in profiles.values() if p.avatar_key and not p.avatar_hidden]
+
+
+def person_card(person_id, profiles, urls):
+    p = profiles.get(person_id)
     return {"telegram_id": person_id, "display_name": p.display_name if p else "Member",
             "verified": p.verified if p else False,
             "age": None,
-            "avatar_url": signed(p.avatar_key) if p and p.avatar_key and not p.avatar_hidden else None,
+            "avatar_url": urls.get((p.avatar_key, 300)) if p and p.avatar_key and not p.avatar_hidden else None,
             "avatar_hidden": p.avatar_hidden if p else False}
+
+
+def minis(db, person_ids):
+    """Public cards for many people using one profile query and concurrent avatar signing."""
+    ids = list(dict.fromkeys(person_ids))
+    profiles = load_profiles(db, ids)
+    urls = sign_all(avatar_sign_items(profiles))
+    return {person_id: person_card(person_id, profiles, urls) for person_id in ids}
+
+
+def mini(db, person_id):
+    return minis(db, [person_id])[person_id]
+
+
+class Relations:
+    """In-memory friendship/block lookups for a bounded set of people (two queries in total)."""
+
+    def __init__(self, db, person_ids):
+        ids = set(person_ids)
+        self.friend_pairs = set()
+        self.block_pairs = set()
+        if not ids:
+            return
+        self.friend_pairs = {frozenset((r.sender_id, r.recipient_id)) for r in db.query(
+            m.SocialFriendRequest.sender_id, m.SocialFriendRequest.recipient_id
+        ).filter(m.SocialFriendRequest.status == "accepted",
+                 m.SocialFriendRequest.sender_id.in_(ids), m.SocialFriendRequest.recipient_id.in_(ids))}
+        self.block_pairs = {frozenset((r.blocker_id, r.blocked_id)) for r in db.query(
+            m.SocialBlock.blocker_id, m.SocialBlock.blocked_id
+        ).filter(m.SocialBlock.blocker_id.in_(ids), m.SocialBlock.blocked_id.in_(ids))}
+
+    def blocked(self, a, b):
+        return frozenset((a, b)) in self.block_pairs
+
+    def friends(self, a, b):
+        return frozenset((a, b)) in self.friend_pairs and not self.blocked(a, b)
 
 
 def notify(person_id, message):
@@ -213,45 +294,74 @@ def event_for(db, event_id, viewer):
     return e
 
 
+def event_photo_sign_item(e, moderator=False):
+    if e.event_type == "global" or not e.photo_key:
+        return None
+    return (e.photo_key, 300 if moderator else
+            min(300, max(1, int((utc(e.expires_at) - now()).total_seconds()))))
+
+
 def event_photo_url(e, moderator=False):
     if e.event_type == "global":
         return (e.image_urls or [None])[0]
-    return signed(
-        e.photo_key, 300 if moderator else
-        min(300, max(1, int((utc(e.expires_at) - now()).total_seconds())))
-    )
+    item = event_photo_sign_item(e, moderator)
+    return signed(*item) if item else None
 
 
 def event_json(db, e, viewer, moderator=False):
+    is_global = e.event_type == "global"
     owner_visible = e.visibility != "anonymous" or e.owner_id == viewer or moderator
-    joins = db.query(m.SocialJoinRequest).filter_by(event_id=e.id, status="accepted").all()
+    joins = [] if is_global else db.query(m.SocialJoinRequest).filter_by(
+        event_id=e.id).order_by(m.SocialJoinRequest.id).all()
+    accepted = [j for j in joins if j.status == "accepted"]
+    own_join = next((j for j in joins if j.telegram_id == viewer), None)
     tags = db.query(m.SocialTag).filter_by(event_id=e.id, status="accepted").all()
-    cheers = db.query(m.SocialCheer).filter_by(event_id=e.id).count()
+    cheer_count, cheered = db.query(
+        func.count(m.SocialCheer.telegram_id),
+        func.coalesce(func.sum(case((m.SocialCheer.telegram_id == viewer, 1), else_=0)), 0),
+    ).filter(m.SocialCheer.event_id == e.id).one()
+
+    people_ids = {e.owner_id, viewer}
+    people_ids.update(t.telegram_id for t in tags)
+    people_ids.update(j.telegram_id for j in accepted)
+    relations = Relations(db, people_ids)
     # Anonymous event participants cannot infer the organizer through tags or attendee lists.
+    tagged_ids = [
+        t.telegram_id for t in tags
+        if t.telegram_id != e.owner_id
+        and (moderator or (relations.friends(e.owner_id, t.telegram_id)
+                           and not relations.blocked(viewer, t.telegram_id)
+                           and (viewer in (e.owner_id, t.telegram_id)
+                                or relations.friends(viewer, t.telegram_id))))
+    ]
+    attendee_ids = [] if is_global else [
+        j.telegram_id for j in accepted if moderator or not relations.blocked(viewer, j.telegram_id)]
+    shown_ids = set(tagged_ids) | set(attendee_ids)
+    if owner_visible:
+        shown_ids.add(e.owner_id)
+    profiles = load_profiles(db, shown_ids)
+    photo_item = event_photo_sign_item(e, moderator)
+    # One concurrent pass over every avatar and the event photo instead of sequential round trips.
+    urls = sign_all(avatar_sign_items(profiles) + ([photo_item] if photo_item else []))
+    cards = {person_id: person_card(person_id, profiles, urls) for person_id in shown_ids}
     return {
         "id": e.id, "description": e.description, "drink": e.drink,
         "event_type": e.event_type, "map_layer": e.map_layer, "image_urls": e.image_urls or [],
         "visibility": e.visibility, "latitude": e.latitude, "longitude": e.longitude,
-        "location": e.location, "photo_url": event_photo_url(e, moderator),
+        "location": e.location,
+        "photo_url": (e.image_urls or [None])[0] if is_global else urls.get(photo_item),
         "starts_at": utc(e.starts_at).isoformat(), "expires_at": utc(e.expires_at).isoformat(),
-        "capacity": e.capacity, "attendee_count": 0 if e.event_type == "global" else len(joins) + 1,
-        "owner": mini(db, e.owner_id) if owner_visible else None,
+        "capacity": e.capacity, "attendee_count": 0 if is_global else len(accepted) + 1,
+        "owner": cards[e.owner_id] if owner_visible else None,
         "is_owner": e.owner_id == viewer,
-        "tagged_friends": [mini(db, t.telegram_id) for t in tags if
-                           t.telegram_id != e.owner_id
-                           and (moderator or (friends(db, e.owner_id, t.telegram_id)
-                                              and not blocked(db, viewer, t.telegram_id)
-                                              and (viewer in (e.owner_id, t.telegram_id)
-                                                   or friends(db, viewer, t.telegram_id))))],
-        "attendees": [] if e.event_type == "global" else ([mini(db, j.telegram_id) for j in joins
-                       if moderator or not blocked(db, viewer, j.telegram_id)] +
-                      ([mini(db, e.owner_id)] if owner_visible else [])),
-        "cheers": cheers,
-        "cheered": db.get(m.SocialCheer, (e.id, viewer)) is not None,
-        "join_status": None if e.event_type == "global" else "host" if e.owner_id == viewer else
-                       (db.query(m.SocialJoinRequest).filter_by(event_id=e.id, telegram_id=viewer).first().status
-                        if db.query(m.SocialJoinRequest).filter_by(event_id=e.id, telegram_id=viewer).first()
-                        else None),
+        "tagged_friends": [cards[t] for t in tagged_ids],
+        "attendees": [] if is_global else (
+            [dict(cards[a]) for a in attendee_ids]
+            + ([dict(cards[e.owner_id])] if owner_visible else [])),
+        "cheers": cheer_count,
+        "cheered": bool(cheered),
+        "join_status": None if is_global else "host" if e.owner_id == viewer else
+                       (own_join.status if own_join else None),
     }
 
 
@@ -399,8 +509,11 @@ def put_profile(data: ProfileUpdate, user=Depends(auth()), db: Session = Depends
 def get_friends(user=Depends(auth()), db: Session = Depends(get_db)):
     rows = db.query(m.SocialFriendRequest).filter_by(status="accepted").filter(
         or_(m.SocialFriendRequest.sender_id == uid(user), m.SocialFriendRequest.recipient_id == uid(user))).all()
-    return [mini(db, other) for r in rows
-            if not blocked(db, uid(user), other := (r.recipient_id if r.sender_id == uid(user) else r.sender_id))]
+    others = [r.recipient_id if r.sender_id == uid(user) else r.sender_id for r in rows]
+    relations = Relations(db, {uid(user), *others})
+    visible_others = [other for other in others if not relations.blocked(uid(user), other)]
+    cards = minis(db, visible_others)
+    return [cards[other] for other in visible_others]
 
 
 @router.get("/tag-requests")
@@ -444,7 +557,10 @@ def invite(data: FriendInvite, user=Depends(auth()), db: Session = Depends(get_d
 @router.get("/friend-requests")
 def friend_requests(user=Depends(auth()), db: Session = Depends(get_db)):
     rows = db.query(m.SocialFriendRequest).filter_by(recipient_id=uid(user), status="pending").all()
-    return [{"id": r.id, "sender": mini(db, r.sender_id)} for r in rows if not blocked(db, uid(user), r.sender_id)]
+    relations = Relations(db, {uid(user), *(r.sender_id for r in rows)})
+    rows = [r for r in rows if not relations.blocked(uid(user), r.sender_id)]
+    cards = minis(db, [r.sender_id for r in rows])
+    return [{"id": r.id, "sender": cards[r.sender_id]} for r in rows]
 
 
 @router.post("/friend-requests/{request_id}/accept")
@@ -720,7 +836,10 @@ def join_requests(event_id: int, user=Depends(auth()), db: Session = Depends(get
     if e.owner_id != uid(user):
         fail(403, "Host only")
     rows = db.query(m.SocialJoinRequest).filter_by(event_id=event_id, status="pending").all()
-    return [{"id": r.id, "user": mini(db, r.telegram_id)} for r in rows if not blocked(db, uid(user), r.telegram_id)]
+    relations = Relations(db, {uid(user), *(r.telegram_id for r in rows)})
+    rows = [r for r in rows if not relations.blocked(uid(user), r.telegram_id)]
+    cards = minis(db, [r.telegram_id for r in rows])
+    return [{"id": r.id, "user": cards[r.telegram_id]} for r in rows]
 
 
 @router.post("/events/{event_id}/join-requests/{request_id}/accept")
@@ -754,10 +873,10 @@ def chat_access(db, event_id, user):
     return e
 
 
-def chat_json(db, item, e, viewer):
+def chat_json(item, e, viewer, cards):
     return {"id": item.id, "body": item.body, "created_at": utc(item.created_at).isoformat(),
             "sender": None if item.sender_id == e.owner_id and e.visibility == "anonymous"
-            and viewer != e.owner_id else mini(db, item.sender_id),
+            and viewer != e.owner_id else cards[item.sender_id],
             "is_mine": item.sender_id == viewer}
 
 
@@ -769,8 +888,14 @@ def chat(event_id: int, after_id: int = Query(0, ge=0), user=Depends(auth()), db
     rows = db.query(m.SocialChatMessage).filter(
         m.SocialChatMessage.event_id == event_id, m.SocialChatMessage.id > after_id
     ).order_by(m.SocialChatMessage.id).limit(100).all()
-    return [chat_json(db, row, e, uid(user)) for row in rows
-            if row.sender_id == uid(user) or not blocked(db, uid(user), row.sender_id)]
+    relations = Relations(db, {uid(user), *(row.sender_id for row in rows)})
+    rows = [row for row in rows
+            if row.sender_id == uid(user) or not relations.blocked(uid(user), row.sender_id)]
+    # Anonymous hosts are never serialized for other viewers, so their avatar is not signed either.
+    cards = minis(db, {row.sender_id for row in rows
+                       if not (row.sender_id == e.owner_id and e.visibility == "anonymous"
+                               and uid(user) != e.owner_id)})
+    return [chat_json(row, e, uid(user), cards) for row in rows]
 
 
 @router.post("/events/{event_id}/chat")
@@ -780,7 +905,7 @@ def send_chat(event_id: int, data: Message, user=Depends(auth()), db: Session = 
     item = m.SocialChatMessage(event_id=event_id, sender_id=uid(user), body=data.body)
     db.add(item)
     commit(db)
-    return chat_json(db, item, e, uid(user))
+    return chat_json(item, e, uid(user), minis(db, [item.sender_id]))
 
 
 @router.post("/events/{event_id}/report")

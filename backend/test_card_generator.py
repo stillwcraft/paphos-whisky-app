@@ -58,6 +58,53 @@ class CardGeneratorTest(unittest.TestCase):
             self.assertEqual(image.getpixel((540, 120)), (255, 0, 0))
             self.assertEqual(image.getpixel((540, 560)), (0, 255, 0))
 
+    def test_logo_and_bottle_are_downloaded_concurrently(self):
+        # Each download waits for the other one: sequential loading would break the barrier.
+        barrier = threading.Barrier(2, timeout=2)
+
+        def image_fixture(url, bounds):
+            barrier.wait()
+            return Image.new("RGBA", (50, 50), "#ff0000")
+
+        with patch.object(cards, "_load_image", side_effect=image_fixture) as load:
+            cards.render_review_card(sample_card(
+                bottle_image_url="https://example.com/bottle.png",
+                distillery_logo_url="https://example.com/logo.png",
+            ))
+        self.assertEqual(load.call_count, 2)
+
+    def test_fonts_and_background_are_computed_once_and_not_shared_mutably(self):
+        self.assertIs(cards._font(21, True, True), cards._font(21, True, True))
+        self.assertIsNot(cards._font(21, True, True), cards._font(21, False, True))
+        self.assertIs(cards._background_template(), cards._background_template())
+        first, second = cards._background(), cards._background()
+        self.assertIsNot(first, second)
+        pixel = second.getpixel((5, 5))
+        first.putpixel((5, 5), (1, 2, 3))
+        self.assertEqual(second.getpixel((5, 5)), pixel)
+        self.assertEqual(cards._background_template().getpixel((5, 5)), pixel)
+
+    def test_unexpected_download_error_closes_the_other_image(self):
+        closed = []
+
+        class TrackedImage:
+            def close(self):
+                closed.append(True)
+
+        def image_fixture(url, bounds):
+            if "logo" in url:
+                raise OSError("decoder crashed")
+            return TrackedImage()
+
+        data = sample_card(
+            bottle_image_url="https://example.com/bottle.png",
+            distillery_logo_url="https://example.com/logo.png",
+        )
+        with patch.object(cards, "_load_image", side_effect=image_fixture):
+            with self.assertRaises(OSError):
+                cards._load_card_images(data)
+        self.assertEqual(closed, [True])
+
     def test_unavailable_logo_falls_back_to_distillery_name(self):
         with patch.object(cards, "_load_image", side_effect=cards.CardGenerationError("403")), self.assertLogs(cards.logger):
             png = cards.render_review_card(sample_card(
