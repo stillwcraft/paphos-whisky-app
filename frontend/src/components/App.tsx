@@ -1,18 +1,25 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type ComponentType } from 'react';
 import { initData, retrieveLaunchParams, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 
-import { AdminTab } from '@/components/AdminTab.tsx';
 import { EventsTab } from '@/components/EventsTab.tsx';
-import { BottlesSamplesTab } from '@/components/BottlesSamplesTab.tsx';
-import { DistilleriesTab } from '@/components/DistilleriesTab.tsx';
-import { ProfileTab } from '@/components/ProfileTab.tsx';
-import { ScotlandWhiskyMap } from '@/components/ScotlandWhiskyMap.tsx';
 import { CyprusMapLoading } from '@/components/CyprusMapLoading.tsx';
-import { NewsFeedTab } from '@/components/news/NewsFeedTab.tsx';
 import { initAnalytics } from '@/analytics/posthog.ts';
 import { useScreenTracking } from '@/hooks/useScreenTracking.ts';
 import { parseMiniAppStartParam } from '@/miniAppDeepLinks';
+
+// Keeps the component's prop types while splitting each tab into its own chunk.
+const lazyTab = <K extends string, C extends ComponentType<any>>( // eslint-disable-line @typescript-eslint/no-explicit-any
+  load: () => Promise<{ [P in K]: C }>,
+  name: K,
+) => lazy(() => load().then((module) => ({ default: module[name] })));
+
+const AdminTab = lazyTab(() => import('@/components/AdminTab.tsx'), 'AdminTab');
+const BottlesSamplesTab = lazyTab(() => import('@/components/BottlesSamplesTab.tsx'), 'BottlesSamplesTab');
+const DistilleriesTab = lazyTab(() => import('@/components/DistilleriesTab.tsx'), 'DistilleriesTab');
+const ProfileTab = lazyTab(() => import('@/components/ProfileTab.tsx'), 'ProfileTab');
+const ScotlandWhiskyMap = lazyTab(() => import('@/components/ScotlandWhiskyMap.tsx'), 'ScotlandWhiskyMap');
+const NewsFeedTab = lazyTab(() => import('@/components/news/NewsFeedTab.tsx'), 'NewsFeedTab');
 
 const CyprusEventsMap = lazy(() => import('@/components/CyprusEventsMap.tsx').then(
   ({ CyprusEventsMap: Map }) => ({ default: Map }),
@@ -208,6 +215,7 @@ export function App() {
   return (
     <div className={`${dockedFooter ? 'flex h-[100dvh] flex-col overflow-hidden' : 'min-h-screen'} bg-[#0D0D0E] text-[#F4F4F5]`}>
       <main className={activeCyprusMap ? 'min-h-0 flex-1' : activeTab === 'profile' ? 'min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6' : activeTab === 'map' ? 'h-[100dvh]' : 'min-h-screen px-6 pb-28'}>
+        <Suspense fallback={<p className="pt-8 text-center text-sm text-[#6E6D6A]">{t('common.loading')}</p>}>
           {activeTab === 'events' ? (
             <EventsTab
               selectedEventId={selectedEventId}
@@ -268,6 +276,7 @@ export function App() {
               </div>
             </div>
           )}
+        </Suspense>
       </main>
       {activeTab !== 'map' && (
         <Footer

@@ -1,9 +1,7 @@
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { App } from '@/components/App.tsx';
 import { ErrorBoundary } from '@/components/ErrorBoundary.tsx';
-import { publicUrl } from '@/helpers/publicUrl.ts';
 
 const queryClient = new QueryClient();
 
@@ -28,11 +26,7 @@ export function Root() {
   return (
     <ErrorBoundary fallback={ErrorBoundaryError}>
       <QueryClientProvider client={queryClient}>
-        <TonConnectUIProvider
-          manifestUrl={publicUrl('tonconnect-manifest.json')}
-        >
-          <App/>
-        </TonConnectUIProvider>
+        <App/>
       </QueryClientProvider>
     </ErrorBoundary>
   );

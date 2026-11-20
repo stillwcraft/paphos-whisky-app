@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
 import { localizedApiUrl } from '@/localization.ts';
-import { BottleTagChart } from '@/components/BottleTagChart.tsx';
+import { BottleTagChart } from '@/components/LazyBottleTagChart.tsx';
 import { BottleReviewOverlay } from '@/components/BottleReviewOverlay.tsx';
 import { normalizePaginatedResponse, paginatedUrl, type PaginatedResponse, useInfiniteScroll } from '@/pagination.ts';
 import { eventsCacheKey } from '@/eventsCache.ts';
