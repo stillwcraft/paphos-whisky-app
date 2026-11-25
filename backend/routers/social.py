@@ -25,6 +25,7 @@ from typing import Literal, Optional
 
 import models as m
 from database import get_db
+from security import rate_limit, write_rate_limit
 from social_storage import storage_config
 
 log = logging.getLogger(__name__)
@@ -58,8 +59,15 @@ def require_social_access(response: Response, user=Depends(auth())):
     return user
 
 
+def limit(scope, count, window):
+    return Depends(rate_limit(scope, count, window, auth()))
+
+
+# Every state-changing social call counts towards one shared budget; chat, invitations, joins and
+# reports have tighter limits of their own below.
 router = APIRouter(
-    prefix="/api/social", tags=["social"], dependencies=[Depends(require_social_access)]
+    prefix="/api/social", tags=["social"],
+    dependencies=[Depends(require_social_access), Depends(write_rate_limit("social-write", 120, 60, auth()))],
 )
 
 
@@ -534,7 +542,7 @@ def tag_requests(user=Depends(auth()), db: Session = Depends(get_db)):
     ]
 
 
-@router.post("/friend-requests")
+@router.post("/friend-requests", dependencies=[limit("friend-invite", 10, 3600)])
 def invite(data: FriendInvite, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     target = data.telegram_id
@@ -576,7 +584,7 @@ def accept_friend(request_id: int, user=Depends(auth()), db: Session = Depends(g
     return {"status": "accepted"}
 
 
-@router.post("/blocks")
+@router.post("/blocks", dependencies=[limit("block", 30, 3600)])
 def block(data: FriendInvite, user=Depends(auth()), db: Session = Depends(get_db)):
     if data.telegram_id == uid(user) or not db.get(m.SocialProfile, data.telegram_id):
         fail(404, "User not found")
@@ -695,7 +703,7 @@ def active_event_status(user=Depends(auth()), db: Session = Depends(get_db)):
     return {"has_active_event": False if is_admin(user) else has_active_regular_event(db, uid(user))}
 
 
-@router.post("/events", status_code=201)
+@router.post("/events", status_code=201, dependencies=[limit("create-event", 10, 3600)])
 def create_event(data: EventCreate, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     media = db.query(m.SocialMedia).filter_by(key=data.photo_key).with_for_update().first()
@@ -835,7 +843,7 @@ def block_event_owner(event_id: int, user=Depends(auth()), db: Session = Depends
     return {"status": "blocked"}
 
 
-@router.post("/events/{event_id}/cheer")
+@router.post("/events/{event_id}/cheer", dependencies=[limit("cheer", 60, 60)])
 def cheer(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     event_for(db, event_id, uid(user))
@@ -845,7 +853,7 @@ def cheer(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     return {"cheered": True}
 
 
-@router.post("/events/{event_id}/join")
+@router.post("/events/{event_id}/join", dependencies=[limit("join", 30, 3600)])
 def join(event_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     e = event_for(db, event_id, uid(user))
@@ -933,7 +941,7 @@ def chat(event_id: int, after_id: int = Query(0, ge=0), user=Depends(auth()), db
     return [chat_json(row, e, uid(user), cards) for row in rows]
 
 
-@router.post("/events/{event_id}/chat")
+@router.post("/events/{event_id}/chat", dependencies=[limit("chat", 20, 60)])
 def send_chat(event_id: int, data: Message, user=Depends(auth()), db: Session = Depends(get_db)):
     adults(db, user)
     e = chat_access(db, event_id, user)
@@ -943,7 +951,7 @@ def send_chat(event_id: int, data: Message, user=Depends(auth()), db: Session = 
     return chat_json(item, e, uid(user), minis(db, [item.sender_id]))
 
 
-@router.post("/events/{event_id}/report")
+@router.post("/events/{event_id}/report", dependencies=[limit("report", 10, 3600)])
 def report(event_id: int, data: Report, user=Depends(auth()), db: Session = Depends(get_db)):
     e = event_for(db, event_id, uid(user))
     if e.owner_id == uid(user):

@@ -12,6 +12,7 @@ from urllib.parse import parse_qsl
 import requests
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from security import install_security, rate_limit
 from sqlalchemy import case, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
@@ -738,6 +739,7 @@ def cors_settings() -> dict:
 
 
 app.add_middleware(CORSMiddleware, **cors_settings())
+install_security(app, _docs)
 
 
 class TelegramAuthContext(BaseModel):
@@ -931,6 +933,10 @@ def get_authenticated_telegram_user(
 ) -> TelegramAuthContext:
     raw_init_data = parse_authorization_header(authorization)
     return validate_telegram_init_data(raw_init_data, get_bot_token())
+
+
+def member_limit(scope: str, limit: int, window: float):
+    return Depends(rate_limit(scope, limit, window, get_authenticated_telegram_user))
 
 
 def ensure_telegram_id_matches(authenticated_user: TelegramAuthContext, telegram_id: Optional[int]) -> int:
@@ -2229,6 +2235,7 @@ def delete_bottle_background(
 @app.post(
     "/api/events/{event_id}/register",
     response_model=RegistrationResponse,
+    dependencies=[member_limit("register", 30, 60)],
 )
 def register_for_event(
     event_id: int,
@@ -2251,6 +2258,7 @@ def register_for_event(
 @app.post(
     "/api/events/{event_id}/samples",
     response_model=RegistrationResponse,
+    dependencies=[member_limit("samples", 30, 60)],
 )
 def reserve_samples(
     event_id: int,
@@ -2784,6 +2792,7 @@ def delete_bottle(
 @app.post(
     "/api/bottles/{bottle_id}/toggle-action",
     response_model=BottleActionToggleResponse,
+    dependencies=[member_limit("toggle-action", 60, 60)],
 )
 def toggle_bottle_action(
     bottle_id: int,
@@ -3015,7 +3024,8 @@ class ReviewCardLinkResponse(BaseModel):
     sig: str
 
 
-@app.post("/api/reviews/{review_id}/card-link", response_model=ReviewCardLinkResponse)
+@app.post("/api/reviews/{review_id}/card-link", response_model=ReviewCardLinkResponse,
+          dependencies=[member_limit("card-link", 30, 60)])
 def create_review_card_link(
     review_id: int,
     db: Session = Depends(get_db),
@@ -3202,7 +3212,7 @@ def get_review(
     return build_review_response(review)
 
 
-@app.post("/api/reviews", response_model=ReviewResponse)
+@app.post("/api/reviews", response_model=ReviewResponse, dependencies=[member_limit("review", 30, 60)])
 def upsert_review(
     review_data: ReviewCreate,
     db: Session = Depends(get_db),
