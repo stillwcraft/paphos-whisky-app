@@ -86,12 +86,26 @@ def get_event_calendar_date(
     return parsed_date.date() if parsed_date else None
 
 
+def auth():
+    # Deferred import avoids a main/router import cycle; FastAPI resolves the dependency at import time.
+    from main import get_authenticated_telegram_user
+    return get_authenticated_telegram_user
+
+
 @router.get("/whisky-trail", response_model=WhiskyTrailResponse)
 def get_whisky_trail(
-    telegram_id: int,
+    telegram_id: Optional[int] = None,
     lang: str = Query(default="ru"),
     db: Session = Depends(get_db),
+    authenticated_user=Depends(auth()),
 ) -> WhiskyTrailResponse:
+    # The trail is private and this request records progress, so it is only ever served for the
+    # authenticated user. telegram_id stays optional for older clients but must match the token.
+    from main import ensure_telegram_id_matches
+    return build_whisky_trail(ensure_telegram_id_matches(authenticated_user, telegram_id), lang, db)
+
+
+def build_whisky_trail(telegram_id: int, lang: str, db: Session) -> WhiskyTrailResponse:
     events = (
         db.query(models.Event)
         .order_by(cast(models.Event.date, Date).asc())

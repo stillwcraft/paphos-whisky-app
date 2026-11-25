@@ -677,6 +677,74 @@ class SocialTest(unittest.TestCase):
             self.signed_mock.start()
             social._SIGNED_CACHE.clear()
 
+    def png_bytes(self, size=(8, 8)):
+        image = io.BytesIO()
+        Image.new("RGB", size).save(image, "PNG")
+        return image.getvalue()
+
+    def storage_env(self):
+        return patch.dict(os.environ, {"SUPABASE_URL": "https://example.supabase.co",
+                                       "SUPABASE_SERVICE_ROLE_KEY": "fake", "SUPABASE_SOCIAL_BUCKET": "social"})
+
+    def test_upload_does_not_block_the_event_loop(self):
+        import asyncio, time as clock
+        class Ok:
+            ok = True
+            def raise_for_status(self):
+                pass
+        def slow_compress(data):
+            clock.sleep(0.4)
+            return b"jpeg"
+        async def scenario():
+            ticks = []
+            async def ticker():
+                while True:
+                    ticks.append(clock.monotonic())
+                    await asyncio.sleep(0.02)
+            task = asyncio.create_task(ticker())
+            request = type("R", (), {"headers": {}, "stream": lambda self: self._stream()})()
+            async def _stream():
+                yield b"data"
+            request._stream = _stream
+            with self.Session() as db:
+                with patch.object(social, "compress_upload", side_effect=slow_compress), \
+                        patch.object(social.requests, "post", return_value=Ok()), self.storage_env():
+                    user = self.current_user()
+                    await social.upload(request, "event", user, db)
+            task.cancel()
+            return ticks
+        ticks = asyncio.run(scenario())
+        gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+        self.assertGreater(len(ticks), 10)
+        self.assertLess(max(gaps), 0.2, "the event loop stalled while the image was processed")
+
+    def test_upload_rejects_declared_oversize_and_enforces_daily_quota(self):
+        too_big = self.request("POST", "/media?kind=event", content=b"x",
+                               headers={"content-length": str(6 * 1024 * 1024)})
+        self.assertIn(too_big.status_code, (413, 400, 422))
+        with self.Session() as db:
+            for n in range(social.UPLOADS_PER_DAY):
+                db.add(models.SocialMedia(key=f"event/{n:032x}.jpg", owner_id=1, kind="event"))
+            db.commit()
+        self.assertEqual(self.request("POST", "/media?kind=event", content=self.png_bytes()).status_code, 429)
+        self.actor = 2
+        class Ok:
+            ok = True
+            def raise_for_status(self):
+                pass
+        with self.storage_env(), patch.object(social.requests, "post", return_value=Ok()):
+            self.assertEqual(self.request("POST", "/media?kind=event", content=self.png_bytes()).status_code, 200)
+
+    def test_upload_reports_busy_when_processing_slots_are_taken(self):
+        taken = [social._upload_slots.acquire() for _ in range(2)]
+        try:
+            with patch.object(social._upload_slots, "acquire", return_value=False):
+                response = self.request("POST", "/media?kind=event", content=self.png_bytes())
+            self.assertEqual(response.status_code, 503)
+        finally:
+            for _ in taken:
+                social._upload_slots.release()
+
     def test_auth_age_friendship_visibility_and_block(self):
         event = self.create("friends")
         self.actor = 2

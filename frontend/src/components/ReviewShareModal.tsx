@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AccessDeniedError, downloadFile, openLink, useSignal } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { telegramAuthHeaders } from '@/telegramAuth.ts';
@@ -36,12 +36,40 @@ export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onCl
   const [downloadFailed, setDownloadFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPublished, setIsPublished] = useState(false);
+  const [cardLink, setCardLink] = useState<{ exp: number; sig: string } | null>(null);
   const [previewTimestamp] = useState(() => Date.now());
   const cardEndpoint = `${API_URL}/api/reviews/${reviewId}/card.png`;
   const languageCode = i18n.resolvedLanguage?.toLowerCase().split(/[-_]/, 1)[0];
   const cardLanguage = languageCode === 'ru' || languageCode === 'uk' ? languageCode : 'en';
-  const cardUrl = `${cardEndpoint}?lang=${cardLanguage}&t=${previewTimestamp}`;
-  const createDownloadUrl = () => `${cardEndpoint}?download=1&lang=${cardLanguage}&t=${Date.now()}`;
+  // <img>, downloadFile and the external browser cannot send Authorization, so the card is
+  // requested with a short-lived signature that the API issues to the review's owner.
+  const linkQuery = cardLink ? `&exp=${cardLink.exp}&sig=${encodeURIComponent(cardLink.sig)}` : '';
+  const cardUrl = `${cardEndpoint}?lang=${cardLanguage}&t=${previewTimestamp}${linkQuery}`;
+  const createDownloadUrl = () => `${cardEndpoint}?download=1&lang=${cardLanguage}&t=${Date.now()}${linkQuery}`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/reviews/${reviewId}/card-link`, {
+          method: 'POST',
+          headers: telegramAuthHeaders(initDataRaw),
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(await extractErrorMessage(response));
+        const link: unknown = await response.json();
+        if (typeof link === 'object' && link !== null && 'exp' in link && 'sig' in link
+          && typeof link.exp === 'number' && typeof link.sig === 'string') {
+          setCardLink({ exp: link.exp, sig: link.sig });
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : t('review_share.download_error'));
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [reviewId, initDataRaw, t]);
 
   const publish = async () => {
     setIsPublishing(true);
@@ -88,8 +116,12 @@ export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onCl
   const browserDownload = (
     <a
       className="block w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-center text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10"
-      href={`${cardEndpoint}?download=1&lang=${cardLanguage}&t=${previewTimestamp}`}
+      href={`${cardEndpoint}?download=1&lang=${cardLanguage}&t=${previewTimestamp}${linkQuery}`}
       onClick={(event) => {
+        if (!cardLink) {
+          event.preventDefault();
+          return;
+        }
         const downloadUrl = createDownloadUrl();
         trackEvent('review_card_downloaded', {
           bottle_id: bottleId,
@@ -129,7 +161,7 @@ export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onCl
             x
           </button>
         </div>
-        <img alt={t('review_share.preview_alt')} className="ph-no-capture aspect-square w-full bg-[#0D0D0E] object-cover" src={cardUrl} />
+        <img alt={t('review_share.preview_alt')} className="ph-no-capture aspect-square w-full bg-[#0D0D0E] object-cover" src={cardLink ? cardUrl : undefined} />
         <div className="space-y-3 p-4">
           {error && <p className="rounded-xl border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300">{error}</p>}
           {isPublished && <p className="rounded-xl border border-[#C5A059]/30 bg-[#C5A059]/10 px-3 py-2 text-center text-sm font-medium text-[#C5A059]">{t('review_share.published')}</p>}
@@ -144,7 +176,7 @@ export function ReviewShareModal({ bottleId, rating, reviewId, initDataRaw, onCl
           {useNativeDownload ? (
             <button
               className="w-full rounded-xl border border-[#C5A059]/30 px-4 py-3.5 text-sm font-semibold text-[#C5A059] transition-colors hover:bg-[#C5A059]/10 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={isDownloading}
+              disabled={isDownloading || !cardLink}
               onClick={() => void download()}
               type="button"
             >

@@ -1,7 +1,10 @@
 import hashlib
 import hmac
 import json
+import logging
 import os
+import threading
+from collections import deque
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import parse_qsl
@@ -21,7 +24,6 @@ from database import engine, get_db
 from routers.infographics import admin_router as infographics_admin_router
 from routers.infographics import distillery_router as distillery_infographics_router
 from routers.infographics import router as infographics_router
-from routers.whisky_trail import router as whisky_trail_router
 from schemas.article import ArticleBase, ArticleCreate, ArticleResponse, ArticleUpdate, InteractiveSlide
 from presentation import create_presentation_router
 
@@ -33,8 +35,23 @@ BottleLabel = Literal["bottle", "samples", "event"]
 ArticleLanguage = Literal["ru", "en", "uk"]
 CardLanguage = Literal["en", "ru", "uk"]
 I18nString = Dict[str, str]
-TELEGRAM_INIT_DATA_MAX_AGE = timedelta(hours=24)
+TELEGRAM_INIT_DATA_DEFAULT_MAX_AGE = timedelta(hours=6)
+TELEGRAM_INIT_DATA_MIN_MAX_AGE = timedelta(minutes=5)
+TELEGRAM_INIT_DATA_LIMIT_MAX_AGE = timedelta(days=7)
 TELEGRAM_INIT_DATA_FUTURE_SKEW = timedelta(minutes=5)
+
+
+def telegram_init_data_max_age() -> timedelta:
+    """How long a signed initData stays valid; a stolen token is only useful for this long.
+
+    Telegram does not refresh initData while the app is open, so a member who keeps it open longer
+    has to reopen it. TELEGRAM_INIT_DATA_MAX_AGE_SECONDS tunes this (5 minutes to 7 days).
+    """
+    try:
+        configured = timedelta(seconds=int(os.getenv("TELEGRAM_INIT_DATA_MAX_AGE_SECONDS", "")))
+    except ValueError:
+        return TELEGRAM_INIT_DATA_DEFAULT_MAX_AGE
+    return min(max(configured, TELEGRAM_INIT_DATA_MIN_MAX_AGE), TELEGRAM_INIT_DATA_LIMIT_MAX_AGE)
 
 
 def get_table_columns(bind, table_name: str) -> dict[str, dict]:
@@ -682,17 +699,45 @@ def ensure_user_review_schema() -> None:
 ensure_user_review_schema()
 
 
-app = FastAPI(title="Paphos Whisky Club API")
+def api_docs_enabled() -> bool:
+    return os.getenv("ENABLE_API_DOCS", "").strip().lower() in {"1", "true", "yes", "on"}
 
-# Настройка CORS, чтобы наш фронтенд на Vercel мог общаться с бэкендом
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # В продакшене лучше указать конкретный адрес Vercel
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+
+# Swagger UI, ReDoc and openapi.json describe every route (admin ones included), so they are
+# served only when ENABLE_API_DOCS is set, e.g. on a developer machine.
+_docs = api_docs_enabled()
+app = FastAPI(
+    title="Paphos Whisky Club API",
+    docs_url="/docs" if _docs else None,
+    redoc_url="/redoc" if _docs else None,
+    openapi_url="/openapi.json" if _docs else None,
 )
-app.include_router(whisky_trail_router)
+
+def cors_settings() -> dict:
+    """CORS for the Mini App frontend.
+
+    Authentication uses the Authorization header, never cookies, so credentials are not needed.
+    Set CORS_ALLOWED_ORIGINS (comma-separated, e.g. https://club.example.com) in production;
+    CORS_ALLOWED_ORIGIN_REGEX can additionally allow tunnel hosts during development.
+    Without any of them every origin is still allowed, to keep existing deployments working.
+    """
+    origins = [item.strip().rstrip("/") for item in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if item.strip()]
+    origin_regex = os.getenv("CORS_ALLOWED_ORIGIN_REGEX", "").strip() or None
+    if not origins and not origin_regex:
+        logging.getLogger(__name__).warning(
+            "CORS_ALLOWED_ORIGINS is not set: allowing every origin. Restrict it in production.")
+        origins = ["*"]
+    return {
+        "allow_origins": origins,
+        "allow_origin_regex": origin_regex,
+        "allow_credentials": False,
+        "allow_methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        "allow_headers": ["Authorization", "Content-Type"],
+        "max_age": 600,
+    }
+
+
+app.add_middleware(CORSMiddleware, **cors_settings())
 
 
 class TelegramAuthContext(BaseModel):
@@ -848,7 +893,7 @@ def validate_telegram_init_data(raw_init_data: str, bot_token: str) -> TelegramA
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Telegram initData auth_date is in the future",
         )
-    if now_utc - auth_datetime > TELEGRAM_INIT_DATA_MAX_AGE:
+    if now_utc - auth_datetime > telegram_init_data_max_age():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Telegram initData has expired",
@@ -929,6 +974,8 @@ app.include_router(distillery_infographics_router)
 app.include_router(infographics_admin_router, dependencies=[Depends(require_admin)])
 from routers.social import router as social_router
 app.include_router(social_router)
+from routers.whisky_trail import router as whisky_trail_router
+app.include_router(whisky_trail_router)
 app.include_router(create_presentation_router(get_authenticated_telegram_user, require_admin))
 
 
@@ -2945,12 +2992,50 @@ def render_review_card_or_503(
         ) from exc
 
 
+CARD_LINK_TTL_SECONDS = 3600
+
+
+def review_card_signature(review_id: int, expires: int) -> str:
+    # Derived from the bot token, so no extra secret has to be provisioned.
+    key = hmac.new(b"review-card-link", get_bot_token().encode(), hashlib.sha256).digest()
+    return hmac.new(key, f"{review_id}:{expires}".encode(), hashlib.sha256).hexdigest()
+
+
+def require_review_card_link(review_id: int, exp: int = Query(default=0), sig: str = Query(default="")) -> None:
+    """The card is fetched by <img>, downloadFile and the browser, which cannot send Authorization,
+    so access is granted by a short-lived signature issued to the review's owner."""
+    if exp < int(datetime.now(timezone.utc).timestamp()):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review card link is missing or expired")
+    if not hmac.compare_digest(review_card_signature(review_id, exp), sig):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review card link is invalid")
+
+
+class ReviewCardLinkResponse(BaseModel):
+    exp: int
+    sig: str
+
+
+@app.post("/api/reviews/{review_id}/card-link", response_model=ReviewCardLinkResponse)
+def create_review_card_link(
+    review_id: int,
+    db: Session = Depends(get_db),
+    authenticated_user: TelegramAuthContext = Depends(get_authenticated_telegram_user),
+):
+    review = db.query(models.UserReview).filter(models.UserReview.id == review_id).first()
+    if review is None:
+        raise HTTPException(status_code=404, detail="Review not found")
+    ensure_telegram_id_matches(authenticated_user, review.telegram_id)
+    expires = int(datetime.now(timezone.utc).timestamp()) + CARD_LINK_TTL_SECONDS
+    return ReviewCardLinkResponse(exp=expires, sig=review_card_signature(review_id, expires))
+
+
 @app.get("/api/reviews/{review_id}/card.png", response_class=Response)
 def get_review_card(
     review_id: int,
     download: bool = False,
     lang: CardLanguage = "en",
     db: Session = Depends(get_db),
+    _link: None = Depends(require_review_card_link),
 ):
     headers = {
         "Cache-Control": "no-cache, no-store, must-revalidate",
@@ -2966,6 +3051,52 @@ def get_review_card(
         media_type="image/png",
         headers=headers,
     )
+
+
+SHARES_PER_HOUR = 5
+SHARE_REPEAT_COOLDOWN = timedelta(hours=24)
+_share_lock = threading.Lock()
+_share_history: dict[int, deque] = {}
+_shared_reviews: dict[tuple[int, int], datetime] = {}
+
+
+def resolve_share_thread(requested: Optional[int]) -> Optional[int]:
+    """Clients may only pick a topic the operator allowed; otherwise the configured default is used."""
+    default = os.getenv("CLUB_THREAD_ID", "").strip()
+    allowed = {item.strip() for item in os.getenv("CLUB_ALLOWED_THREAD_IDS", "").split(",") if item.strip()}
+    if default:
+        allowed.add(default)
+    if requested is not None:
+        if str(requested) not in allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This club topic is not allowed")
+        return requested
+    return int(default) if default.isdigit() else None
+
+
+def claim_share_slot(telegram_id: int, review_id: int) -> None:
+    """Per-process abuse guard: a review is published once a day and a member 5 times an hour."""
+    current = datetime.now(timezone.utc)
+    with _share_lock:
+        for key, shared_at in list(_shared_reviews.items()):
+            if current - shared_at > SHARE_REPEAT_COOLDOWN:
+                del _shared_reviews[key]
+        if (telegram_id, review_id) in _shared_reviews:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This review was already shared")
+        history = _share_history.setdefault(telegram_id, deque())
+        while history and current - history[0] > timedelta(hours=1):
+            history.popleft()
+        if len(history) >= SHARES_PER_HOUR:
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many shares, try later")
+        history.append(current)
+        _shared_reviews[(telegram_id, review_id)] = current
+
+
+def release_share_slot(telegram_id: int, review_id: int) -> None:
+    with _share_lock:
+        _shared_reviews.pop((telegram_id, review_id), None)
+        history = _share_history.get(telegram_id)
+        if history:
+            history.pop()
 
 
 @app.post("/api/reviews/{review_id}/share", status_code=status.HTTP_204_NO_CONTENT)
@@ -2991,44 +3122,51 @@ def share_review_card(
             detail="Club sharing is not configured: CLUB_CHAT_ID is missing",
         )
 
+    thread_id = resolve_share_thread(share_request.thread_id)
+    claim_share_slot(authenticated_user.telegram_id, review_id)
     payload: dict[str, str | int] = {
         "chat_id": club_chat_id,
         "caption": "New club review",
     }
-    if share_request.thread_id is not None:
-        payload["message_thread_id"] = share_request.thread_id
+    if thread_id is not None:
+        payload["message_thread_id"] = thread_id
 
     try:
-        telegram_response = requests.post(
-            f"https://api.telegram.org/bot{get_bot_token()}/sendPhoto",
-            data=payload,
-            files={
-                "photo": (
-                    f"whisky-review-{review_id}.png",
-                    render_review_card_or_503(review_id, db, share_request.language),
-                    "image/png",
-                )
-            },
-            timeout=30,
-        )
-        telegram_response.raise_for_status()
-        telegram_payload = telegram_response.json()
-    except requests.RequestException as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Telegram could not publish the review card",
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Telegram returned an invalid response",
-        ) from exc
+        try:
+            telegram_response = requests.post(
+                f"https://api.telegram.org/bot{get_bot_token()}/sendPhoto",
+                data=payload,
+                files={
+                    "photo": (
+                        f"whisky-review-{review_id}.png",
+                        render_review_card_or_503(review_id, db, share_request.language),
+                        "image/png",
+                    )
+                },
+                timeout=30,
+            )
+            telegram_response.raise_for_status()
+            telegram_payload = telegram_response.json()
+        except requests.RequestException as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Telegram could not publish the review card",
+            ) from exc
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Telegram returned an invalid response",
+            ) from exc
 
-    if not telegram_payload.get("ok"):
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Telegram rejected the review card",
-        )
+        if not telegram_payload.get("ok"):
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Telegram rejected the review card",
+            )
+    except BaseException:
+        # A failed publication must not consume the member's quota.
+        release_share_slot(authenticated_user.telegram_id, review_id)
+        raise
 
 
 @app.get("/api/reviews", response_model=ReviewResponse)

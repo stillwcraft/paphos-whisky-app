@@ -11,3 +11,8 @@ frontend/dist/
 
 # Настройки PyCharm
 .idea/
+
+# Зависимости и окружения (корень репозитория)
+node_modules/
+.venv/
+__pycache__/

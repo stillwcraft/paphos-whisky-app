@@ -6,6 +6,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, time, timedelta, timezone
+from threading import BoundedSemaphore
 from time import monotonic
 from urllib.parse import quote, urlsplit
 from uuid import uuid4
@@ -13,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
@@ -594,22 +596,21 @@ def unblock(block_id: int, user=Depends(auth()), db: Session = Depends(get_db)):
     return {"status": "unblocked"}
 
 
-@router.post("/media")
-async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...),
-                 user=Depends(auth()), db: Session = Depends(get_db)):
-    adults(db, user)
-    data = bytearray()
-    async for chunk in request.stream():
-        data.extend(chunk)
-        if len(data) > 5 * 1024 * 1024:
-            fail(413, "Image exceeds 5 MB")
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_UPLOAD_PIXELS = 25_000_000
+UPLOADS_PER_DAY = 20
+# Decoding a 25 MP image takes ~75 MB, so only a couple may be processed at the same time.
+_upload_slots = BoundedSemaphore(2)
+
+
+def compress_upload(data: bytes) -> bytes:
     try:
         with Image.open(io.BytesIO(data)) as image:
-            if image.width * image.height > 25_000_000:
+            if image.width * image.height > MAX_UPLOAD_PIXELS:
                 fail(422, "Unsupported image")
             image.verify()
         with Image.open(io.BytesIO(data)) as image:
-            if image.format not in ("JPEG", "PNG", "WEBP") or image.width * image.height > 25_000_000:
+            if image.format not in ("JPEG", "PNG", "WEBP") or image.width * image.height > MAX_UPLOAD_PIXELS:
                 fail(422, "Unsupported image")
             image.load()
             rgb = image.convert("RGB")
@@ -626,6 +627,25 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
                 fail(422, "Image cannot be compressed to 1 MB")
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
         fail(422, "Invalid image")
+    return output.getvalue()
+
+
+def store_upload(db, user, kind, data: bytes):
+    """Blocking part of an upload (DB, image decoding, storage call); runs in a worker thread."""
+    adults(db, user)
+    if not is_admin(user):
+        recent = db.query(func.count(m.SocialMedia.key)).filter(
+            m.SocialMedia.owner_id == uid(user),
+            m.SocialMedia.created_at > now() - timedelta(hours=24),
+        ).scalar()
+        if recent >= UPLOADS_PER_DAY:
+            fail(429, "Daily upload limit reached")
+    if not _upload_slots.acquire(timeout=5):
+        fail(503, "Image processing is busy, retry shortly")
+    try:
+        jpeg = compress_upload(data)
+    finally:
+        _upload_slots.release()
     url, secret, bucket = storage_config()
     key = f"{kind}/{uuid4().hex}.jpg"
     # Record the key first so even an interrupted upload can be collected later.
@@ -636,7 +656,7 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
             f"{url}/storage/v1/object/{quote(bucket, safe='')}/{quote(key, safe='/')}",
             headers={"Authorization": f"Bearer {secret}", "apikey": secret,
                      "Content-Type": "image/jpeg", "x-upsert": "false"},
-            data=output.getvalue(), timeout=15, allow_redirects=False)
+            data=jpeg, timeout=15, allow_redirects=False)
         r.raise_for_status()
         if not r.ok:
             fail(503, "Media temporarily unavailable")
@@ -644,6 +664,21 @@ async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...)
         log.warning("Social image upload failed")
         fail(503, "Media temporarily unavailable")
     return {"key": key}
+
+
+@router.post("/media")
+async def upload(request: Request, kind: Literal["event", "avatar"] = Query(...),
+                 user=Depends(auth()), db: Session = Depends(get_db)):
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+        fail(413, "Image exceeds 5 MB")
+    data = bytearray()
+    async for chunk in request.stream():
+        data.extend(chunk)
+        if len(data) > MAX_UPLOAD_BYTES:
+            fail(413, "Image exceeds 5 MB")
+    # Decoding, DB access and the storage call are blocking, so keep them off the event loop.
+    return await run_in_threadpool(store_upload, db, user, kind, bytes(data))
 
 
 def has_active_regular_event(db, owner_id):
