@@ -257,6 +257,7 @@ export function App() {
               selectedDistilleryId={mapDistilleryId}
               onSelectedDistilleryHandled={clearMapDistillery}
               onClose={closeMap}
+              telegramBackButton
             />
           ) : activeTab === 'presentations' ? (
             <Suspense fallback={<p>{t('common.loading')}</p>}>

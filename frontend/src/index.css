@@ -12,42 +12,15 @@
   }
 }
 
-@keyframes distillery-spider-pop {
-  from {
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.distillery-spider-icon {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: distillery-spider-pop 250ms ease-out both;
-}
-
-.distillery-cluster-trigger,
-.distillery-spider-trigger {
+.map-region-pill,
+.map-distillery-pin {
   outline: none;
 }
 
-.distillery-cluster-trigger:focus-visible > circle:first-of-type {
+.map-region-pill:focus-visible > rect,
+.map-distillery-pin:focus-visible > circle:first-of-type {
   stroke: #FFF2C2;
   stroke-width: 3;
-}
-
-.distillery-spider-trigger:focus-visible .distillery-spider-icon {
-  outline: 2px solid #FFF2C2;
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .distillery-spider-icon {
-    animation: none;
-  }
 }
 
 .cyprus-map-loader {

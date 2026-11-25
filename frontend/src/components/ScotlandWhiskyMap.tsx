@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   ComposableMap,
   Geographies,
@@ -6,15 +6,24 @@ import {
   Marker,
   ZoomableGroup,
 } from 'react-simple-maps';
+import { backButton, hapticFeedback } from '@tma.js/sdk-react';
 import { useTranslation } from 'react-i18next';
 import { useAnalytics } from '@/hooks/useAnalytics.ts';
 
 const SCOTLAND_TOPOLOGY_URL = '/assets/maps/ScotchRegions.topo.json';
 const API_URL = 'https://paphos-whisky-api.onrender.com';
+const MAP_WIDTH = 390;
+const MAP_HEIGHT = 640;
+const MAP_SCALE = 3300;
+// Shifted south so the mainland sits above the collapsed sheet; Shetland falls off the top.
+const MAP_CENTER: [number, number] = [-4.6, 56.31];
 const SMALL_ISLAND_MAX_SIZE = 12;
 const MAX_ZOOM = 8;
-const CLUSTER_RADIUS = 48;
-const SPIDER_RADIUS = 56;
+// Map units (at zoom 1) hidden by the bottom sheet, used to lift a focused region into view.
+const SHEET_PEEK_OFFSET = 80;
+const SHEET_OPEN_OFFSET = 190;
+const PIN_RADIUS = 14;
+const PIN_SPACING = PIN_RADIUS * 2 + 4;
 
 export type MapDistillery = {
   id: number;
@@ -24,56 +33,13 @@ export type MapDistillery = {
   image_url?: string | null;
   logo_url?: string | null;
   region?: string | null;
-  tasted?: boolean;
-  rating?: number;
+  bottle_count?: number;
 };
 
 type PositionedMapDistillery = MapDistillery & {
   latitude: number;
   longitude: number;
 };
-
-type DistilleryGroup = {
-  members: PositionedMapDistillery[];
-  x: number;
-  y: number;
-  latitude: number;
-  longitude: number;
-};
-
-type ExpandedCluster = {
-  id: number;
-  x: number;
-  y: number;
-};
-
-function groupDistilleries(distilleries: PositionedMapDistillery[], zoom: number): DistilleryGroup[] {
-  const radiusSquared = (CLUSTER_RADIUS / zoom) ** 2;
-  const groups: DistilleryGroup[] = [];
-  for (const distillery of distilleries) {
-    const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
-    let nearest: DistilleryGroup | undefined;
-    let nearestDistance = radiusSquared;
-    for (const group of groups) {
-      const distance = (group.x - x) ** 2 + (group.y - y) ** 2;
-      if (distance < nearestDistance) {
-        nearest = group;
-        nearestDistance = distance;
-      }
-    }
-    if (!nearest) {
-      groups.push({ members: [distillery], x, y, latitude: distillery.latitude, longitude: distillery.longitude });
-      continue;
-    }
-    const count = nearest.members.length;
-    nearest.members.push(distillery);
-    nearest.x = (nearest.x * count + x) / (count + 1);
-    nearest.y = (nearest.y * count + y) / (count + 1);
-    nearest.latitude = (nearest.latitude * count + distillery.latitude) / (count + 1);
-    nearest.longitude = (nearest.longitude * count + distillery.longitude) / (count + 1);
-  }
-  return groups;
-}
 
 type BottlePreview = {
   id: number;
@@ -88,6 +54,8 @@ type ScotlandWhiskyMapProps = {
   selectedDistilleryId?: number | null;
   onSelectedDistilleryHandled?: () => void;
   onClose: () => void;
+  /** Drive Telegram's native Back button instead of the in-map close button. */
+  telegramBackButton?: boolean;
 };
 
 type WhiskyRegion = {
@@ -98,101 +66,114 @@ type WhiskyRegion = {
   zoom: number;
 };
 
-const initialPosition = {
-  coordinates: [-4.2, 57.3] as [number, number],
+type RegionStats = { total: number; tasted: number };
+
+type MapPosition = { coordinates: [number, number]; zoom: number };
+
+const initialPosition: MapPosition = {
+  coordinates: MAP_CENTER,
   zoom: 1,
 };
 
 const whiskyRegions: WhiskyRegion[] = [
   {
-    sourceName: 'Speyside',
-    label: 'Speyside',
-    center: [-3.5, 57.25],
-    labelCoordinates: [-2.8, 57.85],
-    zoom: 3.2,
-  },
-  {
     sourceName: 'Highlands',
     label: 'Highland',
-    center: [-4.2, 57.55],
-    labelCoordinates: [-4.2, 58.85],
-    zoom: 2.3,
+    center: [-4.4, 57.45],
+    labelCoordinates: [-4.75, 57.95],
+    zoom: 1.6,
+  },
+  {
+    sourceName: 'Speyside',
+    label: 'Speyside',
+    center: [-3.3, 57.45],
+    labelCoordinates: [-2.75, 57.75],
+    zoom: 3,
   },
   {
     sourceName: 'Islands',
     label: 'Island',
-    center: [-5.6, 57.8],
-    labelCoordinates: [-7.1, 57.45],
-    zoom: 1.8,
+    center: [-5.9, 57.3],
+    labelCoordinates: [-7.05, 57.35],
+    zoom: 1.6,
   },
   {
     sourceName: 'Lowlands',
     label: 'Lowland',
-    center: [-3.7, 55.45],
-    labelCoordinates: [-2.55, 55.2],
-    zoom: 2.5,
+    center: [-3.7, 55.7],
+    labelCoordinates: [-2.95, 55.3],
+    zoom: 2,
   },
   {
     sourceName: 'Islay',
     label: 'Islay',
-    center: [-6.27, 55.75],
-    labelCoordinates: [-6.75, 55.78],
-    zoom: 5.5,
+    center: [-6.2, 55.75],
+    labelCoordinates: [-7.1, 56.1],
+    zoom: 5,
   },
   {
     sourceName: 'Campbeltown',
     label: 'Campbeltown',
-    center: [-5.64, 55.42],
-    labelCoordinates: [-5.85, 55.2],
-    zoom: 5.5,
+    center: [-5.6, 55.42],
+    labelCoordinates: [-5.75, 55.05],
+    zoom: 5,
   },
 ];
+
+const isTasted = (distillery: MapDistillery) => (distillery.bottle_count ?? 0) > 0;
+
+const regionLabel = (sourceName: string | null | undefined) => (
+  whiskyRegions.find((region) => region.sourceName === sourceName)?.label ?? sourceName ?? ''
+);
 
 export function ScotlandWhiskyMap({
   onSelectDistillery,
   selectedDistilleryId = null,
   onSelectedDistilleryHandled,
   onClose,
+  telegramBackButton = false,
 }: ScotlandWhiskyMapProps) {
   const { t } = useTranslation();
   const { trackEvent } = useAnalytics();
-  const [position, setPosition] = useState(initialPosition);
-  const [activeDistillery, setActiveDistillery] = useState<MapDistillery | null>(null);
+  const [position, setPosition] = useState<MapPosition>(initialPosition);
   const [selectedRegion, setSelectedRegion] = useState<WhiskyRegion | null>(null);
-  const markerRadius = 2.5 / Math.pow(position.zoom, 1.35);
-  const isDistantZoom = position.zoom <= 1.5;
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [mapDistilleries, setMapDistilleries] = useState<MapDistillery[]>([]);
   const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   const [selectedDistillery, setSelectedDistillery] = useState<MapDistillery | null>(null);
   const [selectedBottles, setSelectedBottles] = useState<BottlePreview[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
-  const [expandedCluster, setExpandedCluster] = useState<ExpandedCluster | null>(null);
-  const mapFrameRef = useRef<HTMLDivElement>(null);
+  const [hasTelegramBack, setHasTelegramBack] = useState(false);
+
+  const markerRadius = 3 / Math.pow(position.zoom, 1.35);
   const positionedDistilleries = useMemo(() => mapDistilleries.filter(hasCoordinates), [mapDistilleries]);
-  const markerGroups = useMemo(() => groupDistilleries(
-    positionedDistilleries.filter((distillery) => distillery.id !== selectedDistillery?.id),
-    position.zoom,
-  ), [position.zoom, positionedDistilleries, selectedDistillery?.id]);
-  const singleDistilleries = markerGroups
-    .filter((group) => group.members.length === 1)
-    .map((group) => group.members[0]);
-  const clusteredGroups = markerGroups
-    .filter((group) => group.members.length > 1)
-    .sort((a, b) => Number(a.members[0].id === expandedCluster?.id) - Number(b.members[0].id === expandedCluster?.id));
-  const expandedGroup = clusteredGroups.find((group) => group.members[0].id === expandedCluster?.id);
-  const spiderMarkers = expandedGroup?.members.map((distillery, index) => {
-    const angle = -Math.PI / 2 + (2 * Math.PI * index) / expandedGroup.members.length;
-    return { distillery, x: Math.cos(angle) * SPIDER_RADIUS, y: Math.sin(angle) * SPIDER_RADIUS };
-  }) ?? [];
-  const selectedMapDistillery = positionedDistilleries.find((distillery) => distillery.id === selectedDistillery?.id);
-  const visibleMapDistilleries = selectedMapDistillery
-    ? [...singleDistilleries, selectedMapDistillery]
-    : singleDistilleries;
-  const canvasDistilleries = singleDistilleries.filter((distillery) => (
-    distillery.id !== selectedDistillery?.id
-    && (selectedRegion === null || distillery.region !== selectedRegion.sourceName)
-  ));
+  const regionStats = useMemo(() => {
+    const stats = new Map<string, RegionStats>();
+    for (const distillery of positionedDistilleries) {
+      if (!distillery.region) continue;
+      const current = stats.get(distillery.region) ?? { total: 0, tasted: 0 };
+      current.total += 1;
+      if (isTasted(distillery)) current.tasted += 1;
+      stats.set(distillery.region, current);
+    }
+    return stats;
+  }, [positionedDistilleries]);
+  const tastedCount = positionedDistilleries.filter(isTasted).length;
+
+  const pinDistilleries = useMemo(() => positionedDistilleries.filter((distillery) => (
+    distillery.id === selectedDistillery?.id
+    || (selectedDistillery === null && selectedRegion !== null && distillery.region === selectedRegion.sourceName)
+  )), [positionedDistilleries, selectedDistillery, selectedRegion]);
+  const pinOffsets = useMemo(
+    () => spreadPins(pinDistilleries, PIN_SPACING / position.zoom),
+    [pinDistilleries, position.zoom],
+  );
+  const dotDistilleries = useMemo(() => {
+    const pinned = new Set(pinDistilleries.map((distillery) => distillery.id));
+    return positionedDistilleries.filter((distillery) => !pinned.has(distillery.id));
+  }, [pinDistilleries, positionedDistilleries]);
 
   const filterMapGestures = useCallback((event: unknown) => {
     if (!(event instanceof Event)) return false;
@@ -207,11 +188,7 @@ export function ScotlandWhiskyMap({
         && !event.ctrlKey
         && event.button === 0);
   }, []);
-  const scheduleMapClick = (action: () => void) => {
-    action();
-  };
-  const handleMoveEnd = useCallback((nextPosition: typeof initialPosition) => {
-    setExpandedCluster(null);
+  const handleMoveEnd = useCallback((nextPosition: MapPosition) => {
     setPosition(nextPosition.zoom <= initialPosition.zoom ? initialPosition : nextPosition);
   }, []);
 
@@ -243,21 +220,12 @@ export function ScotlandWhiskyMap({
     return () => controller.abort();
   }, []);
 
-  const changeZoom = (amount: number) => {
-    setExpandedCluster(null);
-    setPosition((current) => {
-      const zoom = Math.min(MAX_ZOOM, Math.max(initialPosition.zoom, current.zoom + amount));
-      return zoom === initialPosition.zoom ? initialPosition : { ...current, zoom };
-    });
-  };
-
   const selectDistillery = useCallback(async (distillery: MapDistillery) => {
+    hapticFeedback.selectionChanged.ifAvailable();
     trackEvent('map_distillery_selected', {
       distillery_id: distillery.id,
       region: distillery.region ?? null,
     });
-    setActiveDistillery(distillery);
-    setExpandedCluster(null);
     setSelectedDistillery(distillery);
     setSelectedBottles([]);
     setDetailLoadError(null);
@@ -283,7 +251,7 @@ export function ScotlandWhiskyMap({
           ? bottles.items
           : [];
 
-      setSelectedDistillery(detail);
+      setSelectedDistillery({ ...distillery, ...detail });
       setSelectedBottles(bottleItems.filter(isBottlePreview));
       onSelectDistillery(detail);
     } catch (error) {
@@ -312,49 +280,70 @@ export function ScotlandWhiskyMap({
     selectDistillery,
   ]);
 
-  const resetMap = () => {
-    setActiveDistillery(null);
+  const clearDistillery = () => {
     setSelectedDistillery(null);
     setSelectedBottles([]);
     setDetailLoadError(null);
+  };
+
+  const focusRegion = (region: WhiskyRegion | null, sheetOpen: boolean) => {
+    hapticFeedback.selectionChanged.ifAvailable();
+    clearDistillery();
+    setSelectedRegion(region);
+    setIsSheetOpen(sheetOpen);
+    setPosition(region
+      ? {
+        coordinates: liftCoordinates(region.center, region.zoom, sheetOpen ? SHEET_OPEN_OFFSET : SHEET_PEEK_OFFSET),
+        zoom: region.zoom,
+      }
+      : initialPosition);
+    if (region) {
+      trackEvent('map_region_selected', { region: region.sourceName });
+    }
+  };
+
+  const resetMap = () => {
+    clearDistillery();
     setSelectedRegion(null);
-    setExpandedCluster(null);
+    setIsSheetOpen(false);
     setPosition(initialPosition);
   };
 
-  const selectRegion = (region: WhiskyRegion) => {
-    setExpandedCluster(null);
-    if (selectedDistillery) {
+  const toggleRegion = (region: WhiskyRegion) => {
+    if (selectedDistillery || selectedRegion?.sourceName === region.sourceName) {
       resetMap();
       return;
     }
-    const nextRegion = selectedRegion?.sourceName === region.sourceName ? null : region;
-    setSelectedRegion(nextRegion);
-    setPosition(nextRegion
-      ? { coordinates: nextRegion.center, zoom: nextRegion.zoom }
-      : initialPosition);
+    focusRegion(region, true);
   };
 
-  const selectCluster = (group: DistilleryGroup, trigger: SVGGElement) => {
-    setActiveDistillery(null);
-    if (position.zoom >= MAX_ZOOM) {
-      const frame = mapFrameRef.current;
-      if (!frame) throw new Error('Distillery map frame is unavailable');
-      const markerBounds = trigger.getBoundingClientRect();
-      const frameBounds = frame.getBoundingClientRect();
-      setExpandedCluster((current) => current?.id === group.members[0].id ? null : {
-        id: group.members[0].id,
-        x: markerBounds.left + markerBounds.width / 2 - frameBounds.left,
-        y: markerBounds.top + markerBounds.height / 2 - frameBounds.top,
-      });
-      return;
+  const goBack = () => {
+    if (selectedDistillery) {
+      if (selectedRegion) focusRegion(selectedRegion, isSheetOpen);
+      else resetMap();
+    } else if (selectedRegion) {
+      resetMap();
+    } else if (isSheetOpen) {
+      setIsSheetOpen(false);
+    } else {
+      onClose();
     }
-    setExpandedCluster(null);
-    setPosition({
-      coordinates: [group.longitude, group.latitude],
-      zoom: Math.min(MAX_ZOOM, Math.max(position.zoom + 1.5, position.zoom * 1.8)),
-    });
   };
+  const goBackRef = useRef(goBack);
+  goBackRef.current = goBack;
+
+  useEffect(() => {
+    if (!telegramBackButton || !backButton.show.isAvailable() || !backButton.onClick.isAvailable()) return;
+    const wasVisible = backButton.isVisible();
+    const unsubscribe = backButton.onClick(() => goBackRef.current());
+    backButton.show();
+    setHasTelegramBack(true);
+    return () => {
+      unsubscribe();
+      if (!wasVisible) backButton.hide.ifAvailable();
+      setHasTelegramBack(false);
+    };
+  }, [telegramBackButton]);
 
   return (
     <section className={`relative w-full bg-[#0a0a0c] ${
@@ -374,24 +363,18 @@ export function ScotlandWhiskyMap({
         </div>
       )}
 
-      <div ref={mapFrameRef} className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
+      <div className={`relative w-full overflow-hidden bg-[#0a0a0c] ${
         selectedDistillery
           ? 'min-h-[220px] flex-1 rounded-2xl border border-[#C5A059]/60 shadow-2xl'
           : 'h-full'
       }`}>
         <ComposableMap
-          width={390}
-          height={640}
+          width={MAP_WIDTH}
+          height={MAP_HEIGHT}
           projection="geoMercator"
-          projectionConfig={{ center: [-4.2, 57.3], scale: 2200 }}
+          projectionConfig={{ center: MAP_CENTER, scale: MAP_SCALE }}
           className="h-full w-full touch-none"
-          onClick={() => {
-            if (expandedCluster !== null) {
-              setExpandedCluster(null);
-            } else {
-              scheduleMapClick(resetMap);
-            }
-          }}
+          onClick={resetMap}
         >
           <defs>
             <linearGradient id="land-obsidian" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -399,14 +382,14 @@ export function ScotlandWhiskyMap({
               <stop offset="100%" stopColor="#16161a" />
             </linearGradient>
             <linearGradient id="gold-region-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FFE28A" />
-              <stop offset="100%" stopColor="#C5A059" />
+              <stop offset="0%" stopColor="#3B3226" />
+              <stop offset="100%" stopColor="#2a241b" />
             </linearGradient>
             <filter id="region-label-glow" x="-100%" y="-100%" width="300%" height="300%">
               <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#FFE28A" floodOpacity={0.65} />
             </filter>
             <filter id="distillery-pin-shadow" x="-100%" y="-100%" width="300%" height="300%">
-              <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000" floodOpacity={0.95} />
+              <feDropShadow dx="0" dy="4" stdDeviation="5" floodColor="#000" floodOpacity={0.9} />
             </filter>
           </defs>
           <ZoomableGroup
@@ -414,7 +397,7 @@ export function ScotlandWhiskyMap({
             zoom={position.zoom}
             minZoom={1}
             maxZoom={16}
-            translateExtent={[[0, 0], [390, 640]]}
+            translateExtent={[[0, -MAP_HEIGHT / 2], [MAP_WIDTH, MAP_HEIGHT]]}
             filterZoomEvent={filterMapGestures}
             onMoveEnd={handleMoveEnd}
           >
@@ -428,9 +411,10 @@ export function ScotlandWhiskyMap({
                 const regionStyle = {
                   fill: isSelected ? 'url(#gold-region-grad)' : 'url(#land-obsidian)',
                   stroke: isSelected ? '#FFE28A' : '#5A482A',
-                  strokeWidth: 1.2,
+                  strokeWidth: isSelected ? 1.4 : 1.2,
                   strokeLinejoin: 'round' as const,
                   strokeLinecap: 'round' as const,
+                  vectorEffect: 'non-scaling-stroke' as const,
                   opacity: 1,
                   cursor: 'pointer',
                   outline: 'none',
@@ -448,10 +432,10 @@ export function ScotlandWhiskyMap({
                     })
                     : [{ svgPath: geography.svgPath, isSmallIsland: false }];
                 const smallIslandShadow = isSelected
-                  ? 'drop-shadow(0 0 4px rgba(255, 226, 138, 0.6))'
+                  ? 'drop-shadow(0 0 4px rgba(255, 226, 138, 0.5))'
                   : 'drop-shadow(0px 4px 4px rgba(0,0,0,0.9))';
                 const regionShadow = isSelected
-                  ? 'drop-shadow(0 0 8px rgba(255, 226, 138, 0.7)) drop-shadow(0 0 20px rgba(197, 160, 89, 0.4))'
+                  ? 'drop-shadow(0 0 8px rgba(255, 226, 138, 0.45))'
                   : 'drop-shadow(0px 8px 16px rgba(0,0,0,0.9))';
 
                 return (
@@ -467,11 +451,7 @@ export function ScotlandWhiskyMap({
                           geography={{ ...geography, svgPath: shape.svgPath }}
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (expandedCluster !== null) {
-                              setExpandedCluster(null);
-                              return;
-                            }
-                            scheduleMapClick(() => selectRegion(region));
+                            toggleRegion(region);
                           }}
                           style={{
                             default: regionStyle,
@@ -486,142 +466,133 @@ export function ScotlandWhiskyMap({
               })}
             </Geographies>
 
+            <foreignObject x={0} y={-MAP_HEIGHT / 2} width={MAP_WIDTH} height={MAP_HEIGHT * 1.5} pointerEvents="none">
+              <DistilleryDotsCanvas distilleries={dotDistilleries} markerRadius={markerRadius} />
+            </foreignObject>
+
             {whiskyRegions.map((region) => {
               const isActive = selectedRegion?.sourceName === region.sourceName;
-              const badgeWidth = region.label.length * 7 + 20;
+              const stats = regionStats.get(region.sourceName);
+              const text = stats ? `${region.label.toUpperCase()} · ${stats.total}` : region.label.toUpperCase();
+              const badgeWidth = text.length * 7.4 + 22;
               return (
                 <Marker key={`${region.sourceName}-label`} coordinates={region.labelCoordinates}>
-                  <g transform={`scale(${1 / position.zoom})`} pointerEvents="none">
+                  <g
+                    transform={`scale(${1 / position.zoom})`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${region.label}: ${stats?.total ?? 0}`}
+                    aria-pressed={isActive}
+                    className="map-region-pill cursor-pointer"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      toggleRegion(region);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleRegion(region);
+                      }
+                    }}
+                  >
                     <rect
                       x={-badgeWidth / 2}
-                      y={-12}
+                      y={-14}
                       width={badgeWidth}
-                      height={24}
-                      rx={12}
+                      height={28}
+                      rx={14}
                       fill={isActive ? '#3B3226' : '#141417'}
-                      fillOpacity={isActive ? 0.95 : 0.85}
-                      stroke="#C5A059"
-                      strokeOpacity={isActive ? 1 : 0.4}
+                      fillOpacity={0.95}
+                      stroke={isActive ? '#FFE28A' : '#C5A059'}
+                      strokeOpacity={isActive ? 1 : 0.55}
                       strokeWidth={isActive ? 1.5 : 1}
                       filter={isActive ? 'url(#region-label-glow)' : undefined}
                     />
                     <text
                       textAnchor="middle"
-                      dominantBaseline="middle"
+                      dominantBaseline="central"
                       fill={isActive ? '#FFF2C2' : '#FFE28A'}
-                      fontSize={10}
+                      fontSize={11}
                       fontFamily="Georgia, 'Times New Roman', serif"
                       letterSpacing={1}
+                      pointerEvents="none"
                     >
-                      {region.label.toUpperCase()}
+                      {text}
                     </text>
                   </g>
                 </Marker>
               );
             })}
 
-            <foreignObject x={0} y={0} width={390} height={640} pointerEvents="none">
-              <DistilleryMarkersCanvas
-                distilleries={canvasDistilleries}
-                markerRadius={markerRadius}
-                isDistantZoom={isDistantZoom}
-              />
-            </foreignObject>
-            {visibleMapDistilleries.map((distillery) => {
+            {pinDistilleries.map((distillery) => {
+              const [dx, dy] = pinOffsets.get(distillery.id) ?? [0, 0];
               const isSelected = selectedDistillery?.id === distillery.id;
-              const isInSelectedRegion = selectedRegion !== null
-                && selectedRegion.sourceName === distillery.region;
-              const imageUrl = (isSelected && selectedDistillery?.image_url) || distillery.image_url;
-              const hitRadius = isSelected || isInSelectedRegion
-                ? Math.max(20 / position.zoom, 5)
-                : Math.max(markerRadius * 3, 5);
-
+              const tasted = isTasted(distillery);
+              const imageUrl = distillery.logo_url || distillery.image_url;
               return (
-                <Marker
-                  key={distillery.id}
-                  coordinates={[distillery.longitude, distillery.latitude]}
-                  onMouseEnter={() => setActiveDistillery(distillery)}
-                  onFocus={() => setActiveDistillery(distillery)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    scheduleMapClick(() => { void selectDistillery(distillery); });
-                  }}
-                >
-                  {(isSelected || isInSelectedRegion) && (
-                    <g transform={`scale(${1 / position.zoom})`} pointerEvents="none">
-                      <defs>
-                        <clipPath id={`distillery-image-${distillery.id}`}>
-                          <circle r={14} />
-                        </clipPath>
-                      </defs>
-                      <circle
-                        r={18}
-                        fill="#141417"
-                        stroke="#FFF"
-                        strokeOpacity={0.9}
-                        strokeWidth={2}
-                        filter="url(#distillery-pin-shadow)"
-                      />
-                      {imageUrl ? (
+                <Marker key={distillery.id} coordinates={[distillery.longitude, distillery.latitude]}>
+                  {(dx !== 0 || dy !== 0) && (
+                    <>
+                      <line x1={0} y1={0} x2={dx} y2={dy} stroke="#C5A059" strokeOpacity={0.6} strokeWidth={1 / position.zoom} />
+                      <circle r={1.8 / position.zoom} fill="#C5A059" />
+                    </>
+                  )}
+                  <g
+                    transform={`translate(${dx} ${dy}) scale(${1 / position.zoom})`}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={distillery.name}
+                    className="map-distillery-pin cursor-pointer"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void selectDistillery(distillery);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        void selectDistillery(distillery);
+                      }
+                    }}
+                  >
+                    <defs>
+                      <clipPath id={`distillery-image-${distillery.id}`}>
+                        <circle r={PIN_RADIUS - 3} />
+                      </clipPath>
+                    </defs>
+                    <circle
+                      r={isSelected ? PIN_RADIUS + 3 : PIN_RADIUS}
+                      fill={tasted ? '#C5A059' : '#141417'}
+                      stroke={isSelected ? '#FFF2C2' : '#C5A059'}
+                      strokeWidth={isSelected ? 2.5 : 1.5}
+                      filter="url(#distillery-pin-shadow)"
+                    />
+                    {imageUrl ? (
+                      <>
+                        <circle r={PIN_RADIUS - 3} fill="#0D0D0E" />
                         <image
                           href={imageUrl}
-                          x={-14}
-                          y={-14}
-                          width={28}
-                          height={28}
+                          x={-(PIN_RADIUS - 3)}
+                          y={-(PIN_RADIUS - 3)}
+                          width={(PIN_RADIUS - 3) * 2}
+                          height={(PIN_RADIUS - 3) * 2}
                           clipPath={`url(#distillery-image-${distillery.id})`}
                           preserveAspectRatio="xMidYMid slice"
                         />
-                      ) : (
-                        <text
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#FFE28A"
-                          fontSize={12}
-                        >
-                          {distillery.name.charAt(0)}
-                        </text>
-                      )}
-                    </g>
-                  )}
-                  <circle r={hitRadius} fill="transparent" pointerEvents="all" />
-                </Marker>
-              );
-            })}
-            {clusteredGroups.map((group) => {
-              const expanded = expandedCluster?.id === group.members[0].id;
-              return (
-                <Marker
-                  key={`cluster-${group.members[0].id}`}
-                  coordinates={[group.longitude, group.latitude]}
-                  onMouseEnter={() => setActiveDistillery(null)}
-                >
-                  <g transform={`scale(${1 / position.zoom})`}>
-                    <g
-                      role="button"
-                      tabIndex={0}
-                      aria-label={`${t('tabs.distilleries')}: ${group.members.length}`}
-                      aria-expanded={expanded}
-                      className="distillery-cluster-trigger cursor-pointer"
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        selectCluster(group, event.currentTarget);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          selectCluster(group, event.currentTarget);
-                        }
-                      }}
-                    >
-                      <circle r={expanded ? 15 : 20} fill="#141417" stroke="#C5A059" strokeWidth={2} />
-                      <text textAnchor="middle" dominantBaseline="middle" fill="#FFE28A" fontSize={expanded ? 19 : 13} fontWeight="bold" pointerEvents="none">
-                        {expanded ? '×' : group.members.length}
+                      </>
+                    ) : (
+                      <text
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fill={tasted ? '#1a140a' : '#FFE28A'}
+                        fontSize={12}
+                        pointerEvents="none"
+                      >
+                        {distillery.name.charAt(0)}
                       </text>
-                      <circle r={24} fill="transparent" pointerEvents="all" />
-                    </g>
+                    )}
+                    <circle r={PIN_RADIUS + 6} fill="transparent" pointerEvents="all" />
                   </g>
                 </Marker>
               );
@@ -629,68 +600,33 @@ export function ScotlandWhiskyMap({
           </ZoomableGroup>
         </ComposableMap>
 
-        {expandedCluster && expandedGroup && (
-          <div className="pointer-events-none absolute inset-0 z-10">
-            <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
-              {spiderMarkers.map(({ distillery, x, y }) => (
-                <line
-                  key={distillery.id}
-                  x1={expandedCluster.x}
-                  y1={expandedCluster.y}
-                  x2={expandedCluster.x + x}
-                  y2={expandedCluster.y + y}
-                  stroke="#C5A059"
-                  strokeOpacity={0.7}
-                  strokeWidth={1.5}
-                />
-              ))}
-            </svg>
-            {spiderMarkers.map(({ distillery, x, y }) => {
-              const imageUrl = distillery.image_url || distillery.logo_url;
-              const labelPosition = Math.abs(x) > Math.abs(y)
-                ? x < 0 ? 'right-[calc(100%+8px)] top-1/2 -translate-y-1/2' : 'left-[calc(100%+8px)] top-1/2 -translate-y-1/2'
-                : y < 0 ? 'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2' : 'top-[calc(100%+8px)] left-1/2 -translate-x-1/2';
-              return (
-                <button
-                  key={distillery.id}
-                  type="button"
-                  aria-label={distillery.name}
-                  className="distillery-spider-trigger pointer-events-auto absolute flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center overflow-visible"
-                  style={{ left: expandedCluster.x + x, top: expandedCluster.y + y }}
-                  onClick={() => void selectDistillery(distillery)}
-                >
-                  <span className="distillery-spider-icon flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-[#C5A059] bg-[#141417] text-xs text-[#FFE28A] shadow-lg">
-                    {imageUrl ? <img alt="" className="h-full w-full object-cover" src={imageUrl} /> : distillery.name.charAt(0)}
-                  </span>
-                  <span className={`absolute max-w-[95px] rounded-full border border-[#C5A059]/60 bg-[#141417]/95 px-2 py-1 text-center text-[10px] leading-tight break-words text-[#FFE28A] ${labelPosition}`}>
-                    {distillery.name}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+        {!selectedDistillery && (
+          <DistillerySheet
+            distilleries={positionedDistilleries}
+            regionStats={regionStats}
+            tastedCount={tastedCount}
+            selectedRegion={selectedRegion}
+            isOpen={isSheetOpen}
+            searchQuery={searchQuery}
+            loadError={mapLoadError}
+            onOpenChange={(open) => {
+              setIsSheetOpen(open);
+              if (selectedRegion) {
+                setPosition({
+                  coordinates: liftCoordinates(selectedRegion.center, selectedRegion.zoom, open ? SHEET_OPEN_OFFSET : SHEET_PEEK_OFFSET),
+                  zoom: selectedRegion.zoom,
+                });
+              }
+            }}
+            onSearchChange={setSearchQuery}
+            onSelectRegion={(region) => focusRegion(region, true)}
+            onSelectDistillery={(distillery) => { void selectDistillery(distillery); }}
+            t={t}
+          />
         )}
-        <div className="absolute right-3 top-3 z-20 flex flex-col space-y-2">
-          <button
-            aria-label="Zoom in"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#C5A059]/30 bg-[#1a1a1e]/80 text-xl text-[#C5A059] shadow-lg backdrop-blur-md transition-all hover:border-[#C5A059]/70 active:scale-95"
-            type="button"
-            onClick={() => changeZoom(1)}
-          >
-            +
-          </button>
-          <button
-            aria-label="Zoom out"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#C5A059]/30 bg-[#1a1a1e]/80 text-xl text-[#C5A059] shadow-lg backdrop-blur-md transition-all hover:border-[#C5A059]/70 active:scale-95"
-            type="button"
-            onClick={() => changeZoom(-1)}
-          >
-            -
-          </button>
-        </div>
       </div>
 
-      {selectedDistillery ? (
+      {selectedDistillery && (
         <div className="min-w-0 shrink-0">
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2">
             {selectedBottles.map((bottle) => (
@@ -711,154 +647,317 @@ export function ScotlandWhiskyMap({
                 </p>
               </article>
             ))}
-            {isLoadingDetails && <p className="py-4 text-sm text-[#9E9D9A]">Loading bottles...</p>}
+            {isLoadingDetails && <p className="py-4 text-sm text-[#9E9D9A]">{t('common.loading')}</p>}
+            {!isLoadingDetails && !detailLoadError && selectedBottles.length === 0 && (
+              <p className="py-4 text-sm text-[#9E9D9A]">{t('map_view.no_bottles')}</p>
+            )}
             {detailLoadError && <p className="py-4 text-sm text-[#9E9D9A]">{detailLoadError}</p>}
           </div>
         </div>
-      ) : activeDistillery && (
+      )}
+      {(!hasTelegramBack || selectedDistillery) && (
         <button
+          aria-label={selectedDistillery ? t('map_view.back') : t('map_view.close')}
+          className={`absolute z-30 flex h-10 w-10 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${
+            selectedDistillery ? 'left-4 top-4' : 'right-3 top-3'
+          }`}
+          onClick={selectedDistillery ? goBack : onClose}
           type="button"
-          aria-label={`Open ${activeDistillery.name}`}
-          onClick={() => { void selectDistillery(activeDistillery); }}
-          className="absolute bottom-20 left-1/2 flex w-[90%] max-w-xs -translate-x-1/2 items-center justify-between gap-3 rounded-2xl border border-[#C5A059]/40 bg-[#1a1a1e]/80 p-3 text-left shadow-2xl backdrop-blur-md"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#C5A059] bg-[#141417] text-[#C5A059]">
-            {activeDistillery.logo_url || activeDistillery.image_url ? (
-              <img
-                src={activeDistillery.logo_url || activeDistillery.image_url || undefined}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : activeDistillery.name.charAt(0)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-serif text-sm text-[#F4F4F5]">{activeDistillery.name}</span>
-            {activeDistillery.region && (
-              <span className="block truncate text-xs text-[#C5A059]">
-                {whiskyRegions.find((region) => region.sourceName === activeDistillery.region)?.label
-                  ?? activeDistillery.region}
-              </span>
-            )}
-          </span>
-          <span aria-hidden="true" className="shrink-0 text-xl text-[#C5A059]">→</span>
+          <svg aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
+            {selectedDistillery ? <path d="M15 5 8 12l7 7" /> : <path d="M6 6 18 18M18 6 6 18" />}
+          </svg>
         </button>
       )}
-      {mapLoadError && (
-        <p className="absolute bottom-20 right-3 text-xs text-[#9E9D9A]">{mapLoadError}</p>
-      )}
-      <button
-        aria-label={t('map_view.close')}
-        className={`absolute right-4 z-20 flex h-12 w-12 items-center justify-center rounded-xl border border-[#C5A059]/50 bg-[#141417]/90 text-[#C5A059] shadow-lg backdrop-blur-md transition-colors hover:border-[#C5A059] active:bg-[#C5A059]/20 ${
-          selectedDistillery ? 'top-4' : 'bottom-[calc(1rem+env(safe-area-inset-bottom))]'
-        }`}
-        onClick={onClose}
-        type="button"
-      >
-        <svg aria-hidden="true" className="h-6 w-6" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2" viewBox="0 0 24 24">
-          <path d="M6 6 18 18M18 6 6 18" />
-        </svg>
-      </button>
     </section>
   );
 }
 
-type DistilleryMarkersCanvasProps = {
+type DistillerySheetProps = {
   distilleries: PositionedMapDistillery[];
-  markerRadius: number;
-  isDistantZoom: boolean;
+  regionStats: Map<string, RegionStats>;
+  tastedCount: number;
+  selectedRegion: WhiskyRegion | null;
+  isOpen: boolean;
+  searchQuery: string;
+  loadError: string | null;
+  onOpenChange: (open: boolean) => void;
+  onSearchChange: (query: string) => void;
+  onSelectRegion: (region: WhiskyRegion | null) => void;
+  onSelectDistillery: (distillery: PositionedMapDistillery) => void;
+  t: ReturnType<typeof useTranslation>['t'];
 };
 
-function DistilleryMarkersCanvas({
+function DistillerySheet({
   distilleries,
-  markerRadius,
-  isDistantZoom,
-}: DistilleryMarkersCanvasProps) {
+  regionStats,
+  tastedCount,
+  selectedRegion,
+  isOpen,
+  searchQuery,
+  loadError,
+  onOpenChange,
+  onSearchChange,
+  onSelectRegion,
+  onSelectDistillery,
+  t,
+}: DistillerySheetProps) {
+  const dragStartY = useRef<number | null>(null);
+  const query = searchQuery.trim().toLocaleLowerCase();
+  const items = distilleries
+    .filter((distillery) => (query
+      ? distillery.name.toLocaleLowerCase().includes(query)
+      : selectedRegion === null || distillery.region === selectedRegion.sourceName))
+    .sort((a, b) => Number(isTasted(b)) - Number(isTasted(a)) || a.name.localeCompare(b.name));
+  const total = distilleries.length;
+  const scopeStats = selectedRegion ? regionStats.get(selectedRegion.sourceName) : undefined;
+  const scope = scopeStats ?? { tasted: tastedCount, total };
+  const progress = scope.total > 0 ? Math.round((scope.tasted / scope.total) * 100) : 0;
+
+  const onHandlePointerDown = (event: ReactPointerEvent) => {
+    dragStartY.current = event.clientY;
+  };
+  const onHandlePointerUp = (event: ReactPointerEvent) => {
+    if (dragStartY.current === null) return;
+    const delta = event.clientY - dragStartY.current;
+    dragStartY.current = null;
+    if (delta < -24) onOpenChange(true);
+    else if (delta > 24) onOpenChange(false);
+    else onOpenChange(!isOpen);
+  };
+
+  return (
+    <div
+      className={`absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-[20px] border-t border-[#C5A059]/40 bg-[#16161A]/97 shadow-[0_-12px_32px_rgba(0,0,0,0.6)] backdrop-blur-md transition-[height] duration-300 ease-out ${
+        isOpen ? 'h-[52%]' : 'h-[118px]'
+      }`}
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button
+        type="button"
+        aria-label={isOpen ? t('map_view.collapse_list') : t('map_view.expand_list')}
+        aria-expanded={isOpen}
+        className="flex h-6 w-full shrink-0 touch-none items-center justify-center"
+        onPointerDown={onHandlePointerDown}
+        onPointerUp={onHandlePointerUp}
+        onPointerCancel={() => { dragStartY.current = null; }}
+      >
+        <span className="h-1 w-10 rounded-full bg-[#3a3a3e]" />
+      </button>
+
+      <div className="shrink-0 px-4">
+        <label className="flex items-center gap-2 rounded-xl bg-[#0D0D0E] px-3 py-2 text-sm text-[#F4F4F5]">
+          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[#6E6D6A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" strokeLinecap="round" />
+          </svg>
+          <input
+            type="search"
+            value={searchQuery}
+            placeholder={t('map_view.search_placeholder')}
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-[#6E6D6A]"
+            onFocus={() => { if (!isOpen) onOpenChange(true); }}
+            onChange={(event) => onSearchChange(event.target.value)}
+          />
+        </label>
+        <div className="mt-2 flex items-center justify-between text-xs text-[#9E9D9A]">
+          <span>
+            {selectedRegion && scopeStats
+              ? t('map_view.region_progress', { region: selectedRegion.label, tasted: scopeStats.tasted, total: scopeStats.total })
+              : t('map_view.progress', { tasted: tastedCount, total })}
+          </span>
+          <span className="text-[#C5A059]">{progress}%</span>
+        </div>
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-[#2a2a2e]">
+          <div className="h-full rounded-full bg-[#C5A059] transition-[width] duration-500" style={{ width: `${progress}%` }} />
+        </div>
+      </div>
+
+      {isOpen && (
+        <>
+          <div className="mt-3 flex shrink-0 gap-2 overflow-x-auto px-4 pb-2">
+            <RegionChip label={t('map_view.all_regions')} count={total} active={selectedRegion === null} onClick={() => onSelectRegion(null)} />
+            {whiskyRegions.filter((region) => regionStats.has(region.sourceName)).map((region) => (
+              <RegionChip
+                key={region.sourceName}
+                label={region.label}
+                count={regionStats.get(region.sourceName)?.total ?? 0}
+                active={selectedRegion?.sourceName === region.sourceName}
+                onClick={() => onSelectRegion(region)}
+              />
+            ))}
+          </div>
+          <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-3">
+            {items.map((distillery) => {
+              const tasted = isTasted(distillery);
+              const imageUrl = distillery.logo_url || distillery.image_url;
+              return (
+                <li key={distillery.id}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 border-t border-[#2a2a2e] px-4 py-2.5 text-left active:bg-[#C5A059]/10"
+                    onClick={() => onSelectDistillery(distillery)}
+                  >
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 text-sm ${
+                      tasted ? 'border-[#C5A059] bg-[#C5A059] text-[#1a140a]' : 'border-[#C5A059]/70 bg-[#141417] text-[#C5A059]'
+                    }`}>
+                      {imageUrl
+                        ? <img src={imageUrl} alt="" className="h-full w-full rounded-full bg-[#0D0D0E] object-cover" />
+                        : distillery.name.charAt(0)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-serif text-sm text-[#F4F4F5]">{distillery.name}</span>
+                      <span className={`block truncate text-xs ${tasted ? 'text-[#C5A059]' : 'text-[#9E9D9A]'}`}>
+                        {[
+                          (query || selectedRegion === null) ? regionLabel(distillery.region) : null,
+                          tasted ? t('map_view.bottles', { count: distillery.bottle_count }) : t('map_view.not_tasted'),
+                        ].filter(Boolean).join(' · ')}
+                      </span>
+                    </span>
+                    <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-[#6E6D6A]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </li>
+              );
+            })}
+            {items.length === 0 && (
+              <li className="px-4 py-6 text-center text-sm text-[#9E9D9A]">
+                {loadError ?? t('map_view.nothing_found')}
+              </li>
+            )}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
+function RegionChip({ label, count, active, onClick }: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (active) ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [active]);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-pressed={active}
+      className={`shrink-0 rounded-full border px-3 py-1 text-xs whitespace-nowrap transition-colors ${
+        active ? 'border-[#C5A059] bg-[#C5A059] text-[#1a140a]' : 'border-[#C5A059]/50 text-[#FFE28A]'
+      }`}
+      onClick={onClick}
+    >
+      {label} <span className={active ? 'text-[#1a140a]/70' : 'text-[#C5A059]'}>{count}</span>
+    </button>
+  );
+}
+
+type DistilleryDotsCanvasProps = {
+  distilleries: PositionedMapDistillery[];
+  markerRadius: number;
+};
+
+function DistilleryDotsCanvas({ distilleries, markerRadius }: DistilleryDotsCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const height = MAP_HEIGHT * 1.5;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    const pixelRatio = window.devicePixelRatio || 1;
-    canvas.width = 390 * pixelRatio;
-    canvas.height = 640 * pixelRatio;
-    canvas.style.width = '390px';
-    canvas.style.height = '640px';
-    let animationFrame = 0;
+    // Oversample so dots stay crisp when the group is zoomed in.
+    const pixelRatio = (window.devicePixelRatio || 1) * 2;
+    canvas.width = MAP_WIDTH * pixelRatio;
+    canvas.height = height * pixelRatio;
+    canvas.style.width = `${MAP_WIDTH}px`;
+    canvas.style.height = `${height}px`;
+    context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, MAP_HEIGHT / 2 * pixelRatio);
+    context.clearRect(0, -MAP_HEIGHT / 2, MAP_WIDTH, height);
 
-    const draw = (timestamp: number) => {
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      context.clearRect(0, 0, 390, 640);
+    for (const distillery of distilleries) {
+      const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
+      const tasted = isTasted(distillery);
+      context.beginPath();
+      context.arc(x, y, markerRadius * 2.2, 0, Math.PI * 2);
+      context.fillStyle = 'rgba(255, 226, 138, 0.14)';
+      context.fill();
 
-      distilleries.forEach((distillery) => {
-        const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
-        const radius = markerRadius;
-
-        const pulseScale = 1 + Math.sin(timestamp / 290 + distillery.id) * 0.14;
-        context.beginPath();
-        context.arc(x, y, radius * 2.2 * pulseScale, 0, Math.PI * 2);
-        context.fillStyle = distillery.tasted
-          ? 'rgba(255, 226, 138, 0.26)'
-          : 'rgba(255, 226, 138, 0.16)';
-        context.fill();
-
-        context.save();
-        context.shadowColor = 'rgba(255, 226, 138, 0.8)';
-        context.shadowBlur = isDistantZoom ? 6 : 4;
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fillStyle = 'rgba(197, 160, 89, 0.38)';
-        context.fill();
-        context.restore();
-
-        const markerGradient = context.createRadialGradient(
-          x - radius * 0.35,
-          y - radius * 0.4,
-          radius * 0.1,
-          x,
-          y,
-          radius,
-        );
-        markerGradient.addColorStop(0, '#FFF8D5');
-        markerGradient.addColorStop(0.35, '#FFE28A');
-        markerGradient.addColorStop(0.72, '#C5A059');
-        markerGradient.addColorStop(1, '#6F501E');
-
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fillStyle = markerGradient;
-        context.fill();
-
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.lineWidth = 0.75;
-        context.strokeStyle = distillery.tasted ? '#FFF2C2' : '#A77E35';
-        context.stroke();
-      });
-
-      animationFrame = requestAnimationFrame(draw);
-    };
-
-    draw(performance.now());
-    return () => cancelAnimationFrame(animationFrame);
-  }, [distilleries, isDistantZoom, markerRadius]);
+      context.beginPath();
+      context.arc(x, y, markerRadius, 0, Math.PI * 2);
+      context.fillStyle = tasted ? '#E2BC6A' : '#141417';
+      context.fill();
+      context.lineWidth = markerRadius * 0.4;
+      context.strokeStyle = tasted ? '#FFF2C2' : '#C5A059';
+      context.stroke();
+    }
+  }, [distilleries, height, markerRadius]);
 
   return <canvas ref={canvasRef} aria-hidden="true" style={{ display: 'block', pointerEvents: 'none' }} />;
 }
 
+/** Pushes overlapping pins apart (in zoom-1 map units) and returns each pin's offset from its true spot. */
+function spreadPins(distilleries: PositionedMapDistillery[], minDistance: number) {
+  const points = distilleries.map((distillery) => {
+    const [x, y] = projectMapCoordinates(distillery.longitude, distillery.latitude);
+    return { id: distillery.id, originX: x, originY: y, x, y };
+  });
+  for (let iteration = 0; iteration < 60; iteration += 1) {
+    let moved = false;
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        const a = points[i];
+        const b = points[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let distance = Math.hypot(dx, dy);
+        if (distance >= minDistance) continue;
+        if (distance < 1e-6) {
+          const angle = (2 * Math.PI * j) / points.length;
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+          distance = 1;
+        }
+        const push = (minDistance - Math.hypot(b.x - a.x, b.y - a.y)) / 2;
+        a.x -= (dx / distance) * push;
+        a.y -= (dy / distance) * push;
+        b.x += (dx / distance) * push;
+        b.y += (dy / distance) * push;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return new Map(points.map((point) => [point.id, [point.x - point.originX, point.y - point.originY] as [number, number]]));
+}
+
+/** Moves the view centre south so `coordinates` lands above a sheet covering `offset` map units. */
+function liftCoordinates(coordinates: [number, number], zoom: number, offset: number): [number, number] {
+  const [x, y] = projectMapCoordinates(coordinates[0], coordinates[1]);
+  return unprojectMapCoordinates(x, y + offset / zoom);
+}
+
 function projectMapCoordinates(longitude: number, latitude: number): [number, number] {
   const degreesToRadians = Math.PI / 180;
-  const centerLongitude = -4.2 * degreesToRadians;
-  const centerLatitude = mercatorLatitude(57.3);
-  const projectedLongitude = longitude * degreesToRadians;
-
   return [
-    195 + (projectedLongitude - centerLongitude) * 2200,
-    320 - (mercatorLatitude(latitude) - centerLatitude) * 2200,
+    MAP_WIDTH / 2 + (longitude - MAP_CENTER[0]) * degreesToRadians * MAP_SCALE,
+    MAP_HEIGHT / 2 - (mercatorLatitude(latitude) - mercatorLatitude(MAP_CENTER[1])) * MAP_SCALE,
   ];
+}
+
+function unprojectMapCoordinates(x: number, y: number): [number, number] {
+  const radiansToDegrees = 180 / Math.PI;
+  const longitude = MAP_CENTER[0] + ((x - MAP_WIDTH / 2) / MAP_SCALE) * radiansToDegrees;
+  const mercator = mercatorLatitude(MAP_CENTER[1]) - (y - MAP_HEIGHT / 2) / MAP_SCALE;
+  return [longitude, (2 * Math.atan(Math.exp(mercator)) - Math.PI / 2) * radiansToDegrees];
 }
 
 function mercatorLatitude(latitude: number) {

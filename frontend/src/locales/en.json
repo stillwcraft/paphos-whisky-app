@@ -100,7 +100,19 @@
     "no_results": "No distilleries found."
   },
   "map_view": {
-    "close": "Close map"
+    "close": "Close map",
+    "back": "Back to map",
+    "search_placeholder": "Find a distillery",
+    "progress": "{{total}} distilleries · tasted {{tasted}}",
+    "region_progress": "{{region}}: tasted {{tasted}} of {{total}}",
+    "all_regions": "All",
+    "not_tasted": "Not tasted yet",
+    "bottles_one": "{{count}} bottle",
+    "bottles_other": "{{count}} bottles",
+    "nothing_found": "No distilleries found",
+    "no_bottles": "No bottles yet",
+    "expand_list": "Show distillery list",
+    "collapse_list": "Hide distillery list"
   },
   "cyprus_map": {
     "title": "Events map",

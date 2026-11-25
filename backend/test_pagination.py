@@ -209,6 +209,11 @@ class PaginationTest(unittest.TestCase):
         )
         self.db.add_all([visible, hidden])
         self.db.commit()
+        self.db.add_all([
+            models.Bottle(name=f"Map Bottle {index}", distillery_id=visible.id, price_per_sample=10)
+            for index in range(2)
+        ])
+        self.db.commit()
 
         map_distilleries = get_map_distilleries(db=self.db)
 
@@ -217,6 +222,7 @@ class PaginationTest(unittest.TestCase):
         self.assertEqual(map_distilleries[0].longitude, -3.1294)
         self.assertEqual(map_distilleries[0].image_url, visible.image_url)
         self.assertEqual(map_distilleries[0].region, "Speyside")
+        self.assertEqual(map_distilleries[0].bottle_count, 2)
 
     def test_member_and_user_state_pages_are_paginated(self):
         event = self.db.query(models.Event).first()

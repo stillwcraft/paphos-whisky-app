@@ -1060,7 +1060,9 @@ class DistilleryMapResponse(BaseModel):
     latitude: float
     longitude: float
     image_url: Optional[str] = None
+    logo_url: Optional[str] = None
     region: Optional[str] = None
+    bottle_count: int = 0
 
 
 class TastingTagCreate(BaseModel):
@@ -2396,6 +2398,12 @@ def get_map_distilleries(lang: str = "en", db: Session = Depends(get_db)):
         .order_by(models.Distillery.name.asc(), models.Distillery.id.asc())
         .all()
     )
+    bottle_counts = dict(
+        db.query(models.Bottle.distillery_id, func.count(models.Bottle.id))
+        .filter(models.Bottle.distillery_id.in_([distillery.id for distillery in distilleries]))
+        .group_by(models.Bottle.distillery_id)
+        .all()
+    ) if distilleries else {}
     return [
         DistilleryMapResponse(
             id=distillery.id,
@@ -2407,7 +2415,9 @@ def get_map_distilleries(lang: str = "en", db: Session = Depends(get_db)):
             latitude=distillery.latitude,
             longitude=distillery.longitude,
             image_url=distillery.image_url,
+            logo_url=distillery.logo_url,
             region=distillery.region,
+            bottle_count=bottle_counts.get(distillery.id, 0),
         )
         for distillery in distilleries
     ]

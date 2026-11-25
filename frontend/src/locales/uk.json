@@ -100,7 +100,21 @@
     "no_results": "Дистилерії не знайдено."
   },
   "map_view": {
-    "close": "Закрити мапу"
+    "close": "Закрити мапу",
+    "back": "Назад до мапи",
+    "search_placeholder": "Знайти вискокурню",
+    "progress": "Вискокурень: {{total}} · спробували {{tasted}}",
+    "region_progress": "{{region}}: спробували {{tasted}} з {{total}}",
+    "all_regions": "Усі",
+    "not_tasted": "Ще не пробували",
+    "bottles_one": "{{count}} пляшка",
+    "bottles_few": "{{count}} пляшки",
+    "bottles_many": "{{count}} пляшок",
+    "bottles_other": "{{count}} пляшки",
+    "nothing_found": "Нічого не знайшлося",
+    "no_bottles": "Пляшок поки немає",
+    "expand_list": "Показати список вискокурень",
+    "collapse_list": "Сховати список вискокурень"
   },
   "cyprus_map": {
     "title": "Мапа подій",
