@@ -100,7 +100,21 @@
     "no_results": "Дистиллерии не найдены."
   },
   "map_view": {
-    "close": "Закрыть карту"
+    "close": "Закрыть карту",
+    "back": "Назад к карте",
+    "search_placeholder": "Найти вискокурню",
+    "progress": "Вискокурен: {{total}} · попробовали {{tasted}}",
+    "region_progress": "{{region}}: попробовали {{tasted}} из {{total}}",
+    "all_regions": "Все",
+    "not_tasted": "Ещё не пробовали",
+    "bottles_one": "{{count}} бутылка",
+    "bottles_few": "{{count}} бутылки",
+    "bottles_many": "{{count}} бутылок",
+    "bottles_other": "{{count}} бутылки",
+    "nothing_found": "Ничего не нашлось",
+    "no_bottles": "Бутылок пока нет",
+    "expand_list": "Показать список вискокурен",
+    "collapse_list": "Скрыть список вискокурен"
   },
   "cyprus_map": {
     "title": "Карта событий",
